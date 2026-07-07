@@ -36,7 +36,7 @@ export const STREET_BRANDS: StreetBrand[] = [
   { slug: "vague-studios", name: "Vague Studios", storeUrl: "https://vaguestudios.com" },
   { slug: "bravest-studios", name: "Bravest Studios", storeUrl: "https://braveststudios.com" },
   { slug: "the-gv-gallery", name: "The GV Gallery", storeUrl: "https://thegvgallery.com" },
-  { slug: "greddy-unit", name: "Greddy Unit", storeUrl: "https://greddyunit.com" },
+  { slug: "greddy-unit", name: "Greedy Unit", storeUrl: "https://greedyunit.com" },
   { slug: "ditch", name: "DITCH", storeUrl: "https://ditch.la" },
   { slug: "racer-worldwide", name: "Racer Worldwide", storeUrl: "https://racerworldwide.net" },
   { slug: "vicinity", name: "Vicinity", storeUrl: "https://vicinityclo.de" },
