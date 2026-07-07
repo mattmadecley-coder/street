@@ -10,6 +10,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const { product, source } = await getProduct(slug);
   if (!product) notFound();
   const galleryImages = product.images.length ? product.images : [""];
+  const sourceMessage = source === "database" ? "Saved in Street's catalog and refreshed by the scheduled importer." : source === "live" ? "Live source import — this product will be stored after the first database sync." : "The source is unavailable right now. Confirm details on the brand website.";
 
   return (
     <main>
@@ -23,7 +24,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           ))}
         </section>
         <aside className="product-info">
-          <p className="brand">Seventy Four Uniform</p>
+          <p className="brand">{product.brandName}</p>
           <h1>{product.title}</h1>
           <p className="price" style={{ fontSize: 18, marginBottom: 14 }}>${product.price.toFixed(2)}</p>
           <span className="status">{product.stockStatus === "in_stock" ? "In stock" : "Sold out"}{product.isPreorder ? " · Pre-order" : ""}</span>
@@ -31,8 +32,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           {product.colors.length ? <Info label="Color" value={product.colors.join(", ")} /> : null}
           <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "Size choices were not supplied by the source catalog."} />
           <Info label="Description" value={product.description || "See the brand website for complete product details and shipping information."} />
-          <a className="cta" href={product.sourceUrl} target="_blank" rel="noreferrer"><span>Shop at Seventy Four Uniform</span><span>↗</span></a>
-          <p className="results" style={{ lineHeight: 1.45 }}>{source === "live" ? "Live availability and product details are loaded from the brand’s catalog." : "The live source is unavailable right now. This item link still opens the matching product on the brand website."}</p>
+          <a className="cta" href={product.sourceUrl} target="_blank" rel="noreferrer"><span>Shop at {product.brandName}</span><span>↗</span></a>
+          <p className="results" style={{ lineHeight: 1.45 }}>{sourceMessage}</p>
           <div className="tags">{product.tags.slice(0, 12).map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
         </aside>
       </div>
