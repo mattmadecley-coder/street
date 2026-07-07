@@ -1,6 +1,11 @@
 type SupabaseConfig = { url: string; serviceKey: string };
 
-type RestOptions = { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; prefer?: string };
+type RestOptions = {
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  body?: unknown;
+  prefer?: string;
+  range?: { from: number; to: number };
+};
 
 function getConfig(): SupabaseConfig | null {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -23,6 +28,7 @@ export function hasSupabaseCatalog() {
 export async function supabaseRest<T>(path: string, options: RestOptions = {}): Promise<T> {
   const config = getConfig();
   if (!config) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
     method: options.method ?? "GET",
     headers: {
@@ -30,10 +36,12 @@ export async function supabaseRest<T>(path: string, options: RestOptions = {}): 
       Authorization: `Bearer ${config.serviceKey}`,
       "Content-Type": "application/json",
       Prefer: options.prefer ?? "return=representation",
+      ...(options.range ? { Range: `${options.range.from}-${options.range.to}`, "Range-Unit": "items" } : {}),
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     cache: "no-store",
   });
+
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
@@ -41,4 +49,16 @@ export async function supabaseRest<T>(path: string, options: RestOptions = {}): 
     throw new Error(message);
   }
   return data as T;
+}
+
+export async function supabaseRestAll<T>(path: string, pageSize = 500): Promise<T[]> {
+  const all: T[] = [];
+  let from = 0;
+
+  while (true) {
+    const page = await supabaseRest<T[]>(path, { range: { from, to: from + pageSize - 1 } });
+    all.push(...page);
+    if (page.length < pageSize) return all;
+    from += pageSize;
+  }
 }
