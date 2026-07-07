@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Header, ProductCard } from "@/components/storefront";
 import { getCatalog } from "@/lib/catalog";
 
-export const revalidate = 86400;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function HomePage() {
   const { products } = await getCatalog();
