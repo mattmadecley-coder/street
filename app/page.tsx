@@ -1,4 +1,5 @@
 import Link from "next/link";
+import styles from "./home.module.css";
 import { Header, ProductCard } from "@/components/storefront";
 import { getCatalog } from "@/lib/catalog";
 
@@ -15,23 +16,23 @@ export default async function HomePage() {
     <main>
       <Header />
       <div className="shell">
-        <section className="hero hero-video">
+        <section className={`hero ${styles.heroVideo}`}>
           {heroVideoUrl ? (
-            <video className="hero-media" autoPlay muted loop playsInline preload="metadata" poster="/hero-placeholder.svg">
+            <video className={styles.heroMedia} autoPlay muted loop playsInline preload="metadata" poster="/hero-placeholder.svg">
               <source src={heroVideoUrl} type="video/mp4" />
             </video>
           ) : (
-            <img className="hero-media" src="/hero-placeholder.svg" alt="Street hero media placeholder" />
+            <img className={styles.heroMedia} src="/hero-placeholder.svg" alt="Street hero media placeholder" />
           )}
-          <div className="hero-shade" />
+          <div className={styles.heroShade} />
           <div className="hero-copy">
             <p className="eyebrow">Independent streetwear, one catalog</p>
             <h1>Discover independent pieces in one place.</h1>
           </div>
-          <Link href="/brands/seventy-four-uniform" className="brand-spotlight" aria-label="Browse Seventy Four Uniform on Street">
-            <span className="brand-spotlight-label">Featured brand</span>
-            <span className="brand-spotlight-logo-wrap"><img src="/brand-logos/seventy-four-uniform.svg" alt="Seventy Four Uniform" className="brand-spotlight-logo" /></span>
-            <span className="brand-spotlight-arrow">↗</span>
+          <Link href="/brands/seventy-four-uniform" className={styles.brandSpotlight} aria-label="Browse Seventy Four Uniform on Street">
+            <span className={styles.brandSpotlightLabel}>Featured brand</span>
+            <span className={styles.brandSpotlightLogoWrap}><img src="/brand-logos/seventy-four-uniform.svg" alt="Seventy Four Uniform" className={styles.brandSpotlightLogo} /></span>
+            <span className={styles.brandSpotlightArrow}>↗</span>
           </Link>
         </section>
         <Link href="/catalog" className="shop-all"><span>Shop all</span><span>→</span></Link>
