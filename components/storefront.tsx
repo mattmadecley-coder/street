@@ -8,7 +8,7 @@ export function Header() {
       <nav className="nav">
         <Link href="/catalog">Shop all</Link>
         <Link href="/catalog?sort=newest">New in</Link>
-        <Link href="/catalog?brand=seventy-four-uniform">Brands</Link>
+        <Link href="/brands/seventy-four-uniform">Brands</Link>
       </nav>
       <Link href="/catalog" className="nav" aria-label="Search catalog">⌕ <span>Search</span></Link>
     </header>
