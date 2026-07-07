@@ -19,8 +19,9 @@ export function ProductCard({ product }: { product: StreetProduct }) {
   return (
     <Link href={`/products/${product.slug}`}>
       <div className="card-image">
-        {product.primaryImage ? <img src={product.primaryImage} alt={product.title} loading="lazy" /> : <div style={{ height: "100%", background: "linear-gradient(135deg, #d7d4cc, #a7a49e)" }} />}
+        {product.primaryImage ? <img src={product.primaryImage} alt={product.title} loading="lazy" /> : <div style={{ height: "100%", width: "100%", background: "linear-gradient(135deg, #d7d4cc, #a7a49e)" }} />}
         {product.stockStatus === "sold_out" ? <span className="badge">Sold out</span> : null}
+        {product.images.length > 1 ? <span className="image-count">{product.images.length} photos</span> : null}
       </div>
       <p className="brand">Seventy Four Uniform</p>
       <p className="name">{product.title}</p>
