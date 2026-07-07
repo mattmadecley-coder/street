@@ -29,8 +29,8 @@ export default async function HomePage() {
             <p className="eyebrow">Independent streetwear, one catalog</p>
             <h1>Discover independent pieces in one place.</h1>
           </div>
-          <Link href="/brands/seventy-four-uniform" className={styles.brandSpotlight} aria-label="Browse Seventy Four Uniform on Street">
-            <span className={styles.brandSpotlightLabel}>Featured brand</span>
+          <Link href="/brands/seventy-four-uniform" className={styles.brandSpotlight} aria-label="Check out Seventy Four Uniform collections">
+            <span className={styles.brandSpotlightLabel}>Check out their collections</span>
             <span className={styles.brandSpotlightLogoWrap}><img src="/brand-logos/seventy-four-uniform.svg" alt="Seventy Four Uniform" className={styles.brandSpotlightLogo} /></span>
             <span className={styles.brandSpotlightArrow}>↗</span>
           </Link>
