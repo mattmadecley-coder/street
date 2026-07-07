@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { previewPendingClassifications } from "@/lib/classification-preview";
 import { classifyPendingProducts, syncBrandDirectory, syncStreetCatalog } from "@/lib/catalog-store";
 
 export const maxDuration = 60;
@@ -13,6 +14,13 @@ export async function GET(request: NextRequest) {
       const results = await syncBrandDirectory();
       const failed = results.filter((result) => !result.ok);
       return NextResponse.json({ ok: failed.length === 0, mode: "directory", syncedAt: new Date().toISOString(), results }, { status: failed.length ? 502 : 200 });
+    }
+
+    if (mode === "classify-preview") {
+      const requestedLimit = Number(request.nextUrl.searchParams.get("limit"));
+      const preview = await previewPendingClassifications(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined);
+      const failed = preview.results.filter((result) => result.error);
+      return NextResponse.json({ ok: failed.length === 0, mode: "classify-preview", previewedAt: new Date().toISOString(), ...preview }, { status: failed.length ? 502 : 200 });
     }
 
     if (mode === "classify") {
