@@ -5,25 +5,40 @@ import { getCatalog } from "@/lib/catalog";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const heroVideoUrl = process.env.NEXT_PUBLIC_HERO_VIDEO_URL;
+
 export default async function HomePage() {
   const { products } = await getCatalog();
   const featured = products.filter((product) => product.stockStatus === "in_stock").slice(0, 8);
+
   return (
     <main>
       <Header />
       <div className="shell">
-        <section className="hero">
-          <img src="/hero-placeholder.svg" alt="Street hero media placeholder" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: .9 }} />
+        <section className="hero hero-video">
+          {heroVideoUrl ? (
+            <video className="hero-media" autoPlay muted loop playsInline preload="metadata" poster="/hero-placeholder.svg">
+              <source src={heroVideoUrl} type="video/mp4" />
+            </video>
+          ) : (
+            <img className="hero-media" src="/hero-placeholder.svg" alt="Street hero media placeholder" />
+          )}
+          <div className="hero-shade" />
           <div className="hero-copy">
             <p className="eyebrow">Independent streetwear, one catalog</p>
             <h1>Discover independent pieces in one place.</h1>
           </div>
+          <Link href="/brands/seventy-four-uniform" className="brand-spotlight" aria-label="Browse Seventy Four Uniform on Street">
+            <span className="brand-spotlight-label">Featured brand</span>
+            <span className="brand-spotlight-logo-wrap"><img src="/brand-logos/seventy-four-uniform.svg" alt="Seventy Four Uniform" className="brand-spotlight-logo" /></span>
+            <span className="brand-spotlight-arrow">↗</span>
+          </Link>
         </section>
         <Link href="/catalog" className="shop-all"><span>Shop all</span><span>→</span></Link>
         <section className="section">
           <div className="section-head">
             <div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>First brand</p><h2 className="section-title">Seventy Four Uniform</h2></div>
-            <Link href="/catalog" className="link-small">View catalog</Link>
+            <Link href="/brands/seventy-four-uniform" className="link-small">View brand</Link>
           </div>
           <div className="grid">{featured.map((product) => <ProductCard key={product.id} product={product} />)}</div>
         </section>
