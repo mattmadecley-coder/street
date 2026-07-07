@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { Header } from "@/components/storefront";
 import { getProduct } from "@/lib/catalog";
 
-export const revalidate = 86400;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -21,10 +22,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <p className="price" style={{ fontSize: 18, marginBottom: 14 }}>${product.price.toFixed(2)}</p>
           <span className="status">{product.stockStatus === "in_stock" ? "In stock" : "Sold out"}{product.isPreorder ? " · Pre-order" : ""}</span>
           {product.colors.length ? <Info label="Color" value={product.colors.join(", ")} /> : null}
-          <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "No verified size chart imported yet."} />
+          <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "Size choices were not supplied by the source catalog."} />
           <Info label="Description" value={product.description || "See the brand website for complete product details and shipping information."} />
           <a className="cta" href={product.sourceUrl} target="_blank" rel="noreferrer"><span>Shop at Seventy Four Uniform</span><span>↗</span></a>
-          <p className="results" style={{ lineHeight: 1.45 }}>{source === "live" ? "Inventory information is refreshed daily from the brand’s public catalog." : "Catalog information is temporarily cached. Confirm final availability on the brand website."}</p>
+          <p className="results" style={{ lineHeight: 1.45 }}>{source === "live" ? "Live availability and product details are loaded from the brand’s catalog." : "The live source is unavailable right now. This item link still opens the matching product on the brand website."}</p>
           <div className="tags">{product.tags.slice(0, 12).map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
         </aside>
       </div>
