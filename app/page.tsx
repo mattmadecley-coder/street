@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const heroVideoUrl = process.env.NEXT_PUBLIC_HERO_VIDEO_URL;
+const featuredBrandLogoUrl = process.env.NEXT_PUBLIC_FEATURED_BRAND_LOGO_URL ?? "/brand-logos/seventy-four-uniform.svg";
 
 export default async function HomePage() {
   const { products } = await getCatalog();
@@ -24,15 +25,9 @@ export default async function HomePage() {
           ) : (
             <img className={styles.heroMedia} src="/hero-placeholder.svg" alt="Street hero media placeholder" />
           )}
-          <div className={styles.heroShade} />
-          <div className="hero-copy">
-            <p className="eyebrow">Independent streetwear, one catalog</p>
-            <h1>Discover independent pieces in one place.</h1>
-          </div>
           <Link href="/brands/seventy-four-uniform" className={styles.brandSpotlight} aria-label="Check out Seventy Four Uniform collections">
             <span className={styles.brandSpotlightLabel}>Check out their collections</span>
-            <span className={styles.brandSpotlightLogoWrap}><img src="/brand-logos/seventy-four-uniform.svg" alt="Seventy Four Uniform" className={styles.brandSpotlightLogo} /></span>
-            <span className={styles.brandSpotlightArrow}>↗</span>
+            <img src={featuredBrandLogoUrl} alt="Seventy Four Uniform" className={styles.brandSpotlightLogo} />
           </Link>
         </section>
         <Link href="/catalog" className="shop-all"><span>Shop all</span><span>→</span></Link>
