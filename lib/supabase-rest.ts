@@ -7,6 +7,8 @@ type RestOptions = {
   range?: { from: number; to: number };
 };
 
+type ArrayItem<T> = T extends Array<infer Item> ? Item : T;
+
 function getConfig(): SupabaseConfig | null {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -51,12 +53,12 @@ export async function supabaseRest<T>(path: string, options: RestOptions = {}): 
   return data as T;
 }
 
-export async function supabaseRestAll<T>(path: string, pageSize = 500): Promise<T[]> {
-  const all: T[] = [];
+export async function supabaseRestAll<T>(path: string, pageSize = 500): Promise<ArrayItem<T>[]> {
+  const all: ArrayItem<T>[] = [];
   let from = 0;
 
   while (true) {
-    const page = await supabaseRest<T[]>(path, { range: { from, to: from + pageSize - 1 } });
+    const page = await supabaseRest<ArrayItem<T>[]>(path, { range: { from, to: from + pageSize - 1 } });
     all.push(...page);
     if (page.length < pageSize) return all;
     from += pageSize;
