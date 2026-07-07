@@ -12,6 +12,7 @@ export default async function HomePage() {
       <Header />
       <div className="shell">
         <section className="hero">
+          <img src="/hero-placeholder.svg" alt="Street hero media placeholder" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: .9 }} />
           <div className="hero-copy">
             <p className="eyebrow">Independent streetwear, one catalog</p>
             <h1>Discover independent pieces in one place.</h1>
