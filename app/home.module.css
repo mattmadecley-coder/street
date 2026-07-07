@@ -1,6 +1,6 @@
 .heroVideo { min-height: max(680px, 80svh); overflow: hidden; }
 .heroMedia { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-.brandSpotlight { position: absolute; right: 14px; bottom: 14px; z-index: 2; display: flex; flex-direction: column; gap: 5px; width: 152px; padding: 7px; color: #101010; background: rgba(255,255,255,.94); }
-.brandSpotlightLabel { font-size: 7px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; line-height: 1.25; }
-.brandSpotlightLogo { display: block; width: 100%; height: 24px; object-fit: contain; object-position: left center; }
-@media (max-width: 840px) { .heroVideo { min-height: 80svh; } .brandSpotlight { right: 10px; bottom: 10px; width: 136px; padding: 6px; } .brandSpotlightLogo { height: 21px; } }
+.brandSpotlight { position: absolute; right: 14px; bottom: 14px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 126px; padding: 6px 7px; color: #101010; background: rgba(255,255,255,.94); }
+.brandSpotlightLabel { font-size: 7px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; }
+.brandSpotlightLogo { display: block; width: 112px; height: 21px; object-fit: contain; object-position: left center; }
+@media (max-width: 840px) { .heroVideo { min-height: 80svh; } .brandSpotlight { right: 10px; bottom: 10px; width: 114px; padding: 5px 6px; } .brandSpotlightLogo { width: 100px; height: 19px; } }
