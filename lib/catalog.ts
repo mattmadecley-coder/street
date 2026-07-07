@@ -1,3 +1,5 @@
+import { fetchPublicProductPages } from "@/lib/public-store";
+
 export type StreetProduct = {
   id: string;
   slug: string;
@@ -117,18 +119,19 @@ export async function getCatalog(): Promise<{ products: StreetProduct[]; source:
     try {
       const response = await fetch(`${sourceBase}/products.json?limit=250`, {
         cache: "no-store",
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "User-Agent": "Mozilla/5.0 (compatible; StreetCatalog/1.0)",
-        },
+        headers: { Accept: "application/json, text/plain, */*", "User-Agent": "Mozilla/5.0 (compatible; StreetCatalog/1.0)" },
       });
-      if (!response.ok) continue;
-      const text = await response.text();
-      const data = JSON.parse(text) as ShopifyResponse;
-      if (!data.products?.length) continue;
-      return { products: data.products.map((product) => mapProduct(product, sourceBase)), source: "live" };
-    } catch {
-      // Try the next valid public store address before displaying a small fallback catalog.
+      if (response.ok) {
+        const data = await response.json() as ShopifyResponse;
+        if (data.products?.length) return { products: data.products.map((product) => mapProduct(product, sourceBase)), source: "live" };
+      }
+    } catch (error) {
+      console.error("Street products.json import failed", error);
+    }
+
+    const productsFromPages = await fetchPublicProductPages(sourceBase);
+    if (productsFromPages.length) {
+      return { products: productsFromPages.map((product) => mapProduct(product as unknown as ShopifyProduct, sourceBase)), source: "live" };
     }
   }
   return { products: fallbackProducts, source: "fallback" };
