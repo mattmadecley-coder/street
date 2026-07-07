@@ -12,7 +12,9 @@ type ProductCountRow = { brand_id: string };
 type SyncRunRow = { id: string };
 
 export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; instagramUrl: string | null; productCount: number; featured: boolean };
+export type CatalogSyncResult = { brand: string; productCount: number; ok: boolean; error?: string };
 
+const CATALOG_SYNC_BATCH_SIZE = 3;
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
 
 function toStreetProduct(row: ProductRow): StreetProduct {
@@ -23,26 +25,53 @@ function toStreetProduct(row: ProductRow): StreetProduct {
 
 export async function getStoredCatalog(): Promise<StreetProduct[] | null> {
   if (!hasSupabaseCatalog()) return null;
-  try { const rows = await supabaseRest<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&order=updated_at.desc"); return rows.map(toStreetProduct); }
-  catch (error) { console.error("Street database catalog read failed", error); return null; }
+  try {
+    const rows = await supabaseRest<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&order=updated_at.desc");
+    return rows.map(toStreetProduct);
+  } catch (error) {
+    console.error("Street database catalog read failed", error);
+    return null;
+  }
 }
 
 export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
   const fallback = new Map<string, StreetBrandProfile>(STREET_BRANDS.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured) }]));
   if (!hasSupabaseCatalog()) return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   try {
-    const [rows, products] = await Promise.all([supabaseRest<BrandRow[]>("brands?select=*&is_active=eq.true&order=name.asc"), supabaseRest<ProductCountRow[]>("products?select=brand_id&is_active=eq.true")]);
+    const [rows, products] = await Promise.all([
+      supabaseRest<BrandRow[]>("brands?select=*&is_active=eq.true&order=name.asc"),
+      supabaseRest<ProductCountRow[]>("products?select=brand_id&is_active=eq.true"),
+    ]);
     const counts = products.reduce((map, product) => map.set(product.brand_id, (map.get(product.brand_id) ?? 0) + 1), new Map<string, number>());
     for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: counts.get(row.id) ?? 0, featured: row.is_featured });
     return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
-  } catch (error) { console.error("Street brand directory read failed", error); return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name)); }
+  } catch (error) {
+    console.error("Street brand directory read failed", error);
+    return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
 }
 
-async function getExistingBrand(slug: string) { const rows = await supabaseRest<BrandRow[]>(`brands?select=*&slug=eq.${encodeURIComponent(slug)}`); return rows[0] ?? null; }
+async function getExistingBrand(slug: string) {
+  const rows = await supabaseRest<BrandRow[]>(`brands?select=*&slug=eq.${encodeURIComponent(slug)}`);
+  return rows[0] ?? null;
+}
 
 async function upsertBrand(brand: StreetBrand, metadata?: BrandMetadata) {
   const existing = await getExistingBrand(brand.slug);
-  const rows = await supabaseRest<BrandRow[]>("brands?on_conflict=slug", { method: "POST", body: { slug: brand.slug, name: brand.name, store_url: brand.storeUrl, logo_url: metadata?.logoUrl ?? brand.logoUrl ?? existing?.logo_url ?? null, instagram_url: metadata?.instagramUrl ?? existing?.instagram_url ?? null, metadata_synced_at: metadata ? new Date().toISOString() : existing?.metadata_synced_at ?? null, is_active: true, is_featured: Boolean(brand.featured) }, prefer: "resolution=merge-duplicates,return=representation" });
+  const rows = await supabaseRest<BrandRow[]>("brands?on_conflict=slug", {
+    method: "POST",
+    body: {
+      slug: brand.slug,
+      name: brand.name,
+      store_url: brand.storeUrl,
+      logo_url: metadata?.logoUrl ?? brand.logoUrl ?? existing?.logo_url ?? null,
+      instagram_url: metadata?.instagramUrl ?? existing?.instagram_url ?? null,
+      metadata_synced_at: metadata ? new Date().toISOString() : existing?.metadata_synced_at ?? null,
+      is_active: true,
+      is_featured: Boolean(brand.featured),
+    },
+    prefer: "resolution=merge-duplicates,return=representation",
+  });
   if (!rows[0]) throw new Error(`Could not save ${brand.name}.`);
   return rows[0];
 }
@@ -50,7 +79,12 @@ async function upsertBrand(brand: StreetBrand, metadata?: BrandMetadata) {
 async function mapWithConcurrency<T, R>(items: T[], limit: number, callback: (item: T) => Promise<R>) {
   const results: R[] = [];
   let cursor = 0;
-  async function worker() { while (cursor < items.length) { const index = cursor++; results[index] = await callback(items[index]); } }
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await callback(items[index]);
+    }
+  }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return results;
 }
@@ -72,7 +106,7 @@ function databaseProduct(brandId: string, product: ImportedProduct) {
   return { brand_id: brandId, external_id: product.externalId, handle: product.handle, title: product.title, description: product.description, source_url: product.sourceUrl, price: product.price, compare_at_price: product.compareAtPrice ?? null, stock_status: product.stockStatus, is_preorder: product.isPreorder, category: product.category, tags: product.tags, colors: product.colors, sizes: product.sizes, primary_image_url: product.images[0] ?? null, is_active: true, last_synced_at: new Date().toISOString() };
 }
 
-async function saveBrandCatalog(brand: StreetBrand) {
+async function saveBrandCatalog(brand: StreetBrand): Promise<CatalogSyncResult> {
   const brandRow = await upsertBrand(brand);
   const runRows = await supabaseRest<SyncRunRow[]>("catalog_sync_runs", { method: "POST", body: { brand_id: brandRow.id, status: "running" } });
   const runId = runRows[0]?.id;
@@ -88,17 +122,27 @@ async function saveBrandCatalog(brand: StreetBrand) {
     if (images.length) await supabaseRest("product_images", { method: "POST", body: images, prefer: "return=minimal" });
     if (variants.length) await supabaseRest("product_variants", { method: "POST", body: variants, prefer: "return=minimal" });
     if (runId) await supabaseRest(`catalog_sync_runs?id=eq.${runId}`, { method: "PATCH", body: { status: "success", completed_at: new Date().toISOString(), product_count: imported.length }, prefer: "return=minimal" });
-    return { brand: brand.slug, productCount: imported.length, ok: true as const };
+    return { brand: brand.slug, productCount: imported.length, ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync error";
     if (runId) await supabaseRest(`catalog_sync_runs?id=eq.${runId}`, { method: "PATCH", body: { status: "failed", completed_at: new Date().toISOString(), error_message: message }, prefer: "return=minimal" }).catch(() => undefined);
-    return { brand: brand.slug, productCount: 0, ok: false as const, error: message };
+    return { brand: brand.slug, productCount: 0, ok: false, error: message };
   }
 }
 
-export async function syncStreetCatalog() {
+export function getCatalogSyncPlan(requestedBatch?: number) {
+  const brands = STREET_BRANDS.filter((brand) => brand.catalogEnabled);
+  const batchCount = Math.max(1, Math.ceil(brands.length / CATALOG_SYNC_BATCH_SIZE));
+  const automaticBatch = (Math.floor(Date.now() / 86_400_000) % batchCount) + 1;
+  const batch = requestedBatch && requestedBatch >= 1 && requestedBatch <= batchCount ? requestedBatch : automaticBatch;
+  const start = (batch - 1) * CATALOG_SYNC_BATCH_SIZE;
+  return { batch, batchCount, totalEnabled: brands.length, brands: brands.slice(start, start + CATALOG_SYNC_BATCH_SIZE) };
+}
+
+export async function syncStreetCatalog(requestedBatch?: number) {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
-  const results = [];
-  for (const brand of STREET_BRANDS.filter((brand) => brand.catalogEnabled)) results.push(await saveBrandCatalog(brand));
-  return results;
+  const plan = getCatalogSyncPlan(requestedBatch);
+  const results: CatalogSyncResult[] = [];
+  for (const brand of plan.brands) results.push(await saveBrandCatalog(brand));
+  return { ...plan, results };
 }
