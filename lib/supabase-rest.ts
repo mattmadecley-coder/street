@@ -3,10 +3,17 @@ type SupabaseConfig = { url: string; serviceKey: string };
 type RestOptions = { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; prefer?: string };
 
 function getConfig(): SupabaseConfig | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return null;
-  return { url: url.replace(/\/$/, ""), serviceKey };
+  if (!rawUrl || !serviceKey) return null;
+
+  // Accept either the project root URL or a copied Data API URL ending in /rest/v1.
+  const url = rawUrl
+    .trim()
+    .replace(/\/$/, "")
+    .replace(/\/rest\/v1$/i, "");
+
+  return { url, serviceKey };
 }
 
 export function hasSupabaseCatalog() {
