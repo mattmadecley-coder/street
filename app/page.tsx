@@ -1,7 +1,7 @@
 import Link from "next/link";
 import styles from "./home.module.css";
 import { Header, ProductCard } from "@/components/storefront";
-import { getCatalog } from "@/lib/catalog";
+import { getCatalogPage } from "@/lib/catalog-page";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,8 +10,9 @@ const heroVideoUrl = process.env.NEXT_PUBLIC_HERO_VIDEO_URL;
 const featuredBrandLogoUrl = process.env.NEXT_PUBLIC_FEATURED_BRAND_LOGO_URL ?? "/brand-logos/seventy-four-uniform.svg";
 
 export default async function HomePage() {
-  const { products } = await getCatalog();
-  const featured = products.filter((product) => product.brandSlug === "seventy-four-uniform" && product.stockStatus === "in_stock").slice(0, 8);
+  const featuredPage = await getCatalogPage({ brand: "seventy-four-uniform", availability: "in_stock" });
+  const featured = featuredPage?.products.slice(0, 8) ?? [];
+
   return (
     <main>
       <Header />
