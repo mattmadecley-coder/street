@@ -1,5 +1,6 @@
 import { STREET_BRANDS, type StreetBrand } from "@/lib/brands";
 import { fetchBrandMetadata, type BrandMetadata } from "@/lib/brand-metadata";
+import { classifyProductWithAI } from "@/lib/ai-product-classifier";
 import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
 import { hasSupabaseCatalog, supabaseRest, supabaseRestAll } from "@/lib/supabase-rest";
 import type { StreetProduct } from "@/lib/catalog";
@@ -8,13 +9,16 @@ type BrandRow = { id: string; slug: string; name: string; store_url: string; log
 type ImageRow = { source_url: string; sort_order: number; alt_text?: string | null };
 type VariantRow = { external_id: string; title: string | null; price: string | number; compare_at_price: string | number | null; available: boolean; option1: string | null; option2: string | null; option3: string | null };
 type ProductRow = { id: string; brand_id: string; external_id: string; handle: string; title: string; description: string; source_url: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; category: string; tags: string[]; colors: string[]; sizes: string[]; primary_image_url: string | null; last_synced_at: string; is_active: boolean; brands: BrandRow | null; product_images: ImageRow[] | null; product_variants: VariantRow[] | null };
+type PendingClassificationRow = { id: string; title: string; description: string; category: string; tags: string[]; colors: string[] };
 type ProductCountRow = { brand_id: string };
 type SyncRunRow = { id: string };
 
 export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; instagramUrl: string | null; productCount: number; featured: boolean };
 export type CatalogSyncResult = { brand: string; productCount: number; ok: boolean; error?: string };
+export type ClassificationRunResult = { id: string; title: string; status: "classified" | "needs_review" | "error"; group?: string; category?: string; tags?: string[]; error?: string };
 
 const CATALOG_SYNC_BATCH_SIZE = 3;
+const CLASSIFICATION_BATCH_MAX = 10;
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
 
 function toStreetProduct(row: ProductRow): StreetProduct {
@@ -128,6 +132,53 @@ async function saveBrandCatalog(brand: StreetBrand): Promise<CatalogSyncResult> 
     if (runId) await supabaseRest(`catalog_sync_runs?id=eq.${runId}`, { method: "PATCH", body: { status: "failed", completed_at: new Date().toISOString(), error_message: message }, prefer: "return=minimal" }).catch(() => undefined);
     return { brand: brand.slug, productCount: 0, ok: false, error: message };
   }
+}
+
+export async function classifyPendingProducts(requestedLimit?: number) {
+  if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 5)));
+  const pending = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`);
+  const results: ClassificationRunResult[] = [];
+
+  for (const product of pending) {
+    try {
+      const { classification, model } = await classifyProductWithAI({
+        title: product.title,
+        description: product.description,
+        sourceCategory: product.category,
+        sourceTags: product.tags ?? [],
+        sourceColors: product.colors ?? [],
+      });
+      const status = classification.confidence === "low" ? "needs_review" : "classified";
+      await supabaseRest(`products?id=eq.${product.id}`, {
+        method: "PATCH",
+        body: {
+          street_group: classification.group,
+          street_category: classification.category,
+          street_tags: classification.tags,
+          street_colors: classification.colors,
+          classification_status: status,
+          classification_confidence: classification.confidence,
+          classification_model: model,
+          classification_version: 1,
+          classified_at: new Date().toISOString(),
+          classification_error: null,
+        },
+        prefer: "return=minimal",
+      });
+      results.push({ id: product.id, title: product.title, status, group: classification.group, category: classification.category, tags: classification.tags });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI classification failed";
+      await supabaseRest(`products?id=eq.${product.id}`, {
+        method: "PATCH",
+        body: { classification_status: "error", classification_error: message },
+        prefer: "return=minimal",
+      }).catch(() => undefined);
+      results.push({ id: product.id, title: product.title, status: "error", error: message });
+    }
+  }
+
+  return { limit, found: pending.length, results };
 }
 
 export function getCatalogSyncPlan(requestedBatch?: number) {
