@@ -8,8 +8,8 @@ export type PublicProduct = {
   options: Array<{ name: string; values: string[] }>;
   variants: Array<{
     id: number | string;
-    price: number | string;
-    compare_at_price: number | string | null;
+    price: string;
+    compare_at_price: string | null;
     available: boolean;
     option1: string | null;
     option2: string | null;
@@ -18,10 +18,23 @@ export type PublicProduct = {
   images: Array<{ src: string; position: number }>;
 };
 
-type ProductPageResponse = Omit<PublicProduct, "body_html" | "product_type" | "tags" | "images"> & {
+type ProductPageResponse = {
+  id: number | string;
+  title: string;
+  handle: string;
   description?: string;
   type?: string;
   tags?: string[] | string;
+  options: Array<{ name: string; values: string[] }>;
+  variants: Array<{
+    id: number | string;
+    price: number | string;
+    compare_at_price: number | string | null;
+    available: boolean;
+    option1: string | null;
+    option2: string | null;
+    option3: string | null;
+  }>;
   images?: string[];
 };
 
@@ -30,13 +43,35 @@ const headers = {
   "User-Agent": "Mozilla/5.0 (compatible; StreetCatalog/1.0)",
 };
 
+function moneyFromCents(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === "") return null;
+  const cents = Number(value);
+  return Number.isFinite(cents) ? (cents / 100).toFixed(2) : null;
+}
+
 function normalizeProduct(product: ProductPageResponse): PublicProduct {
   return {
-    ...product,
+    id: product.id,
+    title: product.title,
+    handle: product.handle,
     body_html: product.description ?? "",
     product_type: product.type ?? "",
     tags: Array.isArray(product.tags) ? product.tags.join(",") : product.tags ?? "",
-    images: (product.images ?? []).map((src, position) => ({ src: src.startsWith("//") ? `https:${src}` : src, position })),
+    options: product.options ?? [],
+    variants: (product.variants ?? []).map((variant) => ({
+      id: variant.id,
+      // Shopify's public .js route uses cents. Street's catalog mapper expects dollars.
+      price: moneyFromCents(variant.price) ?? "0.00",
+      compare_at_price: moneyFromCents(variant.compare_at_price),
+      available: variant.available,
+      option1: variant.option1,
+      option2: variant.option2,
+      option3: variant.option3,
+    })),
+    images: (product.images ?? []).map((src, position) => ({
+      src: src.startsWith("//") ? `https:${src}` : src,
+      position,
+    })),
   };
 }
 
