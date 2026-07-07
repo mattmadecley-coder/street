@@ -16,6 +16,7 @@ type ProductToClassify = {
   sourceCategory: string;
   sourceTags: string[];
   sourceColors: string[];
+  imageUrl: string | null;
 };
 
 export type ProductClassification = {
@@ -26,7 +27,13 @@ export type ProductClassification = {
   confidence: "high" | "medium" | "low";
 };
 
-const model = () => process.env.STREET_CLASSIFIER_MODEL ?? "gpt-4o-mini";
+type OpenRouterResponse = {
+  error?: { message?: string };
+  model?: string;
+  choices?: Array<{ message?: { content?: string | null } }>;
+};
+
+const model = () => process.env.STREET_CLASSIFIER_MODEL ?? "qwen/qwen3-vl-30b-a3b-instruct";
 const groups = Object.keys(STREET_TAXONOMY);
 const categories = Object.values(STREET_TAXONOMY).flat() as string[];
 
@@ -69,35 +76,41 @@ function validateClassification(value: unknown): ProductClassification {
 }
 
 export async function classifyProductWithAI(product: ProductToClassify): Promise<{ classification: ProductClassification; model: string }> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("AI classification is not configured. Add OPENAI_API_KEY in Vercel before running the classifier.");
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("AI classification is not configured. Add OPENROUTER_API_KEY in Vercel before running the classifier.");
 
   const classifierModel = model();
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const productContext = JSON.stringify({
+    title: product.title,
+    description: product.description.slice(0, 4000),
+    sourceCategory: product.sourceCategory,
+    sourceTags: product.sourceTags.slice(0, 30),
+    sourceColors: product.sourceColors.slice(0, 10),
+  });
+  const userContent: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "low" } }> = [
+    { type: "text", text: productContext },
+  ];
+  if (product.imageUrl?.startsWith("https://")) userContent.push({ type: "image_url", image_url: { url: product.imageUrl, detail: "low" } });
+
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://street-beryl.vercel.app",
+      "X-OpenRouter-Title": "Street catalog classifier",
     },
     body: JSON.stringify({
       model: classifierModel,
       temperature: 0,
-      store: false,
+      max_tokens: 500,
+      provider: { require_parameters: true, sort: "price" },
       messages: [
         {
           role: "system",
-          content: `You classify independent streetwear catalog products for Street. Select exactly one group and one category from the Street taxonomy below. The category must belong to its selected group. Select only tags from the approved tag list. Do not create tags. Use title, description, source category, source tags, and source colors as evidence. Do not infer a tag that is not reasonably supported. If the product is ambiguous, choose the best allowed category and set confidence to low.\n\nStreet taxonomy:\n${taxonomyPrompt}\n\nApproved tags:\n${STREET_TAGS.join(", ")}\n\nApproved colors:\n${STREET_COLORS.join(", ")}`,
+          content: `You classify independent streetwear catalog products for Street. Inspect the product image when it is provided, then combine that visual evidence with title, description, source category, source tags, and source colors. Select exactly one group and one category from the Street taxonomy below. The category must belong to its selected group. Select only tags from the approved tag list. Do not create tags. Do not infer a tag that is not reasonably supported by text or image evidence. If the product is ambiguous, choose the best allowed category and set confidence to low.\n\nStreet taxonomy:\n${taxonomyPrompt}\n\nApproved tags:\n${STREET_TAGS.join(", ")}\n\nApproved colors:\n${STREET_COLORS.join(", ")}`,
         },
-        {
-          role: "user",
-          content: JSON.stringify({
-            title: product.title,
-            description: product.description.slice(0, 4000),
-            sourceCategory: product.sourceCategory,
-            sourceTags: product.sourceTags.slice(0, 30),
-            sourceColors: product.sourceColors.slice(0, 10),
-          }),
-        },
+        { role: "user", content: userContent },
       ],
       response_format: {
         type: "json_schema",
@@ -110,10 +123,10 @@ export async function classifyProductWithAI(product: ProductToClassify): Promise
     }),
   });
 
-  const payload = await response.json() as { error?: { message?: string }; choices?: Array<{ message?: { content?: string | null } }> };
-  if (!response.ok) throw new Error(payload.error?.message ?? `OpenAI classification request failed (${response.status}).`);
+  const payload = await response.json() as OpenRouterResponse;
+  if (!response.ok) throw new Error(payload.error?.message ?? `OpenRouter classification request failed (${response.status}).`);
   const content = payload.choices?.[0]?.message?.content;
   if (!content) throw new Error("AI classification returned no content.");
 
-  return { classification: validateClassification(JSON.parse(content)), model: classifierModel };
+  return { classification: validateClassification(JSON.parse(content)), model: payload.model ?? classifierModel };
 }
