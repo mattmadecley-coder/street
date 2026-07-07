@@ -1,7 +1,7 @@
 import { STREET_BRANDS, type StreetBrand } from "@/lib/brands";
 import { fetchBrandMetadata, type BrandMetadata } from "@/lib/brand-metadata";
 import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
-import { hasSupabaseCatalog, supabaseRest } from "@/lib/supabase-rest";
+import { hasSupabaseCatalog, supabaseRest, supabaseRestAll } from "@/lib/supabase-rest";
 import type { StreetProduct } from "@/lib/catalog";
 
 type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean };
@@ -26,7 +26,7 @@ function toStreetProduct(row: ProductRow): StreetProduct {
 export async function getStoredCatalog(): Promise<StreetProduct[] | null> {
   if (!hasSupabaseCatalog()) return null;
   try {
-    const rows = await supabaseRest<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&order=updated_at.desc");
+    const rows = await supabaseRestAll<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&order=updated_at.desc,id.desc");
     return rows.map(toStreetProduct);
   } catch (error) {
     console.error("Street database catalog read failed", error);
@@ -40,7 +40,7 @@ export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
   try {
     const [rows, products] = await Promise.all([
       supabaseRest<BrandRow[]>("brands?select=*&is_active=eq.true&order=name.asc"),
-      supabaseRest<ProductCountRow[]>("products?select=brand_id&is_active=eq.true"),
+      supabaseRestAll<ProductCountRow[]>("products?select=brand_id&is_active=eq.true&order=id.asc"),
     ]);
     const counts = products.reduce((map, product) => map.set(product.brand_id, (map.get(product.brand_id) ?? 0) + 1), new Map<string, number>());
     for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: counts.get(row.id) ?? 0, featured: row.is_featured });
