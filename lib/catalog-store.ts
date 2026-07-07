@@ -9,7 +9,7 @@ type BrandRow = { id: string; slug: string; name: string; store_url: string; log
 type ImageRow = { source_url: string; sort_order: number; alt_text?: string | null };
 type VariantRow = { external_id: string; title: string | null; price: string | number; compare_at_price: string | number | null; available: boolean; option1: string | null; option2: string | null; option3: string | null };
 type ProductRow = { id: string; brand_id: string; external_id: string; handle: string; title: string; description: string; source_url: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; category: string; tags: string[]; colors: string[]; sizes: string[]; primary_image_url: string | null; last_synced_at: string; is_active: boolean; brands: BrandRow | null; product_images: ImageRow[] | null; product_variants: VariantRow[] | null };
-type PendingClassificationRow = { id: string; title: string; description: string; category: string; tags: string[]; colors: string[] };
+type PendingClassificationRow = { id: string; title: string; description: string; category: string; tags: string[]; colors: string[]; primary_image_url: string | null };
 type ProductCountRow = { brand_id: string };
 type SyncRunRow = { id: string };
 
@@ -137,7 +137,7 @@ async function saveBrandCatalog(brand: StreetBrand): Promise<CatalogSyncResult> 
 export async function classifyPendingProducts(requestedLimit?: number) {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
   const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 5)));
-  const pending = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`);
+  const pending = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors,primary_image_url&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`);
   const results: ClassificationRunResult[] = [];
 
   for (const product of pending) {
@@ -148,6 +148,7 @@ export async function classifyPendingProducts(requestedLimit?: number) {
         sourceCategory: product.category,
         sourceTags: product.tags ?? [],
         sourceColors: product.colors ?? [],
+        imageUrl: product.primary_image_url,
       });
       const status = classification.confidence === "low" ? "needs_review" : "classified";
       await supabaseRest(`products?id=eq.${product.id}`, {
