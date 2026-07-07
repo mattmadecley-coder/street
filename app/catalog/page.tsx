@@ -1,7 +1,8 @@
 import { Header, ProductCard } from "@/components/storefront";
 import { getCatalog } from "@/lib/catalog";
 
-export const revalidate = 86400;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Params = { q?: string; category?: string; color?: string; size?: string; availability?: string; min?: string; max?: string; sort?: string };
 
@@ -33,7 +34,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     <main>
       <Header />
       <div className="shell">
-        <div className="catalog-top"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Street catalog</p><h1>Shop all</h1></div><p className="results">{filtered.length} of {products.length} pieces<br />{source === "live" ? "Synced from the brand source" : "Showing backup catalog data"}</p></div>
+        <div className="catalog-top"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Street catalog</p><h1>Shop all</h1></div><p className="results">{filtered.length} of {products.length} pieces<br />{source === "live" ? "Synced from the brand source" : "Source is temporarily unavailable; showing a small backup catalog."}</p></div>
         <form className="filters" action="/catalog">
           <input name="q" defaultValue={params.q} placeholder="Search products, styles, brands..." />
           <select name="category" defaultValue={params.category ?? ""}><option value="">Category</option>{categories.map((value) => <option key={value}>{value}</option>)}</select>
