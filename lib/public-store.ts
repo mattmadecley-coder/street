@@ -2,11 +2,9 @@ export type PublicProduct = {
   id: number | string;
   title: string;
   handle: string;
-  description?: string;
-  body_html?: string;
-  type?: string;
-  product_type?: string;
-  tags: string[] | string;
+  body_html: string | null;
+  product_type: string;
+  tags: string;
   options: Array<{ name: string; values: string[] }>;
   variants: Array<{
     id: number | string;
@@ -17,13 +15,30 @@ export type PublicProduct = {
     option2: string | null;
     option3: string | null;
   }>;
-  images: string[];
+  images: Array<{ src: string; position: number }>;
+};
+
+type ProductPageResponse = Omit<PublicProduct, "body_html" | "product_type" | "tags" | "images"> & {
+  description?: string;
+  type?: string;
+  tags?: string[] | string;
+  images?: string[];
 };
 
 const headers = {
   Accept: "application/json, text/html, text/plain, */*",
   "User-Agent": "Mozilla/5.0 (compatible; StreetCatalog/1.0)",
 };
+
+function normalizeProduct(product: ProductPageResponse): PublicProduct {
+  return {
+    ...product,
+    body_html: product.description ?? "",
+    product_type: product.type ?? "",
+    tags: Array.isArray(product.tags) ? product.tags.join(",") : product.tags ?? "",
+    images: (product.images ?? []).map((src, position) => ({ src: src.startsWith("//") ? `https:${src}` : src, position })),
+  };
+}
 
 export async function fetchPublicProductPages(baseUrl: string): Promise<PublicProduct[]> {
   try {
@@ -39,7 +54,7 @@ export async function fetchPublicProductPages(baseUrl: string): Promise<PublicPr
       [...handles].slice(0, 60).map(async (handle) => {
         const response = await fetch(`${baseUrl}/products/${handle}.js`, { cache: "no-store", headers });
         if (!response.ok) return null;
-        return JSON.parse(await response.text()) as PublicProduct;
+        return normalizeProduct(JSON.parse(await response.text()) as ProductPageResponse);
       }),
     );
 
