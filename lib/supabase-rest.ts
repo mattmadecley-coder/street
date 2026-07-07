@@ -27,30 +27,55 @@ export function hasSupabaseCatalog() {
   return Boolean(getConfig());
 }
 
+function headers(config: SupabaseConfig, options: RestOptions, count = false) {
+  const preferences = [options.prefer ?? "return=representation", ...(count ? ["count=exact"] : [])].join(",");
+  return {
+    apikey: config.serviceKey,
+    Authorization: `Bearer ${config.serviceKey}`,
+    "Content-Type": "application/json",
+    Prefer: preferences,
+    ...(options.range ? { Range: `${options.range.from}-${options.range.to}`, "Range-Unit": "items" } : {}),
+  };
+}
+
+function responseError(data: unknown, status: number) {
+  return typeof data === "object" && data && "message" in data ? String(data.message) : `Supabase request failed (${status})`;
+}
+
 export async function supabaseRest<T>(path: string, options: RestOptions = {}): Promise<T> {
   const config = getConfig();
   if (!config) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
 
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
     method: options.method ?? "GET",
-    headers: {
-      apikey: config.serviceKey,
-      Authorization: `Bearer ${config.serviceKey}`,
-      "Content-Type": "application/json",
-      Prefer: options.prefer ?? "return=representation",
-      ...(options.range ? { Range: `${options.range.from}-${options.range.to}`, "Range-Unit": "items" } : {}),
-    },
+    headers: headers(config, options),
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     cache: "no-store",
   });
 
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    const message = typeof data === "object" && data && "message" in data ? String(data.message) : `Supabase request failed (${response.status})`;
-    throw new Error(message);
-  }
+  if (!response.ok) throw new Error(responseError(data, response.status));
   return data as T;
+}
+
+export async function supabaseRestPage<T>(path: string, range: { from: number; to: number }): Promise<{ data: T[]; total: number }> {
+  const config = getConfig();
+  if (!config) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+
+  const options: RestOptions = { range };
+  const response = await fetch(`${config.url}/rest/v1/${path}`, {
+    headers: headers(config, options, true),
+    cache: "no-store",
+  });
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) throw new Error(responseError(data, response.status));
+
+  const totalText = response.headers.get("content-range")?.split("/")[1] ?? "0";
+  const total = Number(totalText);
+  return { data: Array.isArray(data) ? data as T[] : [], total: Number.isFinite(total) ? total : 0 };
 }
 
 export async function supabaseRestAll<T>(path: string, pageSize = 500): Promise<ArrayItem<T>[]> {
