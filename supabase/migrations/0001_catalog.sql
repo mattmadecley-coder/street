@@ -26,6 +26,8 @@ create table if not exists public.products (
   is_preorder boolean not null default false,
   category text not null default 'Other',
   tags text[] not null default '{}',
+  colors text[] not null default '{}',
+  sizes text[] not null default '{}',
   primary_image_url text,
   is_active boolean not null default true,
   last_synced_at timestamptz not null default now(),
