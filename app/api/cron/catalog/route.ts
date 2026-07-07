@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { syncStreetCatalog } from "@/lib/catalog-store";
 
 export const maxDuration = 60;
@@ -13,14 +12,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const results = await syncStreetCatalog();
-    revalidatePath("/", "layout");
-    revalidatePath("/catalog");
-    revalidatePath("/brands");
-    revalidatePath("/brands/seventy-four-uniform");
-    revalidatePath("/brands/clutch-supply");
-    revalidatePath("/products/[slug]", "page");
     const failed = results.filter((result) => !result.ok);
-    return NextResponse.json({ ok: failed.length === 0, refreshedAt: new Date().toISOString(), results }, { status: failed.length ? 502 : 200 });
+    return NextResponse.json({ ok: failed.length === 0, syncedAt: new Date().toISOString(), results }, { status: failed.length ? 502 : 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Catalog sync failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
