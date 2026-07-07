@@ -1,4 +1,9 @@
 .directory { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 22px; }
 .card { display: flex; flex-direction: column; justify-content: space-between; min-height: 180px; padding: 18px; border: 1px solid rgba(16,16,16,.18); background: #fff; }
-.card strong { font-size: 38px; line-height: .95; letter-spacing: -.06em; }
+.cardLink { display: flex; flex: 1; flex-direction: column; justify-content: space-between; color: inherit; }
+.logoArea { display: grid; flex: 1; place-items: center; min-height: 84px; margin: 10px 0; }
+.logoArea img { display: block; width: min(100%, 190px); max-height: 62px; object-fit: contain; }
+.logoArea strong { font-size: 32px; line-height: .95; letter-spacing: -.06em; text-align: center; }
 .card span:last-child { font-size: 11px; color: rgba(16,16,16,.58); }
+.instagram { align-self: flex-start; margin-top: 9px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+@media (max-width: 700px) { .directory { grid-template-columns: 1fr; } }
