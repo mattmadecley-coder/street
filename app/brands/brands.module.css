@@ -1,0 +1,4 @@
+.directory { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 22px; }
+.card { display: flex; flex-direction: column; justify-content: space-between; min-height: 180px; padding: 18px; border: 1px solid rgba(16,16,16,.18); background: #fff; }
+.card strong { font-size: 38px; line-height: .95; letter-spacing: -.06em; }
+.card span:last-child { font-size: 11px; color: rgba(16,16,16,.58); }
