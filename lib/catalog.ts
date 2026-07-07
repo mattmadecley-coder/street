@@ -22,6 +22,7 @@ type ShopifyProduct = { id: number; title: string; handle: string; body_html: st
 type ShopifyResponse = { products: ShopifyProduct[] };
 
 const storeUrl = (process.env.STREET_FIRST_BRAND_URL ?? "https://www.seventyfouruniform.com").replace(/\/$/, "");
+const candidateStoreUrls = [...new Set([storeUrl, storeUrl.replace("://www.", "://")])];
 const colors = ["black", "white", "gray", "grey", "blue", "navy", "green", "army", "brown", "tan", "cream", "red", "purple", "yellow", "pink", "camo"];
 const cleanText = (value = "") => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 const titleCase = (value: string) => value.replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -38,7 +39,7 @@ function categoryFor(product: ShopifyProduct) {
   return product.product_type ? titleCase(product.product_type) : "Other";
 }
 
-function mapProduct(product: ShopifyProduct): StreetProduct {
+function mapProduct(product: ShopifyProduct, sourceBase: string): StreetProduct {
   const body = cleanText(product.body_html ?? "");
   const sourceTags = product.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
   const haystack = `${product.title} ${product.product_type} ${sourceTags.join(" ")} ${body}`.toLowerCase();
@@ -66,7 +67,7 @@ function mapProduct(product: ShopifyProduct): StreetProduct {
     slug: product.handle,
     title: product.title,
     description: body,
-    sourceUrl: `${storeUrl}/products/${product.handle}`,
+    sourceUrl: `${sourceBase}/products/${product.handle}`,
     price: Number.parseFloat(firstVariant?.price ?? "0"),
     compareAtPrice: firstVariant?.compare_at_price ? Number.parseFloat(firstVariant.compare_at_price) : undefined,
     stockStatus: available ? "in_stock" : "sold_out",
@@ -90,34 +91,47 @@ const fallbackNames = [
   ["Green Army Utility Cargo", 140, "Pants", ["Green"]],
 ] as const;
 
-const fallbackProducts: StreetProduct[] = fallbackNames.map(([title, price, category, productColors], index) => ({
-  id: `fallback-${index}`,
-  slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-  title,
-  description: "Catalog information is refreshing from the brand source. Confirm details and availability on the brand website.",
-  sourceUrl: storeUrl,
-  price,
-  stockStatus: index === 3 ? "sold_out" : "in_stock",
-  isPreorder: false,
-  primaryImage: "",
-  images: [],
-  colors: [...productColors],
-  sizes: [],
-  category,
-  tags: ["streetwear", category.toLowerCase(), ...productColors.map((color) => color.toLowerCase())],
-  lastSyncedAt: new Date().toISOString(),
-}));
+const fallbackProducts: StreetProduct[] = fallbackNames.map(([title, price, category, productColors], index) => {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return {
+    id: `fallback-${index}`,
+    slug,
+    title,
+    description: "Catalog information is refreshing from the brand source. Confirm details and availability on the brand website.",
+    sourceUrl: `${storeUrl}/products/${slug}`,
+    price,
+    stockStatus: index === 3 ? "sold_out" : "in_stock",
+    isPreorder: false,
+    primaryImage: "",
+    images: [],
+    colors: [...productColors],
+    sizes: [],
+    category,
+    tags: ["streetwear", category.toLowerCase(), ...productColors.map((color) => color.toLowerCase())],
+    lastSyncedAt: new Date().toISOString(),
+  };
+});
 
 export async function getCatalog(): Promise<{ products: StreetProduct[]; source: "live" | "fallback" }> {
-  try {
-    const response = await fetch(`${storeUrl}/products.json?limit=250`, { next: { revalidate: 86400 }, headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error(`Catalog returned ${response.status}`);
-    const data = await response.json() as ShopifyResponse;
-    if (!data.products?.length) throw new Error("No products returned");
-    return { products: data.products.map(mapProduct), source: "live" };
-  } catch {
-    return { products: fallbackProducts, source: "fallback" };
+  for (const sourceBase of candidateStoreUrls) {
+    try {
+      const response = await fetch(`${sourceBase}/products.json?limit=250`, {
+        cache: "no-store",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "User-Agent": "Mozilla/5.0 (compatible; StreetCatalog/1.0)",
+        },
+      });
+      if (!response.ok) continue;
+      const text = await response.text();
+      const data = JSON.parse(text) as ShopifyResponse;
+      if (!data.products?.length) continue;
+      return { products: data.products.map((product) => mapProduct(product, sourceBase)), source: "live" };
+    } catch {
+      // Try the next valid public store address before displaying a small fallback catalog.
+    }
   }
+  return { products: fallbackProducts, source: "fallback" };
 }
 
 export async function getProduct(slug: string) {
