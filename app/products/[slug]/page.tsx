@@ -9,18 +9,25 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
   const { product, source } = await getProduct(slug);
   if (!product) notFound();
+  const galleryImages = product.images.length ? product.images : [""];
+
   return (
     <main>
       <Header />
       <div className="shell product-layout">
-        <section className="gallery">
-          {(product.images.length ? product.images : [""]).map((image, index) => <div key={`${image}-${index}`}>{image ? <img src={image} alt={`${product.title} ${index + 1}`} /> : <div style={{ height: "100%", background: "linear-gradient(135deg,#d7d4cc,#a7a49e)" }} />}</div>)}
+        <section className="gallery" aria-label={`${product.title} image gallery`}>
+          {galleryImages.map((image, index) => (
+            <div key={`${image}-${index}`}>
+              {image ? <img src={image} alt={`${product.title} — image ${index + 1} of ${galleryImages.length}`} /> : <div style={{ height: "100%", width: "100%", background: "linear-gradient(135deg,#d7d4cc,#a7a49e)" }} />}
+            </div>
+          ))}
         </section>
         <aside className="product-info">
           <p className="brand">Seventy Four Uniform</p>
           <h1>{product.title}</h1>
           <p className="price" style={{ fontSize: 18, marginBottom: 14 }}>${product.price.toFixed(2)}</p>
           <span className="status">{product.stockStatus === "in_stock" ? "In stock" : "Sold out"}{product.isPreorder ? " · Pre-order" : ""}</span>
+          <Info label="Product images" value={`${product.images.length || 0} official photo${product.images.length === 1 ? "" : "s"} imported`} />
           {product.colors.length ? <Info label="Color" value={product.colors.join(", ")} /> : null}
           <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "Size choices were not supplied by the source catalog."} />
           <Info label="Description" value={product.description || "See the brand website for complete product details and shipping information."} />
