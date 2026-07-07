@@ -15,7 +15,9 @@ export async function GET(request: NextRequest) {
     const results = await syncStreetCatalog();
     revalidatePath("/", "layout");
     revalidatePath("/catalog");
-    revalidatePath("/brands/[slug]", "page");
+    revalidatePath("/brands");
+    revalidatePath("/brands/seventy-four-uniform");
+    revalidatePath("/brands/clutch-supply");
     revalidatePath("/products/[slug]", "page");
     const failed = results.filter((result) => !result.ok);
     return NextResponse.json({ ok: failed.length === 0, refreshedAt: new Date().toISOString(), results }, { status: failed.length ? 502 : 200 });
