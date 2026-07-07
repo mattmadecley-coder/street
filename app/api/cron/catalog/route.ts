@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { syncBrandDirectory, syncStreetCatalog } from "@/lib/catalog-store";
+import { classifyPendingProducts, syncBrandDirectory, syncStreetCatalog } from "@/lib/catalog-store";
 
 export const maxDuration = 60;
 
@@ -8,10 +8,18 @@ export async function GET(request: NextRequest) {
   if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   try {
-    if (request.nextUrl.searchParams.get("mode") === "directory") {
+    const mode = request.nextUrl.searchParams.get("mode");
+    if (mode === "directory") {
       const results = await syncBrandDirectory();
       const failed = results.filter((result) => !result.ok);
       return NextResponse.json({ ok: failed.length === 0, mode: "directory", syncedAt: new Date().toISOString(), results }, { status: failed.length ? 502 : 200 });
+    }
+
+    if (mode === "classify") {
+      const requestedLimit = Number(request.nextUrl.searchParams.get("limit"));
+      const run = await classifyPendingProducts(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined);
+      const failed = run.results.filter((result) => result.status === "error");
+      return NextResponse.json({ ok: failed.length === 0, mode: "classify", classifiedAt: new Date().toISOString(), ...run }, { status: failed.length ? 502 : 200 });
     }
 
     const batchValue = Number(request.nextUrl.searchParams.get("batch"));
