@@ -23,53 +23,26 @@ function toStreetProduct(row: ProductRow): StreetProduct {
 
 export async function getStoredCatalog(): Promise<StreetProduct[] | null> {
   if (!hasSupabaseCatalog()) return null;
-  try {
-    const rows = await supabaseRest<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&order=updated_at.desc");
-    return rows.map(toStreetProduct);
-  } catch (error) {
-    console.error("Street database catalog read failed", error);
-    return null;
-  }
+  try { const rows = await supabaseRest<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&order=updated_at.desc"); return rows.map(toStreetProduct); }
+  catch (error) { console.error("Street database catalog read failed", error); return null; }
 }
 
 export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
-  const fallback = new Map(STREET_BRANDS.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured) }]));
+  const fallback = new Map<string, StreetBrandProfile>(STREET_BRANDS.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured) }]));
   if (!hasSupabaseCatalog()) return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   try {
-    const [rows, products] = await Promise.all([
-      supabaseRest<BrandRow[]>("brands?select=*&is_active=eq.true&order=name.asc"),
-      supabaseRest<ProductCountRow[]>("products?select=brand_id&is_active=eq.true"),
-    ]);
+    const [rows, products] = await Promise.all([supabaseRest<BrandRow[]>("brands?select=*&is_active=eq.true&order=name.asc"), supabaseRest<ProductCountRow[]>("products?select=brand_id&is_active=eq.true")]);
     const counts = products.reduce((map, product) => map.set(product.brand_id, (map.get(product.brand_id) ?? 0) + 1), new Map<string, number>());
     for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: counts.get(row.id) ?? 0, featured: row.is_featured });
     return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
-  } catch (error) {
-    console.error("Street brand directory read failed", error);
-    return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }
+  } catch (error) { console.error("Street brand directory read failed", error); return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name)); }
 }
 
-async function getExistingBrand(slug: string) {
-  const rows = await supabaseRest<BrandRow[]>(`brands?select=*&slug=eq.${encodeURIComponent(slug)}`);
-  return rows[0] ?? null;
-}
+async function getExistingBrand(slug: string) { const rows = await supabaseRest<BrandRow[]>(`brands?select=*&slug=eq.${encodeURIComponent(slug)}`); return rows[0] ?? null; }
 
 async function upsertBrand(brand: StreetBrand, metadata?: BrandMetadata) {
   const existing = await getExistingBrand(brand.slug);
-  const rows = await supabaseRest<BrandRow[]>("brands?on_conflict=slug", {
-    method: "POST",
-    body: {
-      slug: brand.slug,
-      name: brand.name,
-      store_url: brand.storeUrl,
-      logo_url: metadata?.logoUrl ?? brand.logoUrl ?? existing?.logo_url ?? null,
-      instagram_url: metadata?.instagramUrl ?? existing?.instagram_url ?? null,
-      metadata_synced_at: metadata ? new Date().toISOString() : existing?.metadata_synced_at ?? null,
-      is_active: true,
-      is_featured: Boolean(brand.featured),
-    },
-    prefer: "resolution=merge-duplicates,return=representation",
-  });
+  const rows = await supabaseRest<BrandRow[]>("brands?on_conflict=slug", { method: "POST", body: { slug: brand.slug, name: brand.name, store_url: brand.storeUrl, logo_url: metadata?.logoUrl ?? brand.logoUrl ?? existing?.logo_url ?? null, instagram_url: metadata?.instagramUrl ?? existing?.instagram_url ?? null, metadata_synced_at: metadata ? new Date().toISOString() : existing?.metadata_synced_at ?? null, is_active: true, is_featured: Boolean(brand.featured) }, prefer: "resolution=merge-duplicates,return=representation" });
   if (!rows[0]) throw new Error(`Could not save ${brand.name}.`);
   return rows[0];
 }
@@ -77,12 +50,7 @@ async function upsertBrand(brand: StreetBrand, metadata?: BrandMetadata) {
 async function mapWithConcurrency<T, R>(items: T[], limit: number, callback: (item: T) => Promise<R>) {
   const results: R[] = [];
   let cursor = 0;
-  async function worker() {
-    while (cursor < items.length) {
-      const index = cursor++;
-      results[index] = await callback(items[index]);
-    }
-  }
+  async function worker() { while (cursor < items.length) { const index = cursor++; results[index] = await callback(items[index]); } }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return results;
 }
@@ -90,9 +58,13 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, callback: (it
 export async function syncBrandDirectory() {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
   return mapWithConcurrency(STREET_BRANDS, 5, async (brand) => {
-    const metadata = await fetchBrandMetadata(brand);
-    await upsertBrand(brand, metadata);
-    return { brand: brand.slug, logoFound: Boolean(metadata.logoUrl), instagramFound: Boolean(metadata.instagramUrl), ok: true as const };
+    try {
+      const metadata = await fetchBrandMetadata(brand);
+      await upsertBrand(brand, metadata);
+      return { brand: brand.slug, logoFound: Boolean(metadata.logoUrl), instagramFound: Boolean(metadata.instagramUrl), ok: true as const };
+    } catch (error) {
+      return { brand: brand.slug, logoFound: false, instagramFound: false, ok: false as const, error: error instanceof Error ? error.message : "Metadata sync failed" };
+    }
   });
 }
 
@@ -126,8 +98,7 @@ async function saveBrandCatalog(brand: StreetBrand) {
 
 export async function syncStreetCatalog() {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
-  const enabled = STREET_BRANDS.filter((brand) => brand.catalogEnabled);
   const results = [];
-  for (const brand of enabled) results.push(await saveBrandCatalog(brand));
+  for (const brand of STREET_BRANDS.filter((brand) => brand.catalogEnabled)) results.push(await saveBrandCatalog(brand));
   return results;
 }
