@@ -12,7 +12,7 @@ function unescapeHtml(value: string) {
 }
 
 function attribute(tag: string, name: string) {
-  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*[\"']([^\"']+)[\"']`, "i"));
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`, "i"));
   return match ? unescapeHtml(match[1]) : null;
 }
 
@@ -26,16 +26,16 @@ function absoluteUrl(value: string | null, baseUrl: string) {
 }
 
 function extractInstagram(html: string) {
-  const match = html.match(/https?:\\/\\/(?:www\\.)?instagram\\.com\\/[A-Za-z0-9._-]+(?:\\/)?/i)
-    ?? html.match(/(?:www\\.)?instagram\\.com\\/[A-Za-z0-9._-]+(?:\\/)?/i);
+  const match = html.match(/https?:\/\/(?:www\.)?instagram\.com\/[A-Za-z0-9._-]+(?:\/)?/i)
+    ?? html.match(/(?:www\.)?instagram\.com\/[A-Za-z0-9._-]+(?:\/)?/i);
   if (!match) return null;
   const url = match[0].startsWith("http") ? match[0] : `https://${match[0]}`;
-  return url.replace(/[\"'<>),;]+$/g, "");
+  return url.replace(/["'<>),;]+$/g, "");
 }
 
 function extractHeaderLogo(html: string, brand: StreetBrand) {
-  const header = html.match(/<header\\b[\\s\\S]*?<\\/header>/i)?.[0] ?? html;
-  const imgTags = header.match(/<img\\b[^>]*>/gi) ?? [];
+  const header = html.match(/<header\b[\s\S]*?<\/header>/i)?.[0] ?? html;
+  const imgTags = header.match(/<img\b[^>]*>/gi) ?? [];
   const normalizedName = brand.name.toLowerCase().replace(/[^a-z0-9]+/g, "");
   const candidates = imgTags.map((tag) => {
     const src = attribute(tag, "src") ?? attribute(tag, "data-src") ?? attribute(tag, "data-lazy-src");
@@ -47,7 +47,6 @@ function extractHeaderLogo(html: string, brand: StreetBrand) {
     if (/logo|wordmark|site-brand|header__heading-logo/.test(`${alt} ${className} ${id}`)) score += 12;
     if (alt.includes(normalizedName)) score += 8;
     if (/logo|wordmark/.test(source)) score += 5;
-    if (/shopify/.test(source)) score += 1;
     return { url: absoluteUrl(src, brand.storeUrl), score };
   }).filter((candidate): candidate is { url: string; score: number } => Boolean(candidate.url));
   return candidates.sort((a, b) => b.score - a.score)[0]?.url ?? null;
