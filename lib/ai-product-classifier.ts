@@ -46,6 +46,7 @@ type OpenRouterResponse = {
   error?: { message?: string };
   model?: string;
   choices?: Array<{ message?: { content?: string | null } }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 };
 
 // Switched from qwen3-vl-30b-a3b-instruct: that model was confidently
@@ -150,7 +151,7 @@ function validateClassification(value: unknown): ProductClassification {
   };
 }
 
-export async function classifyProductWithAI(product: ProductToClassify): Promise<{ classification: ProductClassification; model: string }> {
+export async function classifyProductWithAI(product: ProductToClassify): Promise<{ classification: ProductClassification; model: string; usage?: { promptTokens?: number; completionTokens?: number } }> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("AI classification is not configured. Add OPENROUTER_API_KEY in Vercel before running the classifier.");
 
@@ -244,5 +245,9 @@ Respond with ONLY a single raw JSON object — no markdown code fences, no comme
     // TEMP DIAGNOSTIC: include the raw text that failed to parse.
     throw new Error(`${message}. Raw content: ${jsonText.slice(0, 800)}`);
   }
-  return { classification: validateClassification(parsed), model: payload.model ?? classifierModel };
+  return {
+    classification: validateClassification(parsed),
+    model: payload.model ?? classifierModel,
+    usage: { promptTokens: payload.usage?.prompt_tokens, completionTokens: payload.usage?.completion_tokens },
+  };
 }

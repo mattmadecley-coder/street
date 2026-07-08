@@ -24,6 +24,7 @@ export type ClassificationPreview = {
   sourceColors: string[];
   classification?: ProductClassification;
   model?: string;
+  usage?: { promptTokens?: number; completionTokens?: number };
   error?: string;
 };
 
@@ -47,7 +48,7 @@ export async function previewPendingClassifications(requestedLimit?: number) {
     try {
       const galleryUrls = (product.product_images ?? []).sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url);
       const imageUrls = [...new Set([product.primary_image_url, ...galleryUrls].filter((url): url is string => !!url))].slice(0, MAX_PREVIEW_IMAGES);
-      const { classification, model } = await classifyProductWithAI({
+      const { classification, model, usage } = await classifyProductWithAI({
         title: product.title,
         description: product.description,
         sourceCategory: product.category,
@@ -64,6 +65,7 @@ export async function previewPendingClassifications(requestedLimit?: number) {
         sourceColors: product.colors ?? [],
         classification,
         model,
+        usage,
       });
     } catch (error) {
       results.push({
