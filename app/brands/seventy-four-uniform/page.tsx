@@ -1,16 +1,17 @@
 import { Header, ProductCard } from "@/components/storefront";
 import { getCatalog } from "@/lib/catalog";
-import { getCatalogPage } from "@/lib/catalog-page";
+import { getAllCatalogProducts } from "@/lib/catalog-page";
 
 export const revalidate = 3600;
 
 export default async function SeventyFourUniformPage() {
-  // Ask Supabase for just this brand's products instead of pulling the whole
-  // multi-brand catalog and filtering it in memory.
-  const brandPage = await getCatalogPage({ brand: "seventy-four-uniform", availability: "all" });
-  let brandProducts = brandPage?.products ?? [];
-  let source: "database" | "live" | "fallback" = brandPage ? "database" : "fallback";
-  if (!brandPage) {
+  // Ask Supabase for all of just this brand's products (paged through
+  // internally) instead of pulling the whole multi-brand catalog and
+  // filtering it in memory.
+  const brandCatalog = await getAllCatalogProducts({ brand: "seventy-four-uniform", availability: "all" });
+  let brandProducts = brandCatalog?.products ?? [];
+  let source: "database" | "live" | "fallback" = brandCatalog ? "database" : "fallback";
+  if (!brandCatalog) {
     const catalog = await getCatalog();
     brandProducts = catalog.products.filter((product) => product.brandSlug === "seventy-four-uniform");
     source = catalog.source;

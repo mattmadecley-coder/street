@@ -106,6 +106,29 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
 }
 
 /**
+ * Fetch every product matching the given filters from Supabase, paging
+ * through CATALOG_PAGE_SIZE at a time until everything is collected. This is
+ * for single-brand showcase pages (which want "all of this brand's pieces",
+ * not a paginated slice) — it still only queries the matching brand's rows,
+ * not the whole multi-brand catalog, so it stays cheap even for brands with
+ * a few hundred SKUs.
+ */
+export async function getAllCatalogProducts(filters: Omit<CatalogPageFilters, "page">): Promise<{ products: StreetProduct[]; total: number } | null> {
+  const first = await getCatalogPage({ ...filters, page: 1 });
+  if (!first) return null;
+
+  const products = [...first.products];
+  let page = 2;
+  while (products.length < first.total) {
+    const next = await getCatalogPage({ ...filters, page });
+    if (!next || !next.products.length) break;
+    products.push(...next.products);
+    page += 1;
+  }
+  return { products, total: first.total };
+}
+
+/**
  * Look up a single product by its `brandSlug--handle` slug directly in
  * Supabase, instead of pulling the entire catalog into memory and scanning
  * it. This is what product detail pages should use: it's the difference
