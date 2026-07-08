@@ -103,6 +103,10 @@ export const STREET_TAXONOMY = {
     Umbrellas: {},
     // Added after real catalog data surfaced branded towels with nowhere to go.
     Towels: {},
+    // Added after real catalog data surfaced brand decals/stickers with no
+    // home — the classifier was outputting category:"none" for these, which
+    // isn't a valid enum value and made the whole classification fail.
+    "Decals and Stickers": {},
   },
   Bags: {
     "Shoulder Bags": {},

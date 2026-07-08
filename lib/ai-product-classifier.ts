@@ -236,5 +236,13 @@ Respond with ONLY a single raw JSON object — no markdown code fences, no comme
   // Without strict schema enforcement the model occasionally wraps the JSON in
   // a markdown code fence despite instructions not to — strip it before parsing.
   const jsonText = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
-  return { classification: validateClassification(JSON.parse(jsonText)), model: payload.model ?? classifierModel };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "JSON parse failed";
+    // TEMP DIAGNOSTIC: include the raw text that failed to parse.
+    throw new Error(`${message}. Raw content: ${jsonText.slice(0, 800)}`);
+  }
+  return { classification: validateClassification(parsed), model: payload.model ?? classifierModel };
 }
