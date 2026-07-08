@@ -1,10 +1,21 @@
 export const STREET_TAXONOMY = {
-  Apparel: ["T-Shirts", "Long Sleeves", "Hoodies & Sweatshirts", "Sweaters & Knitwear", "Shirts & Overshirts", "Jerseys & Polos", "Tanks"],
-  Bottoms: ["Jeans", "Cargos & Utility Pants", "Pants & Trousers", "Sweatpants & Joggers", "Track Pants", "Shorts", "Jorts"],
-  Outerwear: ["Jackets", "Coats", "Vests", "Windbreakers", "Leather Jackets", "Denim Jackets"],
-  Footwear: ["Sneakers", "Boots", "Slides & Sandals", "Other Footwear"],
-  Accessories: ["Hats & Headwear", "Bags", "Jewelry", "Belts", "Eyewear", "Scarves & Gloves", "Socks", "Other Accessories"],
-  Lifestyle: ["Stickers & Decals", "Keychains", "Collectibles", "Home & Objects", "Other"],
+  Footwear: ["Sneakers", "Cleats", "Sandals", "Slides", "Boots", "Slip-Ons", "Mules", "Slippers", "Loafers", "Flats", "Clogs", "Espadrilles", "Heels"],
+  Apparel: ["Tops", "T-Shirts", "Shirts and Tops", "Hoodies", "Sweatshirts", "Knitwear"],
+  Bottoms: ["Shorts", "Pants", "Jeans", "Sweatpants", "Skirts", "Trousers", "Joggers"],
+  Outerwear: ["Jackets", "Vests", "Coats", "Parkas", "Anoraks", "Capes and Ponchos"],
+  Dresses: ["Short Dresses", "Mid Dresses", "Long Dresses"],
+  Swimwear: ["Swim Shorts", "Bikinis", "One Piece"],
+  Tailoring: ["Blazers", "Suits", "Waistcoats"],
+  "Underwear and Loungewear": ["Underwear", "Lingerie", "Loungewear"],
+  Activewear: ["Leggings", "Sport Bras", "Sports Tops"],
+  "Jumpsuits and Overalls": ["Jumpsuits and Overalls"],
+  Sleepwear: ["Sleepwear"],
+  Accessories: ["Hats", "Eyewear", "Socks and Tights", "Wallets", "Scarves", "Belts", "Technology", "Keychains and Lanyards", "Gloves", "Masks", "Hair Accessories", "Ties", "Travel", "Water Bottles", "Sports", "Umbrellas"],
+  Bags: ["Shoulder Bags", "Tote Bags", "Top Handles", "Backpacks", "Crossbody Bags", "Pouches", "Duffles", "Belt Bags", "Clutches", "Bucket Bags"],
+  Collectibles: ["Cards", "Figures", "Plushes", "Comics", "Objects"],
+  Jewelry: ["Watches", "Necklaces", "Bracelets", "Rings", "Earrings", "Pins", "Brooches", "Fine Jewelry"],
+  Home: ["Media", "Sports", "Objects", "Accessories", "Toys", "Art"],
+  Other: ["Other"],
 } as const;
 
 export type StreetGroup = keyof typeof STREET_TAXONOMY;
@@ -39,8 +50,21 @@ export const STREET_COLLECTIONS = [
   { label: "Iconic Archival", href: "/catalog?tag=archive" },
   { label: "Under $100", href: "/catalog?max=100" },
   { label: "Under $200", href: "/catalog?max=200" },
-  { label: "Instant", href: "/catalog?availability=in_stock" },
+  { label: "Instant", href: "/catalog?availability=in_stock&instant=1" },
 ] as const;
+
+export const STREET_SORT_OPTIONS = [
+  { label: "Newest", value: "" },
+  { label: "Price (Low - High)", value: "price-low" },
+  { label: "Price (High - Low)", value: "price-high" },
+] as const;
+
+export const STREET_FILTER_OPTIONS = {
+  gender: ["Men", "Women", "Unisex"],
+  condition: ["New", "Used"],
+  instant: ["Instant"],
+  availability: ["Available Now"],
+} as const;
 
 export const STREET_TAG_ALIASES: Record<string, StreetTag> = {
   camouflage: "camo",
