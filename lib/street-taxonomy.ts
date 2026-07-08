@@ -27,6 +27,22 @@ export const STREET_TAGS = [
 export type StreetTag = (typeof STREET_TAGS)[number];
 export type StreetColor = (typeof STREET_COLORS)[number];
 
+export const STREET_MENU_TAGS = [
+  "camo", "graphic", "washed", "baggy", "moto", "racing", "workwear", "utility", "gothic", "skate", "y2k", "denim", "leather",
+] as const satisfies readonly StreetTag[];
+
+export const STREET_COLLECTIONS = [
+  { label: "Just Dropped", href: "/catalog?sort=newest" },
+  { label: "New In", href: "/catalog?sort=newest&availability=in_stock" },
+  { label: "Under $100", href: "/catalog?max=100" },
+  { label: "Under $200", href: "/catalog?max=200" },
+  { label: "Camo", href: "/catalog?tag=camo" },
+  { label: "Washed & Distressed", href: "/catalog?tag=washed" },
+  { label: "Baggy Fits", href: "/catalog?tag=baggy" },
+  { label: "Moto & Racing", href: "/catalog?tag=moto" },
+  { label: "Workwear & Utility", href: "/catalog?tag=workwear" },
+] as const;
+
 export const STREET_TAG_ALIASES: Record<string, StreetTag> = {
   camouflage: "camo",
   "camo print": "camo",
