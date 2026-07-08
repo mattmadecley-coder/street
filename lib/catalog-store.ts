@@ -19,6 +19,7 @@ export type ClassificationRunResult = { id: string; title: string; status: "clas
 
 const CATALOG_SYNC_BATCH_SIZE = 3;
 const CLASSIFICATION_BATCH_MAX = 10;
+const CLASSIFICATION_VERSION = 2;
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
 
 function toStreetProduct(row: ProductRow): StreetProduct {
@@ -135,14 +136,10 @@ async function saveBrandCatalog(brand: StreetBrand): Promise<CatalogSyncResult> 
   }
 }
 
-export async function classifyPendingProducts(requestedLimit?: number) {
-  if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
-  const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 5)));
-  // noStore: this drives which rows get patched next, so it must reflect the latest status.
-  const pending = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors,primary_image_url&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`, { noStore: true });
+async function classifyProductRows(products: PendingClassificationRow[]) {
   const results: ClassificationRunResult[] = [];
 
-  for (const product of pending) {
+  for (const product of products) {
     try {
       const { classification, model } = await classifyProductWithAI({
         title: product.title,
@@ -163,7 +160,7 @@ export async function classifyPendingProducts(requestedLimit?: number) {
           classification_status: status,
           classification_confidence: classification.confidence,
           classification_model: model,
-          classification_version: 1,
+          classification_version: CLASSIFICATION_VERSION,
           classified_at: new Date().toISOString(),
           classification_error: null,
         },
@@ -181,7 +178,24 @@ export async function classifyPendingProducts(requestedLimit?: number) {
     }
   }
 
+  return results;
+}
+
+export async function classifyPendingProducts(requestedLimit?: number) {
+  if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 5)));
+  // noStore: this drives which rows get patched next, so it must reflect the latest status.
+  const pending = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors,primary_image_url&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`, { noStore: true });
+  const results = await classifyProductRows(pending);
   return { limit, found: pending.length, results };
+}
+
+export async function reclassifyRecentProducts(requestedLimit?: number) {
+  if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 5)));
+  const products = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors,primary_image_url&classification_status=in.(classified,needs_review,error)&is_active=eq.true&order=classified_at.desc.nullslast,id.desc&limit=${limit}`, { noStore: true });
+  const results = await classifyProductRows(products);
+  return { limit, found: products.length, results };
 }
 
 export function getCatalogSyncPlan(requestedBatch?: number) {
