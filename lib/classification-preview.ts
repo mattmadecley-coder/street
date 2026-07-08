@@ -1,6 +1,7 @@
 import { classifyProductWithAI, type ProductClassification } from "@/lib/ai-product-classifier";
 import { hasSupabaseCatalog, supabaseRest } from "@/lib/supabase-rest";
 
+type ImageRow = { source_url: string; sort_order: number };
 type PendingPreviewRow = {
   id: string;
   title: string;
@@ -9,7 +10,10 @@ type PendingPreviewRow = {
   tags: string[];
   colors: string[];
   primary_image_url: string | null;
+  product_images: ImageRow[] | null;
 };
+
+const MAX_PREVIEW_IMAGES = 6;
 
 export type ClassificationPreview = {
   id: string;
@@ -35,19 +39,21 @@ export async function previewPendingClassifications(requestedLimit?: number) {
 
   const limit = Math.max(1, Math.min(MAX_PREVIEW_PRODUCTS, Math.floor(requestedLimit ?? 3)));
   const products = await supabaseRest<PendingPreviewRow[]>(
-    `products?select=id,title,description,category,tags,colors,primary_image_url&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`,
+    `products?select=id,title,description,category,tags,colors,primary_image_url,product_images(source_url,sort_order)&product_images.order=sort_order.asc&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`,
   );
   const results: ClassificationPreview[] = [];
 
   for (const product of products) {
     try {
+      const galleryUrls = (product.product_images ?? []).sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url);
+      const imageUrls = [...new Set([product.primary_image_url, ...galleryUrls].filter((url): url is string => !!url))].slice(0, MAX_PREVIEW_IMAGES);
       const { classification, model } = await classifyProductWithAI({
         title: product.title,
         description: product.description,
         sourceCategory: product.category,
         sourceTags: product.tags ?? [],
         sourceColors: product.colors ?? [],
-        imageUrl: product.primary_image_url,
+        imageUrls,
       });
       results.push({
         id: product.id,

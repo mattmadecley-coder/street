@@ -24,7 +24,8 @@ type ProductToClassify = {
   sourceCategory: string;
   sourceTags: string[];
   sourceColors: string[];
-  imageUrl: string | null;
+  /** Every available product photo (primary + gallery), in display order. */
+  imageUrls: string[];
 };
 
 export type ProductClassification = {
@@ -158,7 +159,12 @@ export async function classifyProductWithAI(product: ProductToClassify): Promise
   // "high" detail costs more per call than the "low" this used to run at,
   // but a spot-check against real catalog images showed "low" led the model
   // to guess badly on anything that wasn't an obvious t-shirt/hoodie shape.
-  if (product.imageUrl?.startsWith("https://")) userContent.push({ type: "image_url", image_url: { url: product.imageUrl, detail: "high" } });
+  // Sending every photo (not just the primary one) gives the model multiple
+  // angles of the same item — a single studio shot was still producing
+  // confident, flatly wrong group/category picks (e.g. sweatpants -> Footwear).
+  for (const url of product.imageUrls) {
+    if (url.startsWith("https://")) userContent.push({ type: "image_url", image_url: { url, detail: "high" } });
+  }
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -176,7 +182,7 @@ export async function classifyProductWithAI(product: ProductToClassify): Promise
       messages: [
         {
           role: "system",
-          content: `You classify independent streetwear catalog products for Street, using GOAT's product taxonomy. Inspect the product image when it is provided — the image is the primary evidence. Title, description, source category, and source tags come from the merchant's own store and are frequently generic, wrong, or misleading (a merchant will dump unrelated items like balls, towels, or equipment into an "Apparel" or "Accessories" bucket just because that's the only collection they made). Never let a mismatched source category override what the image actually shows.
+          content: `You classify independent streetwear catalog products for Street, using GOAT's product taxonomy. You will typically be shown several photos of the same physical product (different angles, folded vs. worn, close-ups of prints). Look at all of them together before deciding — they are all the same item, not different items. The images are the primary evidence. Title, description, source category, and source tags come from the merchant's own store and are frequently generic, wrong, or misleading (a merchant will dump unrelated items like balls, towels, or equipment into an "Apparel" or "Accessories" bucket just because that's the only collection they made). Never let a mismatched source category override what the images actually show, and never guess a group/category that isn't clearly visible in at least one of the photos — if every photo genuinely shows a pair of pants, the group cannot be Footwear or Bags, no matter what.
 
 Select exactly one "group" (top-level) and one "category" (second-level) from the Street taxonomy below. The category must belong to its selected group. Pick the category that matches what the object literally is — a football is a football (Sports: Football), a towel is a towel (Accessories: Towels), a basketball is a basketball (Sports: Basketball) — do not force a literal piece of sporting equipment or a textile item into Apparel or Footwear just because the brand or listing text suggests clothing. Only classify as apparel/footwear if the image shows a wearable garment or shoe.
 

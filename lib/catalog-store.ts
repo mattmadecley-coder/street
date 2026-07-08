@@ -9,7 +9,7 @@ type BrandRow = { id: string; slug: string; name: string; store_url: string; log
 type ImageRow = { source_url: string; sort_order: number; alt_text?: string | null };
 type VariantRow = { external_id: string; title: string | null; price: string | number; compare_at_price: string | number | null; available: boolean; option1: string | null; option2: string | null; option3: string | null };
 type ProductRow = { id: string; brand_id: string; external_id: string; handle: string; title: string; description: string; source_url: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; category: string; tags: string[]; colors: string[]; sizes: string[]; primary_image_url: string | null; last_synced_at: string; is_active: boolean; brands: BrandRow | null; product_images: ImageRow[] | null; product_variants: VariantRow[] | null };
-type PendingClassificationRow = { id: string; title: string; description: string; category: string; tags: string[]; colors: string[]; primary_image_url: string | null };
+type PendingClassificationRow = { id: string; title: string; description: string; category: string; tags: string[]; colors: string[]; primary_image_url: string | null; product_images: ImageRow[] | null };
 type ProductCountRow = { brand_id: string };
 type SyncRunRow = { id: string };
 
@@ -18,7 +18,13 @@ export type CatalogSyncResult = { brand: string; productCount: number; ok: boole
 export type ClassificationRunResult = { id: string; title: string; status: "classified" | "needs_review" | "error"; group?: string; category?: string; tags?: string[]; error?: string };
 
 const CATALOG_SYNC_BATCH_SIZE = 3;
-const CLASSIFICATION_BATCH_MAX = 10;
+// Lowered from 10: each product now sends every one of its images to the
+// classifier (not just the primary shot), so batches take longer per item
+// and need to comfortably fit inside the route's 60s function timeout.
+const CLASSIFICATION_BATCH_MAX = 5;
+// Max images sent per product — keeps cost/latency bounded for listings
+// with a long gallery while still giving the model multiple angles.
+const CLASSIFICATION_MAX_IMAGES = 6;
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
 
 function toStreetProduct(row: ProductRow): StreetProduct {
@@ -137,20 +143,29 @@ async function saveBrandCatalog(brand: StreetBrand): Promise<CatalogSyncResult> 
 
 export async function classifyPendingProducts(requestedLimit?: number) {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
-  const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 5)));
+  const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 1)));
   // noStore: this drives which rows get patched next, so it must reflect the latest status.
-  const pending = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors,primary_image_url&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`, { noStore: true });
+  // Embeds the full product_images gallery (not just primary_image_url) so the
+  // classifier can be shown every angle of the product, not just one photo.
+  const pending = await supabaseRest<PendingClassificationRow[]>(
+    `products?select=id,title,description,category,tags,colors,primary_image_url,product_images(source_url,sort_order)&product_images.order=sort_order.asc&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`,
+    { noStore: true }
+  );
   const results: ClassificationRunResult[] = [];
 
   for (const product of pending) {
     try {
+      // Primary image first, then the rest of the gallery in sort order, deduped, capped.
+      const galleryUrls = (product.product_images ?? []).sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url);
+      const imageUrls = [...new Set([product.primary_image_url, ...galleryUrls].filter((url): url is string => !!url))].slice(0, CLASSIFICATION_MAX_IMAGES);
+
       const { classification, model } = await classifyProductWithAI({
         title: product.title,
         description: product.description,
         sourceCategory: product.category,
         sourceTags: product.tags ?? [],
         sourceColors: product.colors ?? [],
-        imageUrl: product.primary_image_url,
+        imageUrls,
       });
       const status = classification.confidence === "low" ? "needs_review" : "classified";
       await supabaseRest(`products?id=eq.${product.id}`, {
