@@ -226,7 +226,10 @@ ${STREET_COLORS.join(", ")}`,
   const payload = (await response.json()) as OpenRouterResponse;
   if (!response.ok) throw new Error(payload.error?.message ?? `OpenRouter classification request failed (${response.status}).`);
   const content = payload.choices?.[0]?.message?.content;
-  if (!content) throw new Error("AI classification returned no content.");
+  // TEMP DIAGNOSTIC: surface the raw payload when content is missing so we
+  // can see refusals / finish_reason / provider errors instead of a blind
+  // "no content" message. Remove once the Gemini switch is confirmed stable.
+  if (!content) throw new Error(`AI classification returned no content. Raw payload: ${JSON.stringify(payload).slice(0, 1500)}`);
 
   return { classification: validateClassification(JSON.parse(content)), model: payload.model ?? classifierModel };
 }
