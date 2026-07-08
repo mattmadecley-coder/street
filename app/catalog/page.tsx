@@ -102,10 +102,11 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const firstPiece = total ? (currentPage - 1) * CATALOG_PAGE_SIZE + 1 : 0;
   const lastPiece = Math.min(currentPage * CATALOG_PAGE_SIZE, total);
   const brandOptions = [...STREET_BRANDS].sort((a, b) => a.name.localeCompare(b.name));
+  const hasActiveFilters = Boolean(params.q || params.brand || params.group || params.category || params.tag || params.color || params.size || params.min || params.max || params.availability === "all" || params.sort);
 
   return (
     <main>
-      <Header productCount={total} />
+      <Header productCount={hasActiveFilters ? undefined : total} />
       <div className="shell">
         <div className="catalog-top"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Street catalog</p><h1>Shop all</h1></div><p className="results">Showing {firstPiece}–{lastPiece} of {total.toLocaleString()} pieces<br />{sourceLabel}</p></div>
         <form className="filters" action="/catalog">
