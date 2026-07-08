@@ -59,16 +59,31 @@ function cleanList(values: unknown, allowed: readonly string[]) {
   return [...new Set(values.filter((value): value is string => typeof value === "string" && allowed.includes(value)))];
 }
 
+function groupCandidatesForCategory(category: string) {
+  return Object.entries(STREET_TAXONOMY)
+    .filter(([, entries]) => (entries as readonly string[]).includes(category))
+    .map(([group]) => group as StreetGroup);
+}
+
+function repairGroupCategoryPair(group: StreetGroup, category: string) {
+  if (isStreetCategoryForGroup(group, category)) return { group, category: category as StreetCategory };
+  const candidates = groupCandidatesForCategory(category);
+  if (candidates.length) return { group: candidates[0], category: category as StreetCategory };
+  return { group: "Other" as StreetGroup, category: "Other" as StreetCategory };
+}
+
 function validateClassification(value: unknown): ProductClassification {
   if (!value || typeof value !== "object") throw new Error("Classifier returned an invalid object.");
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.group !== "string" || !isStreetGroup(candidate.group)) throw new Error("Classifier returned an invalid Street group.");
-  if (typeof candidate.category !== "string" || !isStreetCategoryForGroup(candidate.group, candidate.category)) throw new Error("Classifier returned a category outside its allowed group.");
+  if (typeof candidate.category !== "string") throw new Error("Classifier returned an invalid Street category.");
   if (candidate.confidence !== "high" && candidate.confidence !== "medium" && candidate.confidence !== "low") throw new Error("Classifier returned an invalid confidence level.");
 
+  const repaired = repairGroupCategoryPair(candidate.group, candidate.category);
+
   return {
-    group: candidate.group,
-    category: candidate.category,
+    group: repaired.group,
+    category: repaired.category,
     tags: cleanList(candidate.tags, STREET_TAGS) as StreetTag[],
     colors: cleanList(candidate.colors, STREET_COLORS) as StreetColor[],
     confidence: candidate.confidence,
@@ -108,7 +123,7 @@ export async function classifyProductWithAI(product: ProductToClassify): Promise
       messages: [
         {
           role: "system",
-          content: `You classify independent streetwear catalog products for Street. Inspect the product image first when it is provided. Use the image as the strongest evidence for visible category, color, pattern, fit, material, and style details. Use the title, description, source category, source tags, and source colors as supporting context. Select exactly one group and one category from the Street taxonomy below. The category must belong to its selected group. Select only tags from the approved tag list. Do not create new tags. Choose the tags that will make the product easiest to discover in search and filters. Prefer 3-8 useful tags. Let the product image decide the final colors when it is available and clear; brand-provided colors are only context and may be wrong or incomplete. Use high confidence when the image and text give a clear answer, medium when some details are uncertain, and low when the image is missing, blurry, or ambiguous.\n\nStreet taxonomy:\n${taxonomyPrompt}\n\nApproved tags:\n${STREET_TAGS.join(", ")}\n\nApproved colors:\n${STREET_COLORS.join(", ")}`,
+          content: `You classify independent streetwear catalog products for Street. Inspect the product image first when it is provided. Use the image as the strongest evidence for visible category, color, pattern, fit, material, and style details. Use the title, description, source category, source tags, and source colors as supporting context. Select exactly one group and one category from the Street taxonomy below. The category must belong to its selected group. Select only tags from the approved tag list. Do not create new tags. Choose the tags that will make the product easiest to discover in search and filters. Prefer 3-8 useful tags. Let the product image decide the final colors when it is available and clear; brand-provided colors are only context and may be wrong or incomplete. Use high confidence when the image and text give a clear answer, medium when some details are uncertain, and low when the image is missing, blurry, or ambiguous. If a product does not clearly fit any listed category, use Other > Other rather than inventing a category.\n\nStreet taxonomy:\n${taxonomyPrompt}\n\nApproved tags:\n${STREET_TAGS.join(", ")}\n\nApproved colors:\n${STREET_COLORS.join(", ")}`,
         },
         { role: "user", content: userContent },
       ],
