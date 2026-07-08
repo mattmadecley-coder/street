@@ -101,6 +101,8 @@ export const STREET_TAXONOMY = {
     Masks: {},
     "Water Bottles": {},
     Umbrellas: {},
+    // Added after real catalog data surfaced branded towels with nowhere to go.
+    Towels: {},
   },
   Bags: {
     "Shoulder Bags": {},
@@ -137,7 +139,10 @@ export const STREET_TAXONOMY = {
   Media: { Music: {}, Books: {}, Magazines: {} },
   Objects: { Vases: {}, Furniture: {}, Cushions: {}, Glassware: {}, Incense: {}, Rugs: {} },
   Art: { Prints: {}, Photography: {} },
-  Sports: { Ski: {}, Skate: {}, Racing: {}, Soccer: {}, Tennis: {}, Basketball: {}, Baseball: {}, "Soccer Balls": {} },
+  // Added Football after real catalog data included a branded football with
+  // no matching category — Basketball/Soccer/Baseball were already covered
+  // but American football (the ball itself) wasn't.
+  Sports: { Ski: {}, Skate: {}, Racing: {}, Soccer: {}, Tennis: {}, Basketball: {}, Baseball: {}, Football: {}, "Soccer Balls": {} },
   Other: {},
 } as const;
 

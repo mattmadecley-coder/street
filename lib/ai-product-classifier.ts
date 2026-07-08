@@ -152,10 +152,13 @@ export async function classifyProductWithAI(product: ProductToClassify): Promise
     sourceTags: product.sourceTags.slice(0, 30),
     sourceColors: product.sourceColors.slice(0, 10),
   });
-  const userContent: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "low" } }> = [
+  const userContent: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" } }> = [
     { type: "text", text: productContext },
   ];
-  if (product.imageUrl?.startsWith("https://")) userContent.push({ type: "image_url", image_url: { url: product.imageUrl, detail: "low" } });
+  // "high" detail costs more per call than the "low" this used to run at,
+  // but a spot-check against real catalog images showed "low" led the model
+  // to guess badly on anything that wasn't an obvious t-shirt/hoodie shape.
+  if (product.imageUrl?.startsWith("https://")) userContent.push({ type: "image_url", image_url: { url: product.imageUrl, detail: "high" } });
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -173,15 +176,15 @@ export async function classifyProductWithAI(product: ProductToClassify): Promise
       messages: [
         {
           role: "system",
-          content: `You classify independent streetwear catalog products for Street, using GOAT's product taxonomy. Inspect the product image when it is provided, then combine that visual evidence with title, description, source category, source tags, and source colors.
+          content: `You classify independent streetwear catalog products for Street, using GOAT's product taxonomy. Inspect the product image when it is provided — the image is the primary evidence. Title, description, source category, and source tags come from the merchant's own store and are frequently generic, wrong, or misleading (a merchant will dump unrelated items like balls, towels, or equipment into an "Apparel" or "Accessories" bucket just because that's the only collection they made). Never let a mismatched source category override what the image actually shows.
 
-Select exactly one "group" (top-level) and one "category" (second-level) from the Street taxonomy below. The category must belong to its selected group.
+Select exactly one "group" (top-level) and one "category" (second-level) from the Street taxonomy below. The category must belong to its selected group. Pick the category that matches what the object literally is — a football is a football (Sports: Football), a towel is a towel (Accessories: Towels), a basketball is a basketball (Sports: Basketball) — do not force a literal piece of sporting equipment or a textile item into Apparel or Footwear just because the brand or listing text suggests clothing. Only classify as apparel/footwear if the image shows a wearable garment or shoe.
 
 If the category breaks down further, also select a "type" (third-level) that belongs to that category — otherwise set type to null. If that type breaks down further, also select a "detail" (fourth-level) that belongs to that type — otherwise set detail to null. Do not guess a type or detail that isn't listed under the selected category/type; leave it null instead.
 
 If group is "Footwear", also select an "activity" from: ${FOOTWEAR_ACTIVITIES.join(", ")} — describing how the shoe is primarily worn/marketed (e.g. Running, Basketball, Skateboarding, Lifestyle). Set activity to null for every other group.
 
-Select only tags from the approved tag list. Do not create tags. Do not infer a tag that is not reasonably supported by text or image evidence. If the product is ambiguous, choose the best allowed category and set confidence to low.
+Select only tags from the approved tag list. Do not create tags. Do not infer a tag that is not reasonably supported by text or image evidence. If nothing in the taxonomy is a clean literal match for what the image shows, choose the closest allowed category and set confidence to low rather than defaulting to Apparel.
 
 Street taxonomy (Group: Category: Type (Detail, Detail...)):
 ${taxonomyPrompt}
