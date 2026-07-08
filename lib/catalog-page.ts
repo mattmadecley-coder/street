@@ -1,5 +1,6 @@
 import type { StreetProduct } from "@/lib/catalog";
 import { hasSupabaseCatalog, supabaseRest, supabaseRestPage } from "@/lib/supabase-rest";
+import { normalizeStreetSearchToken } from "@/lib/street-taxonomy";
 
 type BrandRow = { slug: string; name: string } | null;
 type ImageRow = { source_url: string; sort_order: number };
@@ -17,6 +18,10 @@ type ProductRow = {
   tags: string[];
   colors: string[];
   sizes: string[];
+  street_group: string | null;
+  street_category: string | null;
+  street_tags: string[] | null;
+  street_colors: string[] | null;
   primary_image_url: string | null;
   last_synced_at: string;
   brands: BrandRow;
@@ -27,7 +32,9 @@ export type CatalogPageFilters = {
   page?: number;
   q?: string;
   brand?: string;
+  group?: string;
   category?: string;
+  tag?: string;
   color?: string;
   size?: string;
   availability?: string;
@@ -41,6 +48,10 @@ export type CatalogPage = { products: StreetProduct[]; total: number; page: numb
 export const CATALOG_PAGE_SIZE = 50;
 
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
+
+function bestArray(primary: string[] | null | undefined, fallback: string[] | null | undefined) {
+  return primary?.length ? primary : fallback ?? [];
+}
 
 function toStreetProduct(row: ProductRow): StreetProduct {
   const images = [...(row.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url);
@@ -59,10 +70,10 @@ function toStreetProduct(row: ProductRow): StreetProduct {
     isPreorder: row.is_preorder,
     primaryImage: row.primary_image_url ?? images[0] ?? "",
     images,
-    colors: row.colors ?? [],
+    colors: bestArray(row.street_colors, row.colors),
     sizes: row.sizes ?? [],
-    category: row.category,
-    tags: row.tags ?? [],
+    category: row.street_category ?? row.category,
+    tags: bestArray(row.street_tags, row.tags),
     lastSyncedAt: row.last_synced_at,
   };
 }
@@ -78,15 +89,22 @@ function productPath(filters: CatalogPageFilters) {
   params.set("order", filters.sort === "price-low" ? "price.asc,id.asc" : filters.sort === "price-high" ? "price.desc,id.desc" : "updated_at.desc,id.desc");
 
   if (filters.brand) params.set("brands.slug", `eq.${filters.brand}`);
-  if (filters.category) params.set("category", `eq.${filters.category}`);
-  if (filters.color) params.set("colors", arrayContains(filters.color));
+  if (filters.group) params.set("street_group", `eq.${filters.group}`);
+  if (filters.category) params.set("street_category", `eq.${filters.category}`);
+  if (filters.tag) params.set("street_tags", arrayContains(filters.tag));
+  if (filters.color) params.set("street_colors", arrayContains(filters.color));
   if (filters.size) params.set("sizes", arrayContains(filters.size));
   if (filters.availability !== "all") params.set("stock_status", "eq.in_stock");
   if (typeof filters.min === "number" && Number.isFinite(filters.min) && filters.min > 0) params.set("price", `gte.${filters.min}`);
   if (typeof filters.max === "number" && Number.isFinite(filters.max) && filters.max > 0) params.set("price", `lte.${filters.max}`);
 
   const query = filters.q?.trim().replace(/[%,()]/g, " ").replace(/\s+/g, " ");
-  if (query) params.set("or", `(title.ilike.*${query}*,description.ilike.*${query}*)`);
+  if (query) {
+    const recognizedTag = normalizeStreetSearchToken(query);
+    const clauses = [`title.ilike.*${query}*`, `description.ilike.*${query}*`, `street_category.ilike.*${query}*`, `category.ilike.*${query}*`];
+    if (recognizedTag) clauses.push(`street_tags.${arrayContains(recognizedTag)}`);
+    params.set("or", `(${clauses.join(",")})`);
+  }
 
   return `products?${params.toString()}`;
 }
