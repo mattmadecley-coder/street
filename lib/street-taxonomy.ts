@@ -146,8 +146,13 @@ export const STREET_TAXONOMY = {
   // Added Football after real catalog data included a branded football with
   // no matching category — Basketball/Soccer/Baseball were already covered
   // but American football (the ball itself) wasn't.
-  Sports: { Ski: {}, Skate: {}, Racing: {}, Soccer: {}, Tennis: {}, Basketball: {}, Baseball: {}, Football: {}, "Soccer Balls": {} },
-  Other: {},
+  Sports: { Ski: {}, Skate: {}, Racing: {}, Soccer: {}, Tennis: {}, Basketball: {}, Baseball: {}, Football: {}, "Soccer Balls": {}, Mouthguards: {} },
+  // Added Automotive/Gift Cards after real catalog data surfaced a car-culture
+  // brand (license plate frames, floormats, detailing spray, valve stem caps)
+  // that has no equivalent anywhere in GOAT's taxonomy — Other was previously
+  // an empty catch-all group with no categories, so nothing could validly
+  // classify into it at all.
+  Other: { Automotive: {}, "Gift Cards": {} },
 } as const;
 
 // Footwear-only facet (GOAT's "activity" filter on sneakers/boots/etc).
