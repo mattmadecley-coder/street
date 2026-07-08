@@ -12,7 +12,7 @@ The first catalog source is **Seventy Four Uniform**.
 - Filters for category, color, size, price, and availability
 - In-stock is selected by default; shoppers can include sold-out products
 - Product detail pages with image gallery, sizes/colors where the source offers them, product tags, and a direct-to-brand button
-- Daily revalidation of the product source through Next.js
+- Cached, ISR-served pages (hourly TTL) that revalidate instantly whenever the daily catalog sync writes new data
 - Safe fallback catalog if the source store is temporarily unavailable
 
 ## Data source
@@ -53,9 +53,9 @@ This is an early product-discovery test. Before scaling to lots of brands, get b
 
 ## Next build priorities
 
-1. Add a real database with Supabase so product history and stock changes persist.
-2. Add outbound-click tracking so Street can prove how much traffic it sends brands.
-3. Add a Vercel Cron sync route for daily database updates.
+1. ~~Add a real database with Supabase so product history and stock changes persist.~~ Done.
+2. ~~Add outbound-click tracking so Street can prove how much traffic it sends brands.~~ Done — "Shop at {brand}" links route through `/api/out`, which logs to `outbound_clicks` before redirecting. A brand-facing traffic report on top of that table is still open.
+3. ~~Add a Vercel Cron sync route for daily database updates.~~ Done.
 4. Add a brand application / claim page.
 5. Bring in the next 5–10 brands through approved feeds or direct onboarding.
 6. Add verified size charts. Do not tell people an item runs large or small unless the brand provides measurements or a clear fit note.

@@ -1,5 +1,5 @@
 import type { StreetProduct } from "@/lib/catalog";
-import { hasSupabaseCatalog, supabaseRestPage } from "@/lib/supabase-rest";
+import { hasSupabaseCatalog, supabaseRest, supabaseRestPage } from "@/lib/supabase-rest";
 
 type BrandRow = { slug: string; name: string } | null;
 type ImageRow = { source_url: string; sort_order: number };
@@ -101,6 +101,38 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
     return { products: result.data.map(toStreetProduct), total: result.total, page, pageSize: CATALOG_PAGE_SIZE };
   } catch (error) {
     console.error("Street paged catalog read failed", error);
+    return null;
+  }
+}
+
+/**
+ * Look up a single product by its `brandSlug--handle` slug directly in
+ * Supabase, instead of pulling the entire catalog into memory and scanning
+ * it. This is what product detail pages should use: it's the difference
+ * between one filtered row fetch and downloading every brand's full catalog
+ * (images + variants included) just to show one item.
+ */
+export async function getStoredProduct(slug: string): Promise<StreetProduct | null> {
+  if (!hasSupabaseCatalog()) return null;
+  const separator = slug.indexOf("--");
+  if (separator === -1) return null;
+  const brandSlug = slug.slice(0, separator);
+  const handle = slug.slice(separator + 2);
+  if (!brandSlug || !handle) return null;
+
+  const params = new URLSearchParams();
+  params.set("select", "*,brands!inner(slug,name),product_images(source_url,sort_order)");
+  params.set("brands.slug", `eq.${brandSlug}`);
+  params.set("handle", `eq.${handle}`);
+  params.set("is_active", "eq.true");
+  params.set("limit", "1");
+
+  try {
+    const rows = await supabaseRest<ProductRow[]>(`products?${params.toString()}`);
+    const row = rows[0];
+    return row ? toStreetProduct(row) : null;
+  } catch (error) {
+    console.error("Street single-product lookup failed", error);
     return null;
   }
 }

@@ -5,7 +5,17 @@ type RestOptions = {
   body?: unknown;
   prefer?: string;
   range?: { from: number; to: number };
+  /** Bypass the shared catalog cache for reads that must see the latest write (e.g. sync bookkeeping). */
+  noStore?: boolean;
 };
+
+/**
+ * Tag applied to every cached catalog read. The daily cron sync calls
+ * `revalidateTag(CATALOG_CACHE_TAG)` as soon as it finishes writing, so pages
+ * refresh immediately after new data lands instead of waiting out the TTL below.
+ */
+export const CATALOG_CACHE_TAG = "street-catalog";
+export const CATALOG_REVALIDATE_SECONDS = 3600;
 
 type ArrayItem<T> = T extends Array<infer Item> ? Item : T;
 
@@ -46,11 +56,18 @@ export async function supabaseRest<T>(path: string, options: RestOptions = {}): 
   const config = getConfig();
   if (!config) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
 
+  const method = options.method ?? "GET";
+  // Only idempotent reads are safe to cache. Writes (and reads explicitly
+  // marked noStore, e.g. read-before-upsert checks) always hit Supabase live.
+  const cacheInit: Partial<RequestInit> = method === "GET" && !options.noStore
+    ? { next: { revalidate: CATALOG_REVALIDATE_SECONDS, tags: [CATALOG_CACHE_TAG] } }
+    : { cache: "no-store" };
+
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
-    method: options.method ?? "GET",
+    method,
     headers: headers(config, options),
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    cache: "no-store",
+    ...cacheInit,
   });
 
   const text = await response.text();
@@ -59,14 +76,18 @@ export async function supabaseRest<T>(path: string, options: RestOptions = {}): 
   return data as T;
 }
 
-export async function supabaseRestPage<T>(path: string, range: { from: number; to: number }): Promise<{ data: T[]; total: number }> {
+export async function supabaseRestPage<T>(path: string, range: { from: number; to: number }, restOptions: { noStore?: boolean } = {}): Promise<{ data: T[]; total: number }> {
   const config = getConfig();
   if (!config) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
 
   const options: RestOptions = { range };
+  const cacheInit: Partial<RequestInit> = restOptions.noStore
+    ? { cache: "no-store" }
+    : { next: { revalidate: CATALOG_REVALIDATE_SECONDS, tags: [CATALOG_CACHE_TAG] } };
+
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
     headers: headers(config, options, true),
-    cache: "no-store",
+    ...cacheInit,
   });
 
   const text = await response.text();

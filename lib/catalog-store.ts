@@ -56,7 +56,8 @@ export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
 }
 
 async function getExistingBrand(slug: string) {
-  const rows = await supabaseRest<BrandRow[]>(`brands?select=*&slug=eq.${encodeURIComponent(slug)}`);
+  // noStore: this feeds an upsert decision, so it must never read a stale cached row.
+  const rows = await supabaseRest<BrandRow[]>(`brands?select=*&slug=eq.${encodeURIComponent(slug)}`, { noStore: true });
   return rows[0] ?? null;
 }
 
@@ -137,7 +138,8 @@ async function saveBrandCatalog(brand: StreetBrand): Promise<CatalogSyncResult> 
 export async function classifyPendingProducts(requestedLimit?: number) {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
   const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 5)));
-  const pending = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors,primary_image_url&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`);
+  // noStore: this drives which rows get patched next, so it must reflect the latest status.
+  const pending = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors,primary_image_url&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`, { noStore: true });
   const results: ClassificationRunResult[] = [];
 
   for (const product of pending) {

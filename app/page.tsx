@@ -3,8 +3,10 @@ import styles from "./home.module.css";
 import { Header, ProductCard } from "@/components/storefront";
 import { getCatalogPage } from "@/lib/catalog-page";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// ISR: the homepage is served from cache and revalidated hourly at most, but
+// the daily catalog sync calls revalidateTag("street-catalog") the moment new
+// data lands, so visitors get fresh data without every request hitting Supabase.
+export const revalidate = 3600;
 
 const heroVideoUrl = process.env.NEXT_PUBLIC_HERO_VIDEO_URL;
 const featuredBrandLogoUrl = process.env.NEXT_PUBLIC_FEATURED_BRAND_LOGO_URL ?? "/brand-logos/seventy-four-uniform.svg";

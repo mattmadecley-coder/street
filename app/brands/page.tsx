@@ -2,8 +2,7 @@ import styles from "./brands.module.css";
 import { Header } from "@/components/storefront";
 import { getBrandDirectory } from "@/lib/catalog-store";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 3600;
 
 function instagramHandle(url: string | null) {
   if (!url) return null;

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { previewPendingClassifications } from "@/lib/classification-preview";
 import { classifyPendingProducts, syncBrandDirectory, syncStreetCatalog } from "@/lib/catalog-store";
+import { CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
 
 export const maxDuration = 60;
 
@@ -27,12 +29,16 @@ export async function GET(request: NextRequest) {
       const requestedLimit = Number(request.nextUrl.searchParams.get("limit"));
       const run = await classifyPendingProducts(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined);
       const failed = run.results.filter((result) => result.status === "error");
+      if (run.results.some((result) => result.status === "classified")) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
       return NextResponse.json({ ok: failed.length === 0, mode: "classify", classifiedAt: new Date().toISOString(), ...run }, { status: failed.length ? 502 : 200 });
     }
 
     const batchValue = Number(request.nextUrl.searchParams.get("batch"));
     const sync = await syncStreetCatalog(Number.isInteger(batchValue) && batchValue > 0 ? batchValue : undefined);
     const failed = sync.results.filter((result) => !result.ok);
+    // Invalidate cached catalog reads the moment new data lands, so pages
+    // don't have to wait out the hourly TTL to show a freshly synced batch.
+    if (sync.results.some((result) => result.ok)) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
     return NextResponse.json({ ok: failed.length === 0, mode: "catalog", syncedAt: new Date().toISOString(), batch: sync.batch, batchCount: sync.batchCount, totalEnabled: sync.totalEnabled, brands: sync.brands.map((brand) => brand.slug), results: sync.results }, { status: failed.length ? 502 : 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Catalog sync failed";

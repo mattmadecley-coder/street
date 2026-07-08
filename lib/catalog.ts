@@ -1,5 +1,6 @@
 import { STREET_BRANDS } from "@/lib/brands";
 import { getStoredCatalog } from "@/lib/catalog-store";
+import { getStoredProduct } from "@/lib/catalog-page";
 import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
 
 export type StreetProduct = {
@@ -69,6 +70,12 @@ export async function getCatalog(): Promise<{ products: StreetProduct[]; source:
 }
 
 export async function getProduct(slug: string) {
+  // Fast path: ask Supabase for this exact product directly. Falls back to the
+  // full catalog scan below only when Supabase isn't configured yet, or the
+  // saved catalog doesn't have this product (e.g. before the first sync).
+  const direct = await getStoredProduct(slug);
+  if (direct) return { product: direct, source: "database" as const };
+
   const catalog = await getCatalog();
   return { ...catalog, product: catalog.products.find((product) => product.slug === slug) };
 }

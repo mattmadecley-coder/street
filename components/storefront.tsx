@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { StreetProduct } from "@/lib/catalog";
 
 export function Header() {
@@ -19,7 +20,18 @@ export function ProductCard({ product }: { product: StreetProduct }) {
   return (
     <Link href={`/products/${product.slug}`}>
       <div className="card-image">
-        {product.primaryImage ? <img src={product.primaryImage} alt={product.title} loading="lazy" /> : <div style={{ height: "100%", width: "100%", background: "linear-gradient(135deg, #d7d4cc, #a7a49e)" }} />}
+        {product.primaryImage ? (
+          <Image
+            src={product.primaryImage}
+            alt={product.title}
+            fill
+            loading="lazy"
+            sizes="(max-width: 840px) 50vw, 25vw"
+            style={{ objectFit: "contain" }}
+          />
+        ) : (
+          <div style={{ height: "100%", width: "100%", background: "linear-gradient(135deg, #d7d4cc, #a7a49e)" }} />
+        )}
         {product.stockStatus === "sold_out" ? <span className="badge">Sold out</span> : null}
         {product.images.length > 1 ? <span className="image-count">{product.images.length} photos</span> : null}
       </div>

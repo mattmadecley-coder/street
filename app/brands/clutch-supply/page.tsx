@@ -1,12 +1,20 @@
 import { Header, ProductCard } from "@/components/storefront";
 import { getCatalog } from "@/lib/catalog";
+import { getCatalogPage } from "@/lib/catalog-page";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 3600;
 
 export default async function ClutchSupplyPage() {
-  const { products, source } = await getCatalog();
-  const brandProducts = products.filter((product) => product.brandSlug === "clutch-supply");
+  // Ask Supabase for just this brand's products instead of pulling the whole
+  // multi-brand catalog and filtering it in memory.
+  const brandPage = await getCatalogPage({ brand: "clutch-supply", availability: "all" });
+  let brandProducts = brandPage?.products ?? [];
+  let source: "database" | "live" | "fallback" = brandPage ? "database" : "fallback";
+  if (!brandPage) {
+    const catalog = await getCatalog();
+    brandProducts = catalog.products.filter((product) => product.brandSlug === "clutch-supply");
+    source = catalog.source;
+  }
 
   return (
     <main>

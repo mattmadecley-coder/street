@@ -4,8 +4,10 @@ import { STREET_BRANDS } from "@/lib/brands";
 import { getCatalog, type StreetProduct } from "@/lib/catalog";
 import { CATALOG_PAGE_SIZE, getCatalogPage } from "@/lib/catalog-page";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// This route reads `searchParams`, so Next always renders it per-request —
+// no explicit `dynamic`/`revalidate` override needed. The underlying Supabase
+// fetches are still cached (see lib/supabase-rest.ts), so repeat views of the
+// same filter combination reuse cached data instead of re-querying every time.
 
 type Params = { q?: string; brand?: string; category?: string; color?: string; size?: string; availability?: string; min?: string; max?: string; sort?: string; page?: string };
 
