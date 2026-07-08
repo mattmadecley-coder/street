@@ -55,15 +55,20 @@ type OpenRouterResponse = {
 const model = () => process.env.STREET_CLASSIFIER_MODEL ?? "google/gemini-2.5-flash";
 const groups = Object.keys(STREET_TAXONOMY);
 
+// "none" sentinel instead of a `["string","null"]` nullable-union type:
+// OpenRouter's structured-output compatibility layer for Gemini doesn't
+// reliably support nullable unions in a JSON schema (it either 500s or
+// silently returns empty content) — a plain string enum with a literal
+// "none" value works the same for our purposes and is portable across models.
 const classificationSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
     group: { type: "string", enum: groups },
     category: { type: "string", enum: ALL_STREET_CATEGORIES },
-    type: { type: ["string", "null"], enum: [...ALL_STREET_TYPES, null] },
-    detail: { type: ["string", "null"], enum: [...ALL_STREET_DETAILS, null] },
-    activity: { type: ["string", "null"], enum: [...FOOTWEAR_ACTIVITIES, null] },
+    type: { type: "string", enum: [...ALL_STREET_TYPES, "none"] },
+    detail: { type: "string", enum: [...ALL_STREET_DETAILS, "none"] },
+    activity: { type: "string", enum: [...FOOTWEAR_ACTIVITIES, "none"] },
     tags: { type: "array", items: { type: "string", enum: STREET_TAGS }, maxItems: 12 },
     colors: { type: "array", items: { type: "string", enum: STREET_COLORS }, maxItems: 3 },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
@@ -124,13 +129,13 @@ function validateClassification(value: unknown): ProductClassification {
   // classification: a model that nails group/category but picks a type that
   // doesn't belong under that category just loses the type, rather than
   // the product going unclassified.
-  const rawType = typeof candidate.type === "string" ? candidate.type : null;
+  const rawType = typeof candidate.type === "string" && candidate.type !== "none" ? candidate.type : null;
   const type = rawType && isStreetType(group, category, rawType) ? rawType : null;
 
-  const rawDetail = typeof candidate.detail === "string" ? candidate.detail : null;
+  const rawDetail = typeof candidate.detail === "string" && candidate.detail !== "none" ? candidate.detail : null;
   const detail = type && rawDetail && isStreetDetail(group, category, type, rawDetail) ? rawDetail : null;
 
-  const rawActivity = typeof candidate.activity === "string" ? candidate.activity : null;
+  const rawActivity = typeof candidate.activity === "string" && candidate.activity !== "none" ? candidate.activity : null;
   const activity = group === "Footwear" && rawActivity && isFootwearActivity(rawActivity) ? rawActivity : null;
 
   return {
@@ -190,9 +195,9 @@ export async function classifyProductWithAI(product: ProductToClassify): Promise
 
 Select exactly one "group" (top-level) and one "category" (second-level) from the Street taxonomy below. The category must belong to its selected group. Pick the category that matches what the object literally is — a football is a football (Sports: Football), a towel is a towel (Accessories: Towels), a basketball is a basketball (Sports: Basketball) — do not force a literal piece of sporting equipment or a textile item into Apparel or Footwear just because the brand or listing text suggests clothing. Only classify as apparel/footwear if the image shows a wearable garment or shoe.
 
-If the category breaks down further, also select a "type" (third-level) that belongs to that category — otherwise set type to null. If that type breaks down further, also select a "detail" (fourth-level) that belongs to that type — otherwise set detail to null. Do not guess a type or detail that isn't listed under the selected category/type; leave it null instead.
+If the category breaks down further, also select a "type" (third-level) that belongs to that category — otherwise set type to the literal string "none". If that type breaks down further, also select a "detail" (fourth-level) that belongs to that type — otherwise set detail to "none". Do not guess a type or detail that isn't listed under the selected category/type; use "none" instead.
 
-If group is "Footwear", also select an "activity" from: ${FOOTWEAR_ACTIVITIES.join(", ")} — describing how the shoe is primarily worn/marketed (e.g. Running, Basketball, Skateboarding, Lifestyle). Set activity to null for every other group.
+If group is "Footwear", also select an "activity" from: ${FOOTWEAR_ACTIVITIES.join(", ")} — describing how the shoe is primarily worn/marketed (e.g. Running, Basketball, Skateboarding, Lifestyle). Set activity to "none" for every other group.
 
 Select only tags from the approved tag list. Do not create tags. Do not infer a tag that is not reasonably supported by text or image evidence. If nothing in the taxonomy is a clean literal match for what the image shows, choose the closest allowed category and set confidence to low rather than defaulting to Apparel.
 
