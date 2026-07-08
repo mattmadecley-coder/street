@@ -3,3 +3,10 @@ node_modules
 .env*
 .DS_Store
 *.tsbuildinfo
+
+qa-images/
+classify-all.ps1
+classify-log.txt
+time-test.ps1
+cleanup.ps1
+
