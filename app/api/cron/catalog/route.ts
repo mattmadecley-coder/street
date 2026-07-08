@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { previewPendingClassifications } from "@/lib/classification-preview";
-import { classifyPendingProducts, syncBrandDirectory, syncStreetCatalog } from "@/lib/catalog-store";
+import { classifyPendingProducts, reclassifyRecentProducts, syncBrandDirectory, syncStreetCatalog } from "@/lib/catalog-store";
 import { CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
 
 export const maxDuration = 60;
@@ -25,12 +25,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: failed.length === 0, mode: "classify-preview", previewedAt: new Date().toISOString(), ...preview }, { status: failed.length ? 502 : 200 });
     }
 
-    if (mode === "classify") {
+    if (mode === "classify" || mode === "reclassify") {
       const requestedLimit = Number(request.nextUrl.searchParams.get("limit"));
-      const run = await classifyPendingProducts(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined);
+      const run = mode === "reclassify"
+        ? await reclassifyRecentProducts(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined)
+        : await classifyPendingProducts(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined);
       const failed = run.results.filter((result) => result.status === "error");
-      if (run.results.some((result) => result.status === "classified")) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
-      return NextResponse.json({ ok: failed.length === 0, mode: "classify", classifiedAt: new Date().toISOString(), ...run }, { status: failed.length ? 502 : 200 });
+      if (run.results.some((result) => result.status === "classified" || result.status === "needs_review")) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+      return NextResponse.json({ ok: failed.length === 0, mode, classifiedAt: new Date().toISOString(), ...run }, { status: failed.length ? 502 : 200 });
     }
 
     const batchValue = Number(request.nextUrl.searchParams.get("batch"));
