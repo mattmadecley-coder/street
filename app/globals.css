@@ -35,6 +35,24 @@ h1, h2, h3, p { margin-top: 0; }
 .filters input, .filters select, .filters button { height: 44px; width: 100%; border: 1px solid rgba(16,16,16,.22); border-radius: 0; padding: 0 10px; background: #fff; color: #101010; font-size: 12px; }
 .filters button { width: auto; padding: 0 16px; background: #101010; color: white; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .results { margin: 12px 0 0; font-size: 12px; color: rgba(16,16,16,.6); }
+.catalog-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 30px; align-items: start; margin-top: 6px; }
+.sidebar { position: sticky; top: 82px; font-size: 12px; padding-right: 4px; }
+.sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sidebar-heading { margin: 0 0 4px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.sidebar-reset { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 3px; color: rgba(16,16,16,.55); }
+.sidebar-breadcrumb { margin: 2px 0 14px; font-size: 11px; color: rgba(16,16,16,.55); }
+.sidebar-group { border-top: 1px solid rgba(16,16,16,.14); padding: 12px 0; }
+.sidebar-group:first-of-type { border-top: none; margin-top: 10px; }
+.sidebar-group summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; font-size: 13px; font-weight: 700; }
+.sidebar-group summary::-webkit-details-marker { display: none; }
+.sidebar-group summary::before { content: "+"; display: inline-block; width: 10px; color: rgba(16,16,16,.4); }
+.sidebar-group[open] > summary::before { content: "\2013"; }
+.sidebar-group ul { list-style: none; margin: 8px 0 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 7px; }
+.sidebar-group ul ul.sidebar-types { padding-left: 14px; margin: 7px 0 0; }
+.sidebar a { color: rgba(16,16,16,.75); }
+.sidebar a.active { color: #101010; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 840px) { .catalog-layout { grid-template-columns: 1fr; } .sidebar { position: static; padding-right: 0; } }
+
 .product-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(330px, .8fr); gap: 34px; }
 .gallery { display: flex; flex-direction: column; gap: 12px; }
 .gallery > div { position: relative; min-height: 420px; max-height: 880px; overflow: hidden; display: grid; place-items: center; padding: 16px; background: #e4e2da; }

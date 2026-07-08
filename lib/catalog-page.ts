@@ -21,13 +21,24 @@ type ProductRow = {
   last_synced_at: string;
   brands: BrandRow;
   product_images: ImageRow[] | null;
+  // Street taxonomy (lib/street-taxonomy.ts), set once a product has been
+  // classified. Null until then.
+  street_group: string | null;
+  street_category: string | null;
+  street_type: string | null;
+  street_detail: string | null;
 };
 
 export type CatalogPageFilters = {
   page?: number;
   q?: string;
   brand?: string;
+  /** Street taxonomy group filter, e.g. "Footwear" / "Apparel" (street_group column). */
+  group?: string;
+  /** Street taxonomy category filter, e.g. "Sneakers" / "Tops" (street_category column). */
   category?: string;
+  /** Street taxonomy type filter, e.g. "T-Shirts" / "Hoodies" (street_type column). */
+  type?: string;
   color?: string;
   size?: string;
   availability?: string;
@@ -64,6 +75,10 @@ function toStreetProduct(row: ProductRow): StreetProduct {
     category: row.category,
     tags: row.tags ?? [],
     lastSyncedAt: row.last_synced_at,
+    streetGroup: row.street_group ?? undefined,
+    streetCategory: row.street_category ?? undefined,
+    streetType: row.street_type ?? undefined,
+    streetDetail: row.street_detail ?? undefined,
   };
 }
 
@@ -78,7 +93,9 @@ function productPath(filters: CatalogPageFilters) {
   params.set("order", filters.sort === "price-low" ? "price.asc,id.asc" : filters.sort === "price-high" ? "price.desc,id.desc" : "updated_at.desc,id.desc");
 
   if (filters.brand) params.set("brands.slug", `eq.${filters.brand}`);
-  if (filters.category) params.set("category", `eq.${filters.category}`);
+  if (filters.group) params.set("street_group", `eq.${filters.group}`);
+  if (filters.category) params.set("street_category", `eq.${filters.category}`);
+  if (filters.type) params.set("street_type", `eq.${filters.type}`);
   if (filters.color) params.set("colors", arrayContains(filters.color));
   if (filters.size) params.set("sizes", arrayContains(filters.size));
   if (filters.availability !== "all") params.set("stock_status", "eq.in_stock");

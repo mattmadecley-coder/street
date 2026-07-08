@@ -23,6 +23,13 @@ export type StreetProduct = {
   category: string;
   tags: string[];
   lastSyncedAt: string;
+  // Street taxonomy (lib/street-taxonomy.ts) assigned during classification.
+  // Undefined for products that haven't been classified yet (e.g. the live
+  // source-import fallback path below never sets these).
+  streetGroup?: string;
+  streetCategory?: string;
+  streetType?: string;
+  streetDetail?: string;
 };
 
 type CatalogSource = "database" | "live" | "fallback";
