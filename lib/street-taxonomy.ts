@@ -34,13 +34,12 @@ export const STREET_MENU_TAGS = [
 export const STREET_COLLECTIONS = [
   { label: "Just Dropped", href: "/catalog?sort=newest" },
   { label: "New In", href: "/catalog?sort=newest&availability=in_stock" },
+  { label: "Most Wanted", href: "/catalog?tag=streetwear" },
+  { label: "Street Selects", href: "/catalog?tag=luxury-streetwear" },
+  { label: "Iconic Archival", href: "/catalog?tag=archive" },
   { label: "Under $100", href: "/catalog?max=100" },
   { label: "Under $200", href: "/catalog?max=200" },
-  { label: "Camo", href: "/catalog?tag=camo" },
-  { label: "Washed & Distressed", href: "/catalog?tag=washed" },
-  { label: "Baggy Fits", href: "/catalog?tag=baggy" },
-  { label: "Moto & Racing", href: "/catalog?tag=moto" },
-  { label: "Workwear & Utility", href: "/catalog?tag=workwear" },
+  { label: "Instant", href: "/catalog?availability=in_stock" },
 ] as const;
 
 export const STREET_TAG_ALIASES: Record<string, StreetTag> = {
