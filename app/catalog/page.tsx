@@ -3,17 +3,17 @@ import { Header, ProductCard } from "@/components/storefront";
 import { STREET_BRANDS } from "@/lib/brands";
 import { getCatalog, type StreetProduct } from "@/lib/catalog";
 import { CATALOG_PAGE_SIZE, getCatalogPage } from "@/lib/catalog-page";
-import { STREET_COLORS, STREET_MENU_TAGS, STREET_TAXONOMY, groupForStreetCategory } from "@/lib/street-taxonomy";
+import { STREET_COLORS, STREET_FILTER_OPTIONS, STREET_MENU_TAGS, STREET_SORT_OPTIONS, STREET_TAXONOMY, groupForStreetCategory } from "@/lib/street-taxonomy";
 
 // This route reads `searchParams`, so Next always renders it per-request —
 // no explicit `dynamic`/`revalidate` override needed. The underlying Supabase
 // fetches are still cached (see lib/supabase-rest.ts), so repeat views of the
 // same filter combination reuse cached data instead of re-querying every time.
 
-type Params = { q?: string; brand?: string; group?: string; category?: string; tag?: string; color?: string; size?: string; availability?: string; min?: string; max?: string; sort?: string; page?: string };
+type Params = { q?: string; brand?: string; group?: string; category?: string; tag?: string; gender?: string; size?: string; condition?: string; color?: string; availability?: string; instant?: string; year?: string; min?: string; max?: string; sort?: string; page?: string };
 
 const groupOptions = Object.keys(STREET_TAXONOMY);
-const categoryOptions = Object.values(STREET_TAXONOMY).flat();
+const categoryOptions = Object.entries(STREET_TAXONOMY).flatMap(([group, categories]) => categories.map((category) => ({ group, category })));
 const colors = STREET_COLORS;
 const tags = STREET_MENU_TAGS;
 const sizes = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "28", "30", "32", "34", "36", "38", "40", "One Size"];
@@ -35,7 +35,7 @@ function catalogHref(params: Params, page: number) {
 }
 
 function HiddenFilterFields({ params }: { params: Params }) {
-  const preserved: Array<keyof Params> = ["q", "brand", "group", "category", "tag", "color", "size", "availability", "sort"];
+  const preserved: Array<keyof Params> = ["q", "brand", "group", "category", "tag", "gender", "size", "condition", "color", "availability", "instant", "year", "sort"];
   return <>{preserved.map((key) => params[key] ? <input type="hidden" name={key} value={params[key]} key={key} /> : null)}</>;
 }
 
@@ -54,6 +54,7 @@ function fallbackFilter(products: StreetProduct[], params: Params) {
       && (!params.color || product.colors.some((color) => color.toLowerCase() === params.color?.toLowerCase()))
       && (!params.size || product.sizes.includes(params.size))
       && (params.availability === "all" || !params.availability || product.stockStatus === "in_stock")
+      && (!params.instant || product.stockStatus === "in_stock")
       && product.price >= min
       && product.price <= max;
   });
@@ -74,7 +75,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     tag: params.tag,
     color: params.color,
     size: params.size,
-    availability: params.availability,
+    availability: params.instant ? "in_stock" : params.availability,
     min: numberOrUndefined(params.min),
     max: numberOrUndefined(params.max),
     sort: params.sort,
@@ -102,7 +103,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const firstPiece = total ? (currentPage - 1) * CATALOG_PAGE_SIZE + 1 : 0;
   const lastPiece = Math.min(currentPage * CATALOG_PAGE_SIZE, total);
   const brandOptions = [...STREET_BRANDS].sort((a, b) => a.name.localeCompare(b.name));
-  const hasActiveFilters = Boolean(params.q || params.brand || params.group || params.category || params.tag || params.color || params.size || params.min || params.max || params.availability === "all" || params.sort);
+  const hasActiveFilters = Boolean(params.q || params.brand || params.group || params.category || params.tag || params.gender || params.size || params.condition || params.color || params.min || params.max || params.availability === "all" || params.instant || params.year || params.sort);
 
   return (
     <main>
@@ -111,21 +112,26 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
         <div className="catalog-top"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Street catalog</p><h1>Shop all</h1></div><p className="results">Showing {firstPiece}–{lastPiece} of {total.toLocaleString()} pieces<br />{sourceLabel}</p></div>
         <form className="filters" action="/catalog">
           <input name="q" defaultValue={params.q} placeholder="Search products, styles, brands..." />
+          <select name="sort" defaultValue={params.sort ?? ""}>{STREET_SORT_OPTIONS.map((option) => <option value={option.value} key={option.label}>{option.label}</option>)}</select>
           <select name="brand" defaultValue={params.brand ?? ""}><option value="">Brand</option>{brandOptions.map((brand) => <option value={brand.slug} key={brand.slug}>{brand.name}</option>)}</select>
-          <select name="group" defaultValue={params.group ?? ""}><option value="">Group</option>{groupOptions.map((value) => <option value={value} key={value}>{value}</option>)}</select>
-          <select name="category" defaultValue={params.category ?? ""}><option value="">Category</option>{categoryOptions.map((value) => <option value={value} key={value}>{value}</option>)}</select>
+          <select name="group" defaultValue={params.group ?? ""}><option value="">Category</option>{groupOptions.map((value) => <option value={value} key={value}>{value}</option>)}</select>
+          <select name="category" defaultValue={params.category ?? ""}><option value="">Subcategory</option>{categoryOptions.map(({ group, category }) => <option value={category} key={`${group}-${category}`}>{category}</option>)}</select>
           <select name="tag" defaultValue={params.tag ?? ""}><option value="">Style</option>{tags.map((value) => <option value={value} key={value}>{value.replaceAll("-", " ")}</option>)}</select>
-          <select name="color" defaultValue={params.color ?? ""}><option value="">Color</option>{colors.map((value) => <option value={value} key={value}>{value}</option>)}</select>
+          <select name="gender" defaultValue={params.gender ?? ""}><option value="">Gender</option>{STREET_FILTER_OPTIONS.gender.map((value) => <option value={value} key={value}>{value}</option>)}</select>
           <select name="size" defaultValue={params.size ?? ""}><option value="">Size</option>{sizes.map((value) => <option value={value} key={value}>{value}</option>)}</select>
-          <select name="availability" defaultValue={params.availability ?? "in_stock"}><option value="in_stock">In stock</option><option value="all">Include sold out</option></select>
-          <select name="sort" defaultValue={params.sort ?? ""}><option value="">Newest</option><option value="price-low">Price: low</option><option value="price-high">Price: high</option></select>
+          <select name="condition" defaultValue={params.condition ?? ""}><option value="">Condition</option>{STREET_FILTER_OPTIONS.condition.map((value) => <option value={value} key={value}>{value}</option>)}</select>
+          <select name="color" defaultValue={params.color ?? ""}><option value="">Color</option>{colors.map((value) => <option value={value} key={value}>{value}</option>)}</select>
+          <select name="availability" defaultValue={params.availability ?? "in_stock"}><option value="in_stock">Available Now</option><option value="all">Include sold out</option></select>
+          <select name="instant" defaultValue={params.instant ?? ""}><option value="">Instant</option><option value="1">Instant</option></select>
+          <input name="year" defaultValue={params.year} placeholder="Year" />
           <button type="submit">Apply</button>
+          <Link href="/catalog" className="filter-reset">Reset</Link>
         </form>
-        <form className="filters" action="/catalog" style={{ marginTop: 8, gridTemplateColumns: "1fr 1fr auto" }}>
+        <form className="filters price-filters" action="/catalog">
           <HiddenFilterFields params={params} />
           <input name="min" type="number" min="0" defaultValue={params.min} placeholder="Min price" />
           <input name="max" type="number" min="0" defaultValue={params.max} placeholder="Max price" />
-          <button type="submit">Price range</button>
+          <button type="submit">Price</button>
         </form>
         {products.length ? <div className="grid">{products.map((product) => <ProductCard key={product.id} product={product} />)}</div> : <div className="empty"><p>No pieces match those filters.</p><a className="link-small" href="/catalog">Reset filters</a></div>}
         {total > CATALOG_PAGE_SIZE ? <nav aria-label="Catalog pages" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, margin: "28px 0 12px", fontSize: 12 }}>
