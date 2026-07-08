@@ -198,6 +198,14 @@ export async function reclassifyRecentProducts(requestedLimit?: number) {
   return { limit, found: products.length, results };
 }
 
+export async function reclassifyErrorProducts(requestedLimit?: number) {
+  if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 5)));
+  const products = await supabaseRest<PendingClassificationRow[]>(`products?select=id,title,description,category,tags,colors,primary_image_url&classification_status=eq.error&is_active=eq.true&order=updated_at.asc,id.asc&limit=${limit}`, { noStore: true });
+  const results = await classifyProductRows(products);
+  return { limit, found: products.length, results };
+}
+
 export function getCatalogSyncPlan(requestedBatch?: number) {
   const brands = STREET_BRANDS.filter((brand) => brand.catalogEnabled);
   const batchCount = Math.max(1, Math.ceil(brands.length / CATALOG_SYNC_BATCH_SIZE));
