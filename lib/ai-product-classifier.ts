@@ -224,7 +224,9 @@ ${STREET_COLORS.join(", ")}`,
   });
 
   const payload = (await response.json()) as OpenRouterResponse;
-  if (!response.ok) throw new Error(payload.error?.message ?? `OpenRouter classification request failed (${response.status}).`);
+  // TEMP DIAGNOSTIC: include the full error payload, not just .message —
+  // OpenRouter's generic "Provider returned error" hides the real cause.
+  if (!response.ok) throw new Error(`OpenRouter request failed (${response.status}): ${JSON.stringify(payload).slice(0, 1500)}`);
   const content = payload.choices?.[0]?.message?.content;
   // TEMP DIAGNOSTIC: surface the raw payload when content is missing so we
   // can see refusals / finish_reason / provider errors instead of a blind
