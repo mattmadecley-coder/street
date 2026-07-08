@@ -52,7 +52,7 @@ type OpenRouterResponse = {
 // mis-grouping plain apparel (hoodies -> Hats, sweatpants -> Sneakers, a
 // jersey -> Bags) even with multiple high-detail images. Gemini 2.5 Flash is
 // a meaningfully stronger vision model at a still-low per-image cost.
-const model = () => process.env.STREET_CLASSIFIER_MODEL ?? "google/gemini-3-flash";
+const model = () => process.env.STREET_CLASSIFIER_MODEL ?? "google/gemini-3.5-flash";
 const groups = Object.keys(STREET_TAXONOMY);
 
 // "none" sentinel instead of a `["string","null"]` nullable-union type:
