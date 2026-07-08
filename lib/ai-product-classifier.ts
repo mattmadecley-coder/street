@@ -6,6 +6,7 @@ import {
   STREET_COLORS,
   STREET_TAGS,
   STREET_TAXONOMY,
+  groupForStreetCategory,
   isFootwearActivity,
   isStreetCategory,
   isStreetDetail,
@@ -96,11 +97,23 @@ function validateClassification(value: unknown): ProductClassification {
   const candidate = value as Record<string, unknown>;
 
   if (typeof candidate.group !== "string" || !isStreetGroup(candidate.group)) throw new Error("Classifier returned an invalid Street group.");
-  if (typeof candidate.category !== "string" || !isStreetCategory(candidate.group, candidate.category)) throw new Error("Classifier returned a category outside its selected group.");
+  if (typeof candidate.category !== "string") throw new Error("Classifier returned an invalid category.");
   if (candidate.confidence !== "high" && candidate.confidence !== "medium" && candidate.confidence !== "low") throw new Error("Classifier returned an invalid confidence level.");
 
-  const group = candidate.group;
+  let group = candidate.group;
   const category = candidate.category;
+  let confidence: "high" | "medium" | "low" = candidate.confidence;
+
+  // The model sometimes names a real category but pairs it with the wrong
+  // group (e.g. group: "Accessories", category: "Sneakers"). Category names
+  // are unique across the whole tree, so recover the correct group instead
+  // of throwing the classification away — just mark it down for review.
+  if (!isStreetCategory(group, category)) {
+    const correctedGroup = groupForStreetCategory(category);
+    if (!correctedGroup) throw new Error(`Classifier returned category "${category}", which doesn't exist under any group.`);
+    group = correctedGroup;
+    confidence = "low";
+  }
 
   // Deeper levels degrade gracefully instead of failing the whole
   // classification: a model that nails group/category but picks a type that
@@ -123,7 +136,7 @@ function validateClassification(value: unknown): ProductClassification {
     activity,
     tags: cleanList(candidate.tags, STREET_TAGS) as StreetTag[],
     colors: cleanList(candidate.colors, STREET_COLORS) as StreetColor[],
-    confidence: candidate.confidence,
+    confidence,
   };
 }
 
