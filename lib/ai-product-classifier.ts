@@ -208,18 +208,18 @@ Approved tags:
 ${STREET_TAGS.join(", ")}
 
 Approved colors:
-${STREET_COLORS.join(", ")}`,
+${STREET_COLORS.join(", ")}
+
+Respond with ONLY a single raw JSON object — no markdown code fences, no commentary before or after. It must have exactly these keys: "group" (string), "category" (string), "type" (string, or "none"), "detail" (string, or "none"), "activity" (string, or "none"), "tags" (array of strings, up to 12), "colors" (array of strings, up to 3), "confidence" ("high", "medium", or "low"). Every string value must be copied exactly (case-sensitive) from the approved lists above — never invent a value that isn't in those lists.`,
         },
         { role: "user", content: userContent },
       ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "street_product_classification",
-          strict: true,
-          schema: classificationSchema,
-        },
-      },
+      // Plain JSON mode instead of a strict json_schema: Gemini's schema-constrained
+      // decoding rejects this schema outright ("too much branching for serving")
+      // once type/detail enums cover the full 4-level taxonomy (hundreds of values).
+      // validateClassification() below already does full manual validation with
+      // graceful degradation, so we don't depend on provider-side schema enforcement.
+      response_format: { type: "json_object" },
     }),
   });
 
@@ -233,5 +233,8 @@ ${STREET_COLORS.join(", ")}`,
   // "no content" message. Remove once the Gemini switch is confirmed stable.
   if (!content) throw new Error(`AI classification returned no content. Raw payload: ${JSON.stringify(payload).slice(0, 1500)}`);
 
-  return { classification: validateClassification(JSON.parse(content)), model: payload.model ?? classifierModel };
+  // Without strict schema enforcement the model occasionally wraps the JSON in
+  // a markdown code fence despite instructions not to — strip it before parsing.
+  const jsonText = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  return { classification: validateClassification(JSON.parse(jsonText)), model: payload.model ?? classifierModel };
 }
