@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { StreetProduct } from "@/lib/catalog";
 import { STREET_BRANDS } from "@/lib/brands";
-import { STREET_COLLECTIONS, STREET_MENU_TAGS, STREET_TAXONOMY } from "@/lib/street-taxonomy";
+import { STREET_COLLECTIONS, STREET_TAXONOMY } from "@/lib/street-taxonomy";
 
 function catalogLink(params: Record<string, string>) {
   const search = new URLSearchParams(params);
@@ -21,6 +21,7 @@ export function Header({ productCount }: { productCount?: number }) {
     <header className="header">
       <Link href="/" className="wordmark" aria-label="Street home">STREET</Link>
       <nav className="nav" aria-label="Primary navigation">
+        <Link href="/">Home</Link>
         <div className="nav-item mega-trigger">
           <Link href="/catalog">{shopLabel}</Link>
           <div className="mega-menu" aria-label="Shop menu">
@@ -40,16 +41,11 @@ export function Header({ productCount }: { productCount?: number }) {
               {STREET_COLLECTIONS.map((collection) => <Link href={collection.href} key={collection.label}>{collection.label}</Link>)}
             </div>
             <div className="mega-column">
-              <p>Styles</p>
-              {STREET_MENU_TAGS.map((tag) => <Link href={catalogLink({ tag })} key={tag}>{tag.replaceAll("-", " ")}</Link>)}
-            </div>
-            <div className="mega-column">
               <p>Featured brands</p>
               {featuredBrands.map((brand) => <Link href={catalogLink({ brand: brand.slug })} key={brand.slug}>{brand.name}</Link>)}
             </div>
           </div>
         </div>
-        <Link href="/catalog?sort=newest">New in</Link>
         <Link href="/brands">Brands</Link>
       </nav>
       <Link href="/catalog" className="nav-search" aria-label="Search catalog"><span>Search</span></Link>
