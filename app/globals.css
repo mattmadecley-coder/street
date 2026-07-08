@@ -43,7 +43,7 @@ h1, h2, h3, p { margin-top: 0; }
 .dark-section h2 { max-width: 900px; margin: 0; font-size: clamp(38px, 6vw, 92px); line-height: .9; letter-spacing: -.09em; }
 .catalog-top { display: flex; gap: 12px; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(16,16,16,.16); padding-bottom: 20px; }
 .catalog-top h1 { margin: 0; font-size: clamp(38px, 5vw, 68px); letter-spacing: -.08em; }
-.filters { display: grid; grid-template-columns: 2fr repeat(7, 1fr) auto; gap: 9px; margin: 20px 0 0; }
+.filters { display: grid; grid-template-columns: 2fr repeat(8, 1fr) auto; gap: 9px; margin: 20px 0 0; }
 .filters input, .filters select, .filters button { height: 44px; width: 100%; border: 1px solid rgba(16,16,16,.22); border-radius: 0; padding: 0 10px; background: #fff; color: #101010; font-size: 12px; }
 .filters button { width: auto; padding: 0 16px; background: #101010; color: white; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .results { margin: 12px 0 0; font-size: 12px; color: rgba(16,16,16,.6); }
