@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import { after } from "next/server";
 import { Header, Footer } from "@/components/storefront";
+import { ProductGallery } from "@/components/product-gallery";
 import { getProduct } from "@/lib/catalog";
 import { logSiteEvent } from "@/lib/analytics";
 
@@ -41,32 +41,13 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
     await logSiteEvent({ eventType: "product_view", productId: product.id, brandSlug: product.brandSlug, streetGroup: product.streetGroup, streetCategory: product.streetCategory, price: product.price, path: `/products/${slug}` });
   });
 
-  const galleryImages = product.images.length ? product.images : [""];
   const sourceMessage = source === "database" ? "Saved in Street's catalog and refreshed by the scheduled importer." : source === "live" ? "Live source import — this product will be stored after the first database sync." : "The source is unavailable right now. Confirm details on the brand website.";
 
   return (
     <main>
       <Header />
       <div className="shell product-layout">
-        <section className="gallery" aria-label={`${product.title} image gallery`}>
-          {galleryImages.map((image, index) => (
-            <div key={`${image}-${index}`}>
-              {image ? (
-                <Image
-                  src={image}
-                  alt={`${product.title} — image ${index + 1} of ${galleryImages.length}`}
-                  fill
-                  priority={index === 0}
-                  loading={index === 0 ? undefined : "lazy"}
-                  sizes="(max-width: 840px) 100vw, 60vw"
-                  style={{ objectFit: "contain" }}
-                />
-              ) : (
-                <div style={{ height: "100%", width: "100%", background: "linear-gradient(135deg,#d7d4cc,#a7a49e)" }} />
-              )}
-            </div>
-          ))}
-        </section>
+        <ProductGallery images={product.images} title={product.title} />
         <aside className="product-info">
           <p className="brand">{product.brandName}</p>
           <h1>{product.title}</h1>
