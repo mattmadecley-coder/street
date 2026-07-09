@@ -2,15 +2,19 @@ import Link from "next/link";
 import Image from "next/image";
 import type { StreetProduct } from "@/lib/catalog";
 import { SearchToggle } from "@/components/search-overlay";
+import { CategoryMenu } from "@/components/category-menu";
+import { getActiveCategorySummary } from "@/lib/catalog-store";
 
-export function Header() {
+export async function Header() {
+  const categorySummary = await getActiveCategorySummary();
   return (
     <header className="header">
       <Link href="/" className="wordmark" aria-label="Street home">STREET</Link>
       <nav className="nav">
         <Link href="/catalog">Shop all</Link>
-        <Link href="/catalog?sort=newest">New in</Link>
-        <Link href="/brands">Brands</Link>
+        <CategoryMenu summary={categorySummary} />
+        <Link href="/catalog?sort=newest" className="nav-hide-mobile">New in</Link>
+        <Link href="/brands" className="nav-hide-mobile">Brands</Link>
       </nav>
       <SearchToggle />
     </header>

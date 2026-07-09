@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createBrandDraft, findBrandByDomain, syncSingleBrand, setBrandCatalogEnabled, classifyPendingProducts, getBrandBySlug } from "@/lib/catalog-store";
@@ -99,7 +100,16 @@ export async function skipLogo(formData: FormData) {
   redirect(`/admin/brands/new?step=import&slug=${encodeURIComponent(slug)}`);
 }
 
-/** Step 3: pull in the brand's full product catalog (images, sizes, prices — everything), then enable it for the daily refresh. */
+/**
+ * Step 3: pull in the brand's full product catalog (images, sizes, prices —
+ * everything), then classify whatever came in. This used to block the admin
+ * on this page until both steps finished, which could take a while for a
+ * big catalog. Now the wizard hands off to a background task (Next's
+ * after(), same pattern as analytics logging) and sends the admin straight
+ * to /admin/brands, where the brand shows up pinned under "Recently added"
+ * with a live "Importing..." / "Classifying (x of y)..." status until it's
+ * done — see the polling in that page.
+ */
 export async function runImport(formData: FormData) {
   const slug = String(formData.get("slug") ?? "");
   const brand = await getBrandBySlug(slug);
@@ -107,14 +117,29 @@ export async function runImport(formData: FormData) {
     redirect("/admin/brands/new");
     return;
   }
-  const result = await syncSingleBrand(brand);
-  await setBrandCatalogEnabled(slug, true);
-  revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
-  revalidatePath("/admin/brands");
 
-  const params = new URLSearchParams({ step: "import", slug, imported: result.ok ? String(result.productCount) : "0" });
-  if (!result.ok && result.error) params.set("importError", result.error);
-  redirect(`/admin/brands/new?${params.toString()}`);
+  await setBrandCatalogEnabled(slug, true);
+
+  after(async () => {
+    const result = await syncSingleBrand(brand);
+    if (!result.ok) return;
+    revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+
+    // Classify in a loop, budgeted so this never runs past the function's
+    // own timeout (vercel.json sets maxDuration=60 on this route). Anything
+    // left pending when the budget runs out just sits as "pending" — the
+    // admin can finish it with the manual "Classify now" button on
+    // /admin/brands, or it gets picked up by a future classify pass.
+    const deadline = Date.now() + 40_000;
+    while (Date.now() < deadline) {
+      const batch = await classifyPendingProducts(20, slug);
+      if (!batch.results.length) break;
+      revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+    }
+  });
+
+  revalidatePath("/admin/brands");
+  redirect(`/admin/brands?justAdded=${encodeURIComponent(slug)}`);
 }
 
 /** Called repeatedly from the client-side classify-runner until this brand has nothing left pending. */

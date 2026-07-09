@@ -1,4 +1,5 @@
 import { STREET_BRANDS, type StreetBrand } from "@/lib/brands";
+import { STREET_TAXONOMY, categoriesForGroup } from "@/lib/street-taxonomy";
 import { fetchBrandMetadata, type BrandMetadata } from "@/lib/brand-metadata";
 import { classifyProductWithAI } from "@/lib/ai-product-classifier";
 import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
@@ -14,7 +15,7 @@ type ProductCountRow = { brand_id: string };
 type SyncRunRow = { id: string };
 type SyncRunHistoryRow = { brand_id: string; started_at: string; completed_at: string | null; status: "running" | "success" | "failed"; product_count: number; error_message: string | null; brands: { slug: string } | null };
 
-export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; instagramUrl: string | null; productCount: number; featured: boolean; catalogEnabled: boolean };
+export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; instagramUrl: string | null; productCount: number; featured: boolean; catalogEnabled: boolean; createdAt: string };
 export type CatalogSyncResult = { brand: string; productCount: number; ok: boolean; error?: string };
 export type ClassificationRunResult = { id: string; title: string; status: "classified" | "needs_review" | "error"; group?: string; category?: string; tags?: string[]; error?: string };
 export type BrandSyncStatus = { lastSyncedAt: string | null; lastStatus: "running" | "success" | "failed" | null; lastProductCount: number | null; lastError: string | null };
@@ -43,7 +44,7 @@ function toStreetBrand(row: BrandRow): StreetBrand {
 export async function getStoredCatalog(): Promise<StreetProduct[] | null> {
   if (!hasSupabaseCatalog()) return null;
   try {
-    const rows = await supabaseRestAll<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&order=updated_at.desc,id.desc");
+    const rows = await supabaseRestAll<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&is_hidden=eq.false&order=updated_at.desc,id.desc");
     return rows.map(toStreetProduct);
   } catch (error) {
     console.error("Street database catalog read failed", error);
@@ -101,19 +102,75 @@ export async function findBrandByDomain(url: string): Promise<StreetBrand | null
 
 export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
   const brands = await getAllBrands();
-  const fallback = new Map<string, StreetBrandProfile>(brands.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured), catalogEnabled: brand.catalogEnabled ?? true }]));
+  const fallback = new Map<string, StreetBrandProfile>(brands.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured), catalogEnabled: brand.catalogEnabled ?? true, createdAt: new Date(0).toISOString() }]));
   if (!hasSupabaseCatalog()) return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   try {
     const [rows, products] = await Promise.all([
-      supabaseRest<BrandRow[]>("brands?select=*&is_active=eq.true&order=name.asc"),
+      supabaseRest<(BrandRow & { created_at: string })[]>("brands?select=*&is_active=eq.true&order=name.asc"),
       supabaseRestAll<ProductCountRow[]>("products?select=brand_id&is_active=eq.true&order=id.asc"),
     ]);
     const counts = products.reduce((map, product) => map.set(product.brand_id, (map.get(product.brand_id) ?? 0) + 1), new Map<string, number>());
-    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: counts.get(row.id) ?? 0, featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true });
+    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: counts.get(row.id) ?? 0, featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true, createdAt: row.created_at });
     return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error("Street brand directory read failed", error);
     return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+}
+
+/**
+ * Pending-classification count per brand slug (products.classification_status
+ * = 'pending', still active). Powers the "Classifying products (x of y)"
+ * progress state on /admin/brands — combined with productCount from
+ * getBrandDirectory, x = productCount - pending.
+ */
+export async function getBrandClassificationProgress(): Promise<Map<string, number>> {
+  if (!hasSupabaseCatalog()) return new Map();
+  try {
+    const rows = await supabaseRestAll<Array<{ brand_id: string; brands: { slug: string } | null }>>(
+      "products?select=brand_id,brands(slug)&is_active=eq.true&classification_status=eq.pending&order=id.asc"
+    );
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      const slug = row.brands?.slug;
+      if (!slug) continue;
+      map.set(slug, (map.get(slug) ?? 0) + 1);
+    }
+    return map;
+  } catch (error) {
+    console.error("Street brand classification progress read failed", error);
+    return new Map();
+  }
+}
+
+export type CategorySummary = { group: string; categories: string[] };
+
+/**
+ * Which taxonomy groups/categories currently have at least one live,
+ * classified product — powers the header's "Categories" mega-menu so it
+ * never links somewhere empty. Cached the same way as the rest of the
+ * catalog (see supabaseRestAll / CATALOG_CACHE_TAG), so this doesn't add a
+ * real extra round trip on top of normal page loads.
+ */
+export async function getActiveCategorySummary(): Promise<CategorySummary[]> {
+  if (!hasSupabaseCatalog()) return [];
+  try {
+    const rows = await supabaseRestAll<Array<{ street_group: string | null; street_category: string | null }>>(
+      "products?select=street_group,street_category&is_active=eq.true&is_hidden=eq.false&street_group=not.is.null&street_category=not.is.null&order=id.asc"
+    );
+    const byGroup = new Map<string, Set<string>>();
+    for (const row of rows) {
+      if (!row.street_group || !row.street_category) continue;
+      if (!byGroup.has(row.street_group)) byGroup.set(row.street_group, new Set());
+      byGroup.get(row.street_group)!.add(row.street_category);
+    }
+    // Taxonomy order (Footwear, Apparel, Accessories, ...), not row order.
+    return Object.keys(STREET_TAXONOMY)
+      .filter((group) => byGroup.has(group))
+      .map((group) => ({ group, categories: categoriesForGroup(group).filter((category) => byGroup.get(group)!.has(category)) }));
+  } catch (error) {
+    console.error("Street category summary read failed", error);
+    return [];
   }
 }
 

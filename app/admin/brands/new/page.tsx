@@ -1,9 +1,7 @@
 import Link from "next/link";
 import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
-import { ClassifyRunner } from "@/components/admin/classify-runner";
 import { getBrandBySlug } from "@/lib/catalog-store";
-import { supabaseRest, supabaseRestPage, hasSupabaseCatalog } from "@/lib/supabase-rest";
 import { startBrandOnboarding, runLogoFinder, approveLogo, saveManualLogo, skipLogo, runImport } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -15,22 +13,7 @@ type PageParams = {
   candidate?: string;
   source?: string;
   notfound?: string;
-  imported?: string;
-  importError?: string;
 };
-
-async function pendingCountForBrand(slug: string): Promise<number> {
-  if (!hasSupabaseCatalog()) return 0;
-  try {
-    const brandRows = await supabaseRest<Array<{ id: string }>>(`brands?select=id&slug=eq.${encodeURIComponent(slug)}&limit=1`);
-    const brandId = brandRows[0]?.id;
-    if (!brandId) return 0;
-    const result = await supabaseRestPage(`products?select=id&brand_id=eq.${brandId}&classification_status=eq.pending&is_active=eq.true`, { from: 0, to: 0 }, { noStore: true });
-    return result.total;
-  } catch {
-    return 0;
-  }
-}
 
 function StepIndicator({ step }: { step: "url" | "logo" | "import" }) {
   const steps: Array<{ key: typeof step; label: string }> = [
@@ -81,7 +64,7 @@ export default async function AddBrandPage({ searchParams }: { searchParams: Pro
       ) : null}
 
       {step === "import" && params.slug ? (
-        <ImportStep slug={params.slug} imported={params.imported} importError={params.importError} />
+        <ImportStep slug={params.slug} />
       ) : null}
     </div>
   );
@@ -144,33 +127,20 @@ async function LogoStep({ slug, candidate, source, notfound }: { slug: string; c
   );
 }
 
-async function ImportStep({ slug, imported, importError }: { slug: string; imported?: string; importError?: string }) {
+async function ImportStep({ slug }: { slug: string }) {
   const brand = await getBrandBySlug(slug);
   if (!brand) return <p className={styles.noticeError}>Couldn&rsquo;t find that brand draft.</p>;
-
-  const hasImported = imported !== undefined;
-  const pendingCount = hasImported ? await pendingCountForBrand(slug) : 0;
 
   return (
     <div>
       <p style={{ marginBottom: 16 }}><strong>{brand.name}</strong> — {brand.storeUrl}</p>
-
-      {importError ? <p className={styles.noticeError}>Import failed: {importError}</p> : null}
-
-      {!hasImported ? (
-        <form action={runImport} className={styles.form} style={{ marginBottom: 20 }}>
-          <input type="hidden" name="slug" value={slug} />
-          <button type="submit" className={styles.button}>Import products now</button>
-        </form>
-      ) : (
-        <>
-          <p className={styles.notice}>Imported {imported} product{imported === "1" ? "" : "s"} — images, prices, sizes, and stock status all pulled in. This brand is now included in the daily refresh.</p>
-          <div style={{ marginBottom: 20 }}>
-            <ClassifyRunner brandSlug={slug} pendingCount={pendingCount} />
-          </div>
-          <Link href="/admin/brands" className={styles.button} style={{ display: "inline-block", textDecoration: "none" }}>Done — go to brands</Link>
-        </>
-      )}
+      <p className={styles.rowMeta} style={{ marginBottom: 16, maxWidth: 480 }}>
+        This pulls in every product — images, prices, sizes, stock status — then classifies each one into a category in the background. You&rsquo;ll land on the Brands page and see {brand.name} at the top under &ldquo;Recently added&rdquo; with a live progress status.
+      </p>
+      <form action={runImport} className={styles.form}>
+        <input type="hidden" name="slug" value={slug} />
+        <button type="submit" className={styles.button}>Import products</button>
+      </form>
     </div>
   );
 }

@@ -2,7 +2,9 @@ import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { TaxonomyPicker } from "@/components/admin/taxonomy-picker";
 import { supabaseRest } from "@/lib/supabase-rest";
-import { updateProductTaxonomy } from "./actions";
+import { getAllBrands } from "@/lib/catalog-store";
+import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
+import { updateProductTaxonomy, hideProduct, deleteProduct } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +20,9 @@ type AdminProductRow = {
   street_activity: string | null;
   street_tags: string[] | null;
   classification_status: string;
-  brands: { name: string } | null;
+  is_hidden: boolean;
+  stock_status: string;
+  brands: { slug: string; name: string } | null;
 };
 
 const STATUS_OPTIONS = [
@@ -29,14 +33,15 @@ const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
 ];
 
-async function searchProducts(q: string | undefined, status: string) {
+async function searchProducts(q: string | undefined, status: string, brandSlug: string | undefined) {
   const params = new URLSearchParams();
-  params.set("select", "id,title,price,primary_image_url,street_group,street_category,street_type,street_detail,street_activity,street_tags,classification_status,brands(name)");
+  params.set("select", "id,title,price,primary_image_url,street_group,street_category,street_type,street_detail,street_activity,street_tags,classification_status,is_hidden,stock_status,brands!inner(slug,name)");
   params.set("is_active", "eq.true");
   params.set("order", "updated_at.desc");
   params.set("limit", "30");
   if (status !== "all") params.set("classification_status", `eq.${status}`);
   if (q?.trim()) params.set("title", `ilike.*${q.trim().replace(/[%,()]/g, " ")}*`);
+  if (brandSlug) params.set("brands.slug", `eq.${brandSlug}`);
 
   try {
     return await supabaseRest<AdminProductRow[]>(`products?${params.toString()}`, { noStore: true });
@@ -46,11 +51,11 @@ async function searchProducts(q: string | undefined, status: string) {
   }
 }
 
-export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; saved?: string }> }) {
-  const { q, status: statusParam, saved } = await searchParams;
+export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; brand?: string; saved?: string }> }) {
+  const { q, status: statusParam, brand: brandParam, saved } = await searchParams;
   const status = statusParam ?? "needs_review";
-  const returnTo = `/admin/products?status=${encodeURIComponent(status)}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
-  const products = await searchProducts(q, status);
+  const returnTo = `/admin/products?status=${encodeURIComponent(status)}${brandParam ? `&brand=${encodeURIComponent(brandParam)}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+  const [products, brands] = await Promise.all([searchProducts(q, status, brandParam), getAllBrands()]);
 
   return (
     <div className={styles.shell}>
@@ -62,6 +67,10 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
 
       <form action="/admin/products" className={styles.searchBar}>
         <input type="text" name="q" defaultValue={q} placeholder="Search by product title..." />
+        <select name="brand" defaultValue={brandParam ?? ""}>
+          <option value="">All brands</option>
+          {[...brands].sort((a, b) => a.name.localeCompare(b.name)).map((brand) => <option key={brand.slug} value={brand.slug}>{brand.name}</option>)}
+        </select>
         <select name="status" defaultValue={status}>
           {STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
@@ -78,10 +87,13 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
                 {product.primary_image_url ? <img src={product.primary_image_url} alt="" style={{ width: 40, height: 40, objectFit: "contain", background: "#f4f3ee" }} /> : null}
                 <span>
                   <strong>{product.title}</strong>
-                  <span className={styles.rowMeta} style={{ display: "block" }}>{product.brands?.name ?? "Unknown brand"} · ${Number(product.price).toFixed(2)}</span>
+                  <span className={styles.rowMeta} style={{ display: "block" }}>{product.brands?.name ?? "Unknown brand"} · ${Number(product.price).toFixed(2)}{product.stock_status === "sold_out" ? " · Sold out" : ""}</span>
                 </span>
               </span>
-              <span className={styles.pill}>{product.classification_status.replace("_", " ")}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {product.is_hidden ? <span className={styles.pill}>Hidden</span> : null}
+                <span className={styles.pill}>{product.classification_status.replace("_", " ")}</span>
+              </span>
             </summary>
             <div className={styles.rowBody}>
               <p className={styles.rowMeta} style={{ marginBottom: 12 }}>
@@ -105,6 +117,21 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
                 </div>
                 <button type="submit" className={styles.button}>Save product</button>
               </form>
+              <div className={styles.actions} style={{ marginTop: 14, borderTop: "1px solid rgba(16,16,16,.12)", paddingTop: 14 }}>
+                <form action={hideProduct}>
+                  <input type="hidden" name="product_id" value={product.id} />
+                  <input type="hidden" name="return_to" value={returnTo} />
+                  <input type="hidden" name="hidden" value={product.is_hidden ? "false" : "true"} />
+                  <button type="submit" className={styles.buttonSecondary}>{product.is_hidden ? "Unhide (show on site)" : "Hide from site"}</button>
+                </form>
+                <form action={deleteProduct}>
+                  <input type="hidden" name="product_id" value={product.id} />
+                  <input type="hidden" name="return_to" value={returnTo} />
+                  <ConfirmSubmitButton confirmText={`Permanently delete "${product.title}"? This can't be undone.`} className={styles.buttonSecondary} style={{ color: "#a4302a", borderColor: "#a4302a" }}>
+                    Delete permanently
+                  </ConfirmSubmitButton>
+                </form>
+              </div>
             </div>
           </details>
         ))}
