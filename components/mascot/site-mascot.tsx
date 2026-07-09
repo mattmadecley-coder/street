@@ -20,7 +20,7 @@ const DWELL_MESSAGES: Array<{ afterMs: number; text: string }> = [
   { afterMs: 180_000, text: "You must really like these." },
 ];
 
-const BUBBLE_VISIBLE_MS = 6_000;
+const BUBBLE_VISIBLE_MS = 12_000;
 const WALK_SPEED_PX_PER_MS = 0.05; // ~50px/sec
 const IDLE_MIN_MS = 3_000;
 const IDLE_MAX_MS = 8_000;
