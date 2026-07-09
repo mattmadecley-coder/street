@@ -137,3 +137,12 @@ h1, h2, h3, p { margin-top: 0; }
   .category-menu-group li { margin-bottom: 10px; }
   .category-menu-group a { font-size: 13.5px; }
 }
+
+
+.footer { margin-top: 64px; border-top: 1px solid rgba(16,16,16,.12); padding: 26px 22px 34px; }
+.footer-inner { max-width: 1080px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.footer-note { flex: 1 1 420px; margin: 0; font-size: 11.5px; line-height: 1.5; color: rgba(16,16,16,.55); max-width: 640px; }
+.footer-links { display: flex; gap: 18px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.footer-links a { color: rgba(16,16,16,.65); text-decoration: none; }
+.footer-links a:hover { color: #101010; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 700px) { .footer-inner { flex-direction: column; align-items: flex-start; } }

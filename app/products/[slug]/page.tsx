@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { after } from "next/server";
-import { Header } from "@/components/storefront";
+import { Header, Footer } from "@/components/storefront";
 import { getProduct } from "@/lib/catalog";
 import { logSiteEvent } from "@/lib/analytics";
 
@@ -88,6 +88,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
           <div className="tags">{product.tags.slice(0, 12).map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
         </aside>
       </div>
+      <Footer />
     </main>
   );
 }

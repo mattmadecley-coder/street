@@ -21,6 +21,21 @@ export async function Header() {
   );
 }
 
+export function Footer() {
+  return (
+    <footer className="footer">
+      <div className="footer-inner">
+        <p className="footer-note">Street is an independent discovery site — every purchase happens on the brand&rsquo;s own website. Street isn&rsquo;t affiliated with, and doesn&rsquo;t sell for, the brands listed here.</p>
+        <nav className="footer-links">
+          <Link href="/catalog">Shop all</Link>
+          <Link href="/brands">Brands</Link>
+          <Link href="/privacy">Privacy &amp; terms</Link>
+        </nav>
+      </div>
+    </footer>
+  );
+}
+
 /**
  * `searchQuery` is set when this card is rendered inside search results
  * (app/catalog/page.tsx passes params.q). It's threaded onto the product

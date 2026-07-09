@@ -2,9 +2,10 @@ import styles from "@/app/admin/admin.module.css";
 import { isAdminConfigured } from "@/lib/admin-auth";
 import { login } from "./actions";
 
-export default async function AdminLoginPage({ searchParams }: { searchParams: Promise<{ error?: string; next?: string }> }) {
-  const { error, next } = await searchParams;
+export default async function AdminLoginPage({ searchParams }: { searchParams: Promise<{ error?: string; next?: string; retry?: string }> }) {
+  const { error, next, retry } = await searchParams;
   const configured = isAdminConfigured();
+  const locked = error === "locked";
 
   return (
     <div className={styles.loginWrap}>
@@ -16,14 +17,15 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
           <p className={styles.noticeError}>ADMIN_PASSWORD isn&rsquo;t set. Add it in the Vercel project&rsquo;s Environment Variables, then redeploy.</p>
         ) : null}
         {error === "invalid" ? <p className={styles.noticeError}>Wrong password. Try again.</p> : null}
+        {locked ? <p className={styles.noticeError}>Too many failed attempts. Try again in {retry ?? "a few"} minute{retry === "1" ? "" : "s"}.</p> : null}
 
         <form action={login} className={styles.form}>
           <input type="hidden" name="next" value={next ?? "/admin"} />
           <div className={styles.field}>
             <label htmlFor="password">Password</label>
-            <input id="password" name="password" type="password" required autoFocus />
+            <input id="password" name="password" type="password" required autoFocus disabled={locked} />
           </div>
-          <button type="submit" className={styles.button}>Sign in</button>
+          <button type="submit" className={styles.button} disabled={locked}>Sign in</button>
         </form>
       </div>
     </div>

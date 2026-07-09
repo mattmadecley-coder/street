@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { after } from "next/server";
-import { Header, ProductCard } from "@/components/storefront";
+import { Header, Footer, ProductCard } from "@/components/storefront";
 import { PriceRangeSlider } from "@/components/price-slider";
 import { getCatalog, type StreetProduct } from "@/lib/catalog";
 import { CATALOG_PAGE_SIZE, getCatalogPage } from "@/lib/catalog-page";
@@ -361,6 +361,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           </div>
         </div>
       </div>
+      <Footer />
     </main>
   );
 }

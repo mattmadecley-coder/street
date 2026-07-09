@@ -1,10 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getStoredCatalog } from "@/lib/catalog-store";
-
-// Only brands with an actual app/brands/<slug>/page.tsx belong here — most of
-// STREET_BRANDS are catalog-only sources with no dedicated page yet, and
-// listing routes that 404 would hurt (not help) discovery SEO.
-const BRAND_PAGES = ["seventy-four-uniform", "clutch-supply"];
+import { getStoredCatalog, getBrandDirectory } from "@/lib/catalog-store";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -23,11 +18,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/brands`, changeFrequency: "daily", priority: 0.6 },
   ];
 
-  const brandRoutes: MetadataRoute.Sitemap = BRAND_PAGES.map((slug) => ({
-    url: `${siteUrl}/brands/${slug}`,
-    changeFrequency: "daily",
-    priority: 0.5,
-  }));
+  // Every brand with at least one live product gets a filtered-catalog URL
+  // — a brand still importing (or one Street can't scrape yet) has nothing
+  // to index, so it's left out rather than pointing crawlers at an empty
+  // page.
+  const brands = await getBrandDirectory();
+  const brandRoutes: MetadataRoute.Sitemap = brands
+    .filter((brand) => brand.productCount > 0)
+    .map((brand) => ({
+      url: `${siteUrl}/catalog?brand=${brand.slug}`,
+      changeFrequency: "daily",
+      priority: 0.5,
+    }));
 
   // Product detail pages are how shoppers land on Street from a Google search
   // for a specific item, so they matter most for the discovery goal.

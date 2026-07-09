@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import styles from "./home.module.css";
-import { Header, ProductCard } from "@/components/storefront";
+import { Header, Footer, ProductCard } from "@/components/storefront";
 import { getCatalogPage } from "@/lib/catalog-page";
 import { getSiteSettings } from "@/lib/site-settings";
 import { getBrandDirectory } from "@/lib/catalog-store";
@@ -16,7 +16,12 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const [settings, brands, requestHeaders] = await Promise.all([getSiteSettings(), getBrandDirectory(), headers()]);
 
-  const featuredBrand = brands.find((brand) => brand.slug === settings.featured_brand_slug) ?? brands.find((brand) => brand.featured) ?? brands[0];
+  // Only ever pick a brand that actually has products to show — otherwise
+  // the hero spotlight and "Featured brand" section could link to an empty
+  // filtered catalog (e.g. a brand still importing, or one whose source
+  // Street can't scrape yet).
+  const brandsWithStock = brands.filter((brand) => brand.productCount > 0);
+  const featuredBrand = brandsWithStock.find((brand) => brand.slug === settings.featured_brand_slug) ?? brandsWithStock.find((brand) => brand.featured) ?? brandsWithStock[0];
   const featuredPage = featuredBrand ? await getCatalogPage({ brand: featuredBrand.slug, availability: "in_stock" }) : null;
   const featured = featuredPage?.products.slice(0, 8) ?? [];
 
@@ -80,6 +85,7 @@ export default async function HomePage() {
         ) : null}
       </div>
       <section className="dark-section"><div className="dark-section-inner"><p className="eyebrow">Why Street</p><div><h2>Search product names, colors, fits, and styles across independent labels.</h2><p style={{ maxWidth: 520, margin: "26px 0 0", fontSize: 15, lineHeight: 1.55, color: "rgba(244,243,238,.65)" }}>When you find something, Street sends you straight to the brand website to buy it.</p></div></div></section>
+      <Footer />
     </main>
   );
 }
