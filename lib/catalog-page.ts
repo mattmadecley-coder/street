@@ -90,6 +90,7 @@ function productPath(filters: CatalogPageFilters) {
   const params = new URLSearchParams();
   params.set("select", "*,brands!inner(slug,name),product_images(source_url,sort_order)");
   params.set("is_active", "eq.true");
+  params.set("is_hidden", "eq.false");
   params.set("order", filters.sort === "price-low" ? "price.asc,id.asc" : filters.sort === "price-high" ? "price.desc,id.desc" : "updated_at.desc,id.desc");
 
   if (filters.brand) params.set("brands.slug", `eq.${filters.brand}`);
@@ -208,6 +209,7 @@ export async function getStoredProduct(slug: string): Promise<StreetProduct | nu
   params.set("brands.slug", `eq.${brandSlug}`);
   params.set("handle", `eq.${handle}`);
   params.set("is_active", "eq.true");
+  params.set("is_hidden", "eq.false");
   params.set("limit", "1");
 
   try {
