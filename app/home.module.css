@@ -12,3 +12,13 @@
 .brandGridCard strong { font-size: 16px; letter-spacing: -.03em; }
 .brandGridCard span { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgba(16,16,16,.55); }
 @media (max-width: 840px) { .brandGrid { grid-template-columns: repeat(2, 1fr); } }
+
+.categoryGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 22px; }
+.categoryTile { position: relative; display: block; aspect-ratio: 4/5; overflow: hidden; background: #f4f3ee; border: 1px solid rgba(16,16,16,.16); }
+.categoryTile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center top; transition: transform .25s ease; }
+.categoryTile:hover img { transform: scale(1.04); }
+.categoryTileFallback { position: absolute; inset: 0; background: rgba(16,16,16,.06); }
+.categoryTileLabel { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px 14px; color: #fff; background: linear-gradient(to top, rgba(16,16,16,.82), rgba(16,16,16,0)); }
+.categoryTileLabel strong { font-size: 15px; letter-spacing: -.03em; }
+.categoryTileLabel em { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .82; }
+@media (max-width: 840px) { .categoryGrid { grid-template-columns: repeat(2, 1fr); } }

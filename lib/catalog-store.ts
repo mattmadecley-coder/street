@@ -174,6 +174,42 @@ export async function getActiveCategorySummary(): Promise<CategorySummary[]> {
   }
 }
 
+export type CategoryShowcaseItem = { group: string; category: string; count: number; imageUrl: string | null };
+
+/**
+ * Top categories by live product count, each with a representative image
+ * (the most recently synced product's photo in that category) - powers the
+ * homepage's "Shop by category" tiles. Same client-side-aggregate approach
+ * as getActiveCategorySummary above (PostgREST has no GROUP BY endpoint),
+ * just also tracking a count and a photo per bucket instead of only which
+ * categories exist.
+ */
+export async function getHomepageCategoryShowcase(limit = 8): Promise<CategoryShowcaseItem[]> {
+  if (!hasSupabaseCatalog()) return [];
+  try {
+    const rows = await supabaseRestAll<Array<{ street_group: string | null; street_category: string | null; primary_image_url: string | null }>>(
+      "products?select=street_group,street_category,primary_image_url&is_active=eq.true&is_hidden=eq.false&street_group=not.is.null&street_category=not.is.null&street_category=neq.&order=last_synced_at.desc"
+    );
+    const byKey = new Map<string, CategoryShowcaseItem>();
+    for (const row of rows) {
+      if (!row.street_group || !row.street_category) continue;
+      const key = `${row.street_group}::${row.street_category}`;
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.count += 1;
+        // Rows are newest-first, so whichever row we saw first for this key
+        // already has the newest photo - don't overwrite it with an older one.
+      } else {
+        byKey.set(key, { group: row.street_group, category: row.street_category, count: 1, imageUrl: row.primary_image_url });
+      }
+    }
+    return [...byKey.values()].sort((a, b) => b.count - a.count).slice(0, limit);
+  } catch (error) {
+    console.error("Street category showcase read failed", error);
+    return [];
+  }
+}
+
 /** Most recent catalog_sync_runs row per brand, keyed by brand slug — powers the "last updated" column in /admin/brands. */
 export async function getBrandSyncStatuses(): Promise<Map<string, BrandSyncStatus>> {
   if (!hasSupabaseCatalog()) return new Map();

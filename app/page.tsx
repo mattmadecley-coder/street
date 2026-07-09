@@ -5,7 +5,7 @@ import styles from "./home.module.css";
 import { Header, Footer, ProductCard } from "@/components/storefront";
 import { getCatalogPage } from "@/lib/catalog-page";
 import { getSiteSettings } from "@/lib/site-settings";
-import { getBrandDirectory } from "@/lib/catalog-store";
+import { getBrandDirectory, getHomepageCategoryShowcase } from "@/lib/catalog-store";
 import { logSiteEvent } from "@/lib/analytics";
 
 // This route is dynamic (it reads request headers for traffic-source
@@ -14,7 +14,16 @@ import { logSiteEvent } from "@/lib/analytics";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [settings, brands, requestHeaders] = await Promise.all([getSiteSettings(), getBrandDirectory(), headers()]);
+  const [settings, brands, requestHeaders, categoryShowcase, newInPage, under50Page] = await Promise.all([
+    getSiteSettings(),
+    getBrandDirectory(),
+    headers(),
+    getHomepageCategoryShowcase(8),
+    getCatalogPage({ sort: "newest", availability: "in_stock" }),
+    getCatalogPage({ max: 50, sort: "newest", availability: "in_stock" }),
+  ]);
+  const newIn = newInPage?.products.slice(0, 10) ?? [];
+  const under50 = under50Page?.products.slice(0, 10) ?? [];
 
   // Only ever pick a brand that actually has products to show — otherwise
   // the hero spotlight and "Featured brand" section could link to an empty
@@ -57,6 +66,25 @@ export default async function HomePage() {
         </section>
         <Link href="/catalog" className="shop-all"><span>Shop all</span><span>→</span></Link>
 
+        {categoryShowcase.length ? (
+          <section className="section">
+            <div className="section-head">
+              <div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Browse</p><h2 className="section-title">Shop by category</h2></div>
+            </div>
+            <div className={styles.categoryGrid}>
+              {categoryShowcase.map((item) => (
+                <Link key={`${item.group}-${item.category}`} href={`/catalog?group=${encodeURIComponent(item.group)}&category=${encodeURIComponent(item.category)}`} className={styles.categoryTile}>
+                  {item.imageUrl ? <img src={item.imageUrl} alt={item.category} /> : <div className={styles.categoryTileFallback} />}
+                  <span className={styles.categoryTileLabel}>
+                    <strong>{item.category}</strong>
+                    <em>{item.count} piece{item.count === 1 ? "" : "s"}</em>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {featuredBrand ? (
           <section className="section">
             <div className="section-head">
@@ -64,6 +92,26 @@ export default async function HomePage() {
               <Link href={`/catalog?brand=${featuredBrand.slug}`} className="link-small">View brand</Link>
             </div>
             <div className="grid">{featured.map((product) => <ProductCard key={product.id} product={product} />)}</div>
+          </section>
+        ) : null}
+
+        {newIn.length ? (
+          <section className="section">
+            <div className="section-head">
+              <div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Just landed</p><h2 className="section-title">New in</h2></div>
+              <Link href="/catalog?sort=newest" className="link-small">See all new in</Link>
+            </div>
+            <div className="grid">{newIn.map((product) => <ProductCard key={product.id} product={product} />)}</div>
+          </section>
+        ) : null}
+
+        {under50.length ? (
+          <section className="section">
+            <div className="section-head">
+              <div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Budget friendly</p><h2 className="section-title">Under $50</h2></div>
+              <Link href="/catalog?max=50" className="link-small">See all under $50</Link>
+            </div>
+            <div className="grid">{under50.map((product) => <ProductCard key={product.id} product={product} />)}</div>
           </section>
         ) : null}
 
