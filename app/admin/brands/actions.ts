@@ -1,10 +1,11 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseRest, CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
 import { uploadSiteAsset } from "@/lib/supabase-storage";
-import { getBrandBySlug, syncSingleBrand } from "@/lib/catalog-store";
+import { getBrandBySlug, syncSingleBrand, classifyPendingProducts } from "@/lib/catalog-store";
 
 export async function updateBrand(formData: FormData) {
   const slug = String(formData.get("slug") ?? "").trim();
@@ -34,7 +35,17 @@ export async function updateBrand(formData: FormData) {
   redirect(`/admin/brands?saved=${encodeURIComponent(slug)}`);
 }
 
-/** Manually re-syncs one brand's products right now, instead of waiting for the next daily cron run. */
+/**
+ * Manually re-syncs one brand's products right now, instead of waiting for
+ * the next daily cron run. Import happens inline (so the admin sees the
+ * result immediately), then classification of whatever just came in is
+ * handed off to a background task — same after() pattern as the new-brand
+ * wizard's runImport, and for the same reason: a big catalog's worth of AI
+ * classification calls can run past what's reasonable to block a redirect
+ * on. Without this, newly (re-)imported products used to sit at
+ * classification_status=pending until an admin noticed and clicked the
+ * per-brand "Classify" button by hand.
+ */
 export async function syncBrandNow(formData: FormData) {
   const slug = String(formData.get("slug") ?? "").trim();
   if (!slug) throw new Error("Missing brand slug.");
@@ -42,7 +53,18 @@ export async function syncBrandNow(formData: FormData) {
   if (!brand) throw new Error("Brand not found.");
 
   const result = await syncSingleBrand(brand);
-  if (result.ok) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+  if (result.ok) {
+    revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+
+    after(async () => {
+      const deadline = Date.now() + 40_000;
+      while (Date.now() < deadline) {
+        const batch = await classifyPendingProducts(20, slug);
+        if (!batch.results.length) break;
+        revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+      }
+    });
+  }
   revalidatePath("/admin/brands");
   redirect(`/admin/brands?synced=${encodeURIComponent(slug)}${result.ok ? "" : `&syncError=${encodeURIComponent(result.error ?? "Sync failed")}`}`);
 }
