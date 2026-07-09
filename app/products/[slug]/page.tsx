@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
+import { after } from "next/server";
 import { Header } from "@/components/storefront";
 import { getProduct } from "@/lib/catalog";
+import { logSiteEvent } from "@/lib/analytics";
 
 // ISR: rendered HTML for each product slug is cached and revalidated hourly
 // at most, with the cron sync invalidating it immediately via revalidateTag.
@@ -22,10 +24,23 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ProductPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ sq?: string }> }) {
   const { slug } = await params;
+  const { sq } = await searchParams;
   const { product, source } = await getProduct(slug);
   if (!product) notFound();
+
+  // Analytics, scheduled after the response is sent so it never adds latency
+  // to the product page itself (see lib/analytics.ts). `sq` is set by
+  // ProductCard when this page was reached from a search result — it ties
+  // the search query to the item the shopper actually opened.
+  after(async () => {
+    if (sq?.trim()) {
+      await logSiteEvent({ eventType: "search_click", query: sq.trim(), productId: product.id, brandSlug: product.brandSlug, path: `/products/${slug}` });
+    }
+    await logSiteEvent({ eventType: "product_view", productId: product.id, brandSlug: product.brandSlug, streetGroup: product.streetGroup, streetCategory: product.streetCategory, price: product.price, path: `/products/${slug}` });
+  });
+
   const galleryImages = product.images.length ? product.images : [""];
   const sourceMessage = source === "database" ? "Saved in Street's catalog and refreshed by the scheduled importer." : source === "live" ? "Live source import — this product will be stored after the first database sync." : "The source is unavailable right now. Confirm details on the brand website.";
 

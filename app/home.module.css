@@ -4,3 +4,11 @@
 .brandSpotlightLabel { display: block; width: 100%; font-size: 7px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; line-height: 1.2; }
 .brandSpotlightLogo { display: block; width: 118px; height: 30px; object-fit: contain; object-position: center; }
 @media (max-width: 840px) { .heroVideo { min-height: 80svh; } .brandSpotlight { right: 10px; bottom: 10px; width: 142px; min-height: 70px; padding: 8px; gap: 6px; } .brandSpotlightLogo { width: 108px; height: 27px; } }
+
+.brandGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 22px; }
+.brandGridCard { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 120px; padding: 18px; border: 1px solid rgba(16,16,16,.16); background: #fff; text-align: center; }
+.brandGridCard:hover { border-color: #101010; }
+.brandGridCard img { max-width: 84%; max-height: 40px; object-fit: contain; }
+.brandGridCard strong { font-size: 16px; letter-spacing: -.03em; }
+.brandGridCard span { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgba(16,16,16,.55); }
+@media (max-width: 840px) { .brandGrid { grid-template-columns: repeat(2, 1fr); } }

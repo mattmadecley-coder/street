@@ -1,30 +1,83 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { after } from "next/server";
 import styles from "./home.module.css";
 import { Header, ProductCard } from "@/components/storefront";
 import { getCatalogPage } from "@/lib/catalog-page";
+import { getSiteSettings } from "@/lib/site-settings";
+import { getBrandDirectory } from "@/lib/catalog-store";
+import { logSiteEvent } from "@/lib/analytics";
 
-// ISR: the homepage is served from cache and revalidated hourly at most, but
-// the daily catalog sync calls revalidateTag("street-catalog") the moment new
-// data lands, so visitors get fresh data without every request hitting Supabase.
-export const revalidate = 3600;
-
-const heroVideoUrl = process.env.NEXT_PUBLIC_HERO_VIDEO_URL;
-const featuredBrandLogoUrl = process.env.NEXT_PUBLIC_FEATURED_BRAND_LOGO_URL ?? "/brand-logos/seventy-four-uniform.svg";
+// This route is dynamic (it reads request headers for traffic-source
+// logging) but the underlying Supabase reads are still cached — see
+// lib/supabase-rest.ts — so it stays cheap.
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const featuredPage = await getCatalogPage({ brand: "seventy-four-uniform", availability: "in_stock" });
+  const [settings, brands, requestHeaders] = await Promise.all([getSiteSettings(), getBrandDirectory(), headers()]);
+
+  const featuredBrand = brands.find((brand) => brand.slug === settings.featured_brand_slug) ?? brands.find((brand) => brand.featured) ?? brands[0];
+  const featuredPage = featuredBrand ? await getCatalogPage({ brand: featuredBrand.slug, availability: "in_stock" }) : null;
   const featured = featuredPage?.products.slice(0, 8) ?? [];
+
+  // Homepage traffic sources (README's "where is our traffic coming from"):
+  // logged after the response is sent so it never adds latency.
+  after(async () => {
+    await logSiteEvent({ eventType: "page_view", path: "/", referrer: requestHeaders.get("referer") });
+  });
+
+  const heroVideoUrl = settings.hero_video_url || undefined;
+  const heroImageUrl = settings.hero_image_url || "/hero-placeholder.svg";
+  const spotlightBrands = brands.filter((brand) => brand.featured && brand.productCount > 0).slice(0, 8);
+  const brandGrid = (spotlightBrands.length ? spotlightBrands : brands.filter((brand) => brand.productCount > 0)).slice(0, 8);
 
   return (
     <main>
       <Header />
       <div className="shell">
         <section className={`hero ${styles.heroVideo}`}>
-          {heroVideoUrl ? <video className={styles.heroMedia} autoPlay muted loop playsInline preload="metadata" poster="/hero-placeholder.svg"><source src={heroVideoUrl} type="video/mp4" /></video> : <img className={styles.heroMedia} src="/hero-placeholder.svg" alt="Street hero media placeholder" />}
-          <Link href="/brands/seventy-four-uniform" className={styles.brandSpotlight} aria-label="Check out Seventy Four Uniform collections"><span className={styles.brandSpotlightLabel}>Check out their collections</span><img src={featuredBrandLogoUrl} alt="Seventy Four Uniform" className={styles.brandSpotlightLogo} /></Link>
+          {heroVideoUrl ? (
+            <video className={styles.heroMedia} autoPlay muted loop playsInline preload="metadata" poster="/hero-placeholder.svg">
+              <source src={heroVideoUrl} type="video/mp4" />
+            </video>
+          ) : (
+            <img className={styles.heroMedia} src={heroImageUrl} alt="Street hero" />
+          )}
+          {featuredBrand ? (
+            <Link href={`/catalog?brand=${featuredBrand.slug}`} className={styles.brandSpotlight} aria-label={`Check out ${featuredBrand.name} collections`}>
+              <span className={styles.brandSpotlightLabel}>{settings.featured_brand_cta_label || "Check out their collections"}</span>
+              {featuredBrand.logoUrl ? <img src={featuredBrand.logoUrl} alt={featuredBrand.name} className={styles.brandSpotlightLogo} /> : <strong>{featuredBrand.name}</strong>}
+            </Link>
+          ) : null}
         </section>
         <Link href="/catalog" className="shop-all"><span>Shop all</span><span>→</span></Link>
-        <section className="section"><div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>First brand</p><h2 className="section-title">Seventy Four Uniform</h2></div><Link href="/brands/seventy-four-uniform" className="link-small">View brand</Link></div><div className="grid">{featured.map((product) => <ProductCard key={product.id} product={product} />)}</div></section>
+
+        {featuredBrand ? (
+          <section className="section">
+            <div className="section-head">
+              <div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Featured brand</p><h2 className="section-title">{featuredBrand.name}</h2></div>
+              <Link href={`/catalog?brand=${featuredBrand.slug}`} className="link-small">View brand</Link>
+            </div>
+            <div className="grid">{featured.map((product) => <ProductCard key={product.id} product={product} />)}</div>
+          </section>
+        ) : null}
+
+        {brandGrid.length ? (
+          <section className="section">
+            <div className="section-head">
+              <div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Independent labels</p><h2 className="section-title">Featured brands</h2></div>
+              <Link href="/brands" className="link-small">All brands</Link>
+            </div>
+            <div className={styles.brandGrid}>
+              {brandGrid.map((brand) => (
+                <Link key={brand.slug} href={`/catalog?brand=${brand.slug}`} className={styles.brandGridCard}>
+                  {brand.logoUrl ? <img src={brand.logoUrl} alt={brand.name} /> : <strong>{brand.name}</strong>}
+                  <span>{brand.productCount} pieces</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
       <section className="dark-section"><div className="dark-section-inner"><p className="eyebrow">Why Street</p><div><h2>Search product names, colors, fits, and styles across independent labels.</h2><p style={{ maxWidth: 520, margin: "26px 0 0", fontSize: 15, lineHeight: 1.55, color: "rgba(244,243,238,.65)" }}>When you find something, Street sends you straight to the brand website to buy it.</p></div></div></section>
     </main>
