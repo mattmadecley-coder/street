@@ -5,32 +5,39 @@ import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
 import { hasSupabaseCatalog, supabaseRest, supabaseRestAll } from "@/lib/supabase-rest";
 import type { StreetProduct } from "@/lib/catalog";
 
-type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean };
+type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean; catalog_enabled?: boolean };
 type ImageRow = { source_url: string; sort_order: number; alt_text?: string | null };
 type VariantRow = { external_id: string; title: string | null; price: string | number; compare_at_price: string | number | null; available: boolean; option1: string | null; option2: string | null; option3: string | null };
 type ProductRow = { id: string; brand_id: string; external_id: string; handle: string; title: string; description: string; source_url: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; category: string; tags: string[]; colors: string[]; sizes: string[]; primary_image_url: string | null; last_synced_at: string; is_active: boolean; brands: BrandRow | null; product_images: ImageRow[] | null; product_variants: VariantRow[] | null; street_group: string | null; street_category: string | null; street_type: string | null; street_detail: string | null };
-type PendingClassificationRow = { id: string; title: string; description: string; category: string; tags: string[]; colors: string[]; primary_image_url: string | null; product_images: ImageRow[] | null };
+type PendingClassificationRow = { id: string; title: string; description: string; category: string; tags: string[]; colors: string[] };
 type ProductCountRow = { brand_id: string };
 type SyncRunRow = { id: string };
+type SyncRunHistoryRow = { brand_id: string; started_at: string; completed_at: string | null; status: "running" | "success" | "failed"; product_count: number; error_message: string | null; brands: { slug: string } | null };
 
-export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; instagramUrl: string | null; productCount: number; featured: boolean };
+export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; instagramUrl: string | null; productCount: number; featured: boolean; catalogEnabled: boolean };
 export type CatalogSyncResult = { brand: string; productCount: number; ok: boolean; error?: string };
 export type ClassificationRunResult = { id: string; title: string; status: "classified" | "needs_review" | "error"; group?: string; category?: string; tags?: string[]; error?: string };
+export type BrandSyncStatus = { lastSyncedAt: string | null; lastStatus: "running" | "success" | "failed" | null; lastProductCount: number | null; lastError: string | null };
 
-const CATALOG_SYNC_BATCH_SIZE = 3;
-// Lowered from 10: each product now sends every one of its images to the
-// classifier (not just the primary shot), so batches take longer per item
-// and need to comfortably fit inside the route's 60s function timeout.
-const CLASSIFICATION_BATCH_MAX = 5;
-// Max images sent per product — keeps cost/latency bounded for listings
-// with a long gallery while still giving the model multiple angles.
-const CLASSIFICATION_MAX_IMAGES = 6;
+// The classifier is text-only now (see lib/ai-product-classifier.ts) — no
+// images to fetch/send, so each call is fast and this can run a much bigger
+// batch per invocation and still comfortably fit inside a route's 60s
+// function timeout.
+const CLASSIFICATION_BATCH_MAX = 25;
+// How many brands to sync concurrently in one cron run. Every enabled brand
+// is attempted every run (see syncStreetCatalog) — concurrency is what makes
+// that fit inside the 60s function timeout instead of a multi-day rotation.
+const CATALOG_SYNC_CONCURRENCY = 6;
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
 
 function toStreetProduct(row: ProductRow): StreetProduct {
   const brand = row.brands;
   const images = [...(row.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url);
   return { id: row.id, slug: `${brand?.slug ?? "brand"}--${row.handle}`, handle: row.handle, brandSlug: brand?.slug ?? "brand", brandName: brand?.name ?? "Unknown brand", description: row.description, sourceUrl: row.source_url, title: row.title, price: number(row.price), compareAtPrice: row.compare_at_price === null ? undefined : number(row.compare_at_price), stockStatus: row.stock_status, isPreorder: row.is_preorder, primaryImage: row.primary_image_url ?? images[0] ?? "", images, colors: row.colors ?? [], sizes: row.sizes ?? [], category: row.category, tags: row.tags ?? [], lastSyncedAt: row.last_synced_at, streetGroup: row.street_group ?? undefined, streetCategory: row.street_category ?? undefined, streetType: row.street_type ?? undefined, streetDetail: row.street_detail ?? undefined };
+}
+
+function toStreetBrand(row: BrandRow): StreetBrand {
+  return { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url ?? undefined, featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true };
 }
 
 export async function getStoredCatalog(): Promise<StreetProduct[] | null> {
@@ -44,8 +51,57 @@ export async function getStoredCatalog(): Promise<StreetProduct[] | null> {
   }
 }
 
+/**
+ * Every brand Street knows about — DB rows (including brands added through
+ * /admin/brands/new) layered over the static STREET_BRANDS seed list. The
+ * DB is the source of truth once Supabase is configured; the static array
+ * only matters as a fallback (local dev without Supabase, or first boot).
+ */
+export async function getAllBrands(): Promise<StreetBrand[]> {
+  const fallback = new Map<string, StreetBrand>(STREET_BRANDS.map((brand) => [brand.slug, brand]));
+  if (!hasSupabaseCatalog()) return [...fallback.values()];
+  try {
+    const rows = await supabaseRest<BrandRow[]>("brands?select=slug,name,store_url,logo_url,is_active,is_featured,catalog_enabled&is_active=eq.true&order=name.asc");
+    for (const row of rows) fallback.set(row.slug, toStreetBrand(row));
+    return [...fallback.values()];
+  } catch (error) {
+    console.error("Street brand list read failed", error);
+    return [...fallback.values()];
+  }
+}
+
+export async function getBrandBySlug(slug: string): Promise<StreetBrand | null> {
+  if (hasSupabaseCatalog()) {
+    try {
+      const rows = await supabaseRest<BrandRow[]>(`brands?select=slug,name,store_url,logo_url,is_active,is_featured,catalog_enabled&slug=eq.${encodeURIComponent(slug)}&is_active=eq.true&limit=1`, { noStore: true });
+      if (rows[0]) return toStreetBrand(rows[0]);
+    } catch (error) {
+      console.error("Street brand lookup failed", error);
+    }
+  }
+  return STREET_BRANDS.find((brand) => brand.slug === slug) ?? null;
+}
+
+/** Normalized root domain (no protocol, no "www.") for duplicate-brand detection. */
+export function rootDomain(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** Finds an existing brand whose store URL shares the same root domain, regardless of slug/name. Used to block adding a brand that's already onboarded. */
+export async function findBrandByDomain(url: string): Promise<StreetBrand | null> {
+  const domain = rootDomain(url);
+  if (!domain) return null;
+  const brands = await getAllBrands();
+  return brands.find((brand) => rootDomain(brand.storeUrl) === domain) ?? null;
+}
+
 export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
-  const fallback = new Map<string, StreetBrandProfile>(STREET_BRANDS.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured) }]));
+  const brands = await getAllBrands();
+  const fallback = new Map<string, StreetBrandProfile>(brands.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured), catalogEnabled: brand.catalogEnabled ?? true }]));
   if (!hasSupabaseCatalog()) return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   try {
     const [rows, products] = await Promise.all([
@@ -53,11 +109,29 @@ export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
       supabaseRestAll<ProductCountRow[]>("products?select=brand_id&is_active=eq.true&order=id.asc"),
     ]);
     const counts = products.reduce((map, product) => map.set(product.brand_id, (map.get(product.brand_id) ?? 0) + 1), new Map<string, number>());
-    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: counts.get(row.id) ?? 0, featured: row.is_featured });
+    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: counts.get(row.id) ?? 0, featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true });
     return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error("Street brand directory read failed", error);
     return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+}
+
+/** Most recent catalog_sync_runs row per brand, keyed by brand slug — powers the "last updated" column in /admin/brands. */
+export async function getBrandSyncStatuses(): Promise<Map<string, BrandSyncStatus>> {
+  if (!hasSupabaseCatalog()) return new Map();
+  try {
+    const rows = await supabaseRest<SyncRunHistoryRow[]>("catalog_sync_runs?select=brand_id,started_at,completed_at,status,product_count,error_message,brands(slug)&order=started_at.desc&limit=300");
+    const map = new Map<string, BrandSyncStatus>();
+    for (const row of rows) {
+      const slug = row.brands?.slug;
+      if (!slug || map.has(slug)) continue; // rows are newest-first, so the first hit per slug is the latest run
+      map.set(slug, { lastSyncedAt: row.completed_at ?? row.started_at, lastStatus: row.status, lastProductCount: row.product_count, lastError: row.error_message });
+    }
+    return map;
+  } catch (error) {
+    console.error("Street brand sync status read failed", error);
+    return new Map();
   }
 }
 
@@ -80,11 +154,30 @@ async function upsertBrand(brand: StreetBrand, metadata?: BrandMetadata) {
       metadata_synced_at: metadata ? new Date().toISOString() : existing?.metadata_synced_at ?? null,
       is_active: true,
       is_featured: Boolean(brand.featured),
+      catalog_enabled: brand.catalogEnabled ?? existing?.catalog_enabled ?? true,
     },
     prefer: "resolution=merge-duplicates,return=representation",
   });
   if (!rows[0]) throw new Error(`Could not save ${brand.name}.`);
   return rows[0];
+}
+
+/**
+ * Creates (or updates) a brand row from just a slug/name/store URL — the
+ * admin "add new brand" wizard's step 1. New brands start with
+ * catalog_enabled=false so they don't get swept into the next automatic
+ * daily sync before their logo is set and their first import has actually
+ * been reviewed; the wizard flips it on once the admin runs the import step.
+ */
+export async function createBrandDraft(input: { slug: string; name: string; storeUrl: string }): Promise<StreetBrand> {
+  if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  const row = await upsertBrand({ slug: input.slug, name: input.name, storeUrl: input.storeUrl, catalogEnabled: false });
+  return toStreetBrand(row);
+}
+
+export async function setBrandCatalogEnabled(slug: string, enabled: boolean) {
+  if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body: { catalog_enabled: enabled }, prefer: "return=minimal" });
 }
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, callback: (item: T) => Promise<R>) {
@@ -102,7 +195,8 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, callback: (it
 
 export async function syncBrandDirectory() {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
-  return mapWithConcurrency(STREET_BRANDS, 5, async (brand) => {
+  const brands = await getAllBrands();
+  return mapWithConcurrency(brands, 5, async (brand) => {
     try {
       const metadata = await fetchBrandMetadata(brand);
       await upsertBrand(brand, metadata);
@@ -117,7 +211,18 @@ function databaseProduct(brandId: string, product: ImportedProduct) {
   return { brand_id: brandId, external_id: product.externalId, handle: product.handle, title: product.title, description: product.description, source_url: product.sourceUrl, price: product.price, compare_at_price: product.compareAtPrice ?? null, stock_status: product.stockStatus, is_preorder: product.isPreorder, category: product.category, tags: product.tags, colors: product.colors, sizes: product.sizes, primary_image_url: product.images[0] ?? null, is_active: true, last_synced_at: new Date().toISOString() };
 }
 
-async function saveBrandCatalog(brand: StreetBrand): Promise<CatalogSyncResult> {
+/**
+ * Imports (or re-imports) one brand's full catalog: fetches the source feed,
+ * marks everything previously on file for this brand inactive, then
+ * upserts the fresh product/image/variant rows. Re-running this for a brand
+ * that's already in the database is exactly how "did anything sell out /
+ * come back in stock / get added" is detected — stock_status, sizes
+ * (product_variants), and the product list itself are fully replaced with
+ * whatever the brand's source currently says. Used by both the daily cron
+ * (syncStreetCatalog, all enabled brands) and the admin "sync now" /
+ * new-brand-wizard import step (this brand only).
+ */
+export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncResult> {
   const brandRow = await upsertBrand(brand);
   const runRows = await supabaseRest<SyncRunRow[]>("catalog_sync_runs", { method: "POST", body: { brand_id: brandRow.id, status: "running" } });
   const runId = runRows[0]?.id;
@@ -141,31 +246,29 @@ async function saveBrandCatalog(brand: StreetBrand): Promise<CatalogSyncResult> 
   }
 }
 
-export async function classifyPendingProducts(requestedLimit?: number) {
+export async function classifyPendingProducts(requestedLimit?: number, brandSlug?: string) {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
   const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit ?? 1)));
+  const params = new URLSearchParams();
+  params.set("select", brandSlug ? "id,title,description,category,tags,colors,brands!inner(slug)" : "id,title,description,category,tags,colors");
+  params.set("classification_status", "eq.pending");
+  params.set("is_active", "eq.true");
+  params.set("order", "created_at.asc");
+  params.set("limit", String(limit));
+  if (brandSlug) params.set("brands.slug", `eq.${brandSlug}`);
+
   // noStore: this drives which rows get patched next, so it must reflect the latest status.
-  // Embeds the full product_images gallery (not just primary_image_url) so the
-  // classifier can be shown every angle of the product, not just one photo.
-  const pending = await supabaseRest<PendingClassificationRow[]>(
-    `products?select=id,title,description,category,tags,colors,primary_image_url,product_images(source_url,sort_order)&product_images.order=sort_order.asc&classification_status=eq.pending&is_active=eq.true&order=created_at.asc&limit=${limit}`,
-    { noStore: true }
-  );
+  const pending = await supabaseRest<PendingClassificationRow[]>(`products?${params.toString()}`, { noStore: true });
   const results: ClassificationRunResult[] = [];
 
   for (const product of pending) {
     try {
-      // Primary image first, then the rest of the gallery in sort order, deduped, capped.
-      const galleryUrls = (product.product_images ?? []).sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url);
-      const imageUrls = [...new Set([product.primary_image_url, ...galleryUrls].filter((url): url is string => !!url))].slice(0, CLASSIFICATION_MAX_IMAGES);
-
       const { classification, model } = await classifyProductWithAI({
         title: product.title,
         description: product.description,
         sourceCategory: product.category,
         sourceTags: product.tags ?? [],
         sourceColors: product.colors ?? [],
-        imageUrls,
       });
       const status = classification.confidence === "low" ? "needs_review" : "classified";
       await supabaseRest(`products?id=eq.${product.id}`, {
@@ -202,19 +305,19 @@ export async function classifyPendingProducts(requestedLimit?: number) {
   return { limit, found: pending.length, results };
 }
 
-export function getCatalogSyncPlan(requestedBatch?: number) {
-  const brands = STREET_BRANDS.filter((brand) => brand.catalogEnabled);
-  const batchCount = Math.max(1, Math.ceil(brands.length / CATALOG_SYNC_BATCH_SIZE));
-  const automaticBatch = (Math.floor(Date.now() / 86_400_000) % batchCount) + 1;
-  const batch = requestedBatch && requestedBatch >= 1 && requestedBatch <= batchCount ? requestedBatch : automaticBatch;
-  const start = (batch - 1) * CATALOG_SYNC_BATCH_SIZE;
-  return { batch, batchCount, totalEnabled: brands.length, brands: brands.slice(start, start + CATALOG_SYNC_BATCH_SIZE) };
-}
-
-export async function syncStreetCatalog(requestedBatch?: number) {
+/**
+ * Every brand's catalog, synced once daily by Vercel Cron (see
+ * app/api/cron/catalog/route.ts) — this is what surfaces new products, newly
+ * sold-out items, restocks, and size availability changes for every brand,
+ * not just a rotating subset. Runs with bounded concurrency so it fits
+ * inside the route's 60s timeout; if it doesn't quite finish, whatever
+ * completed is already saved and tomorrow's run picks up the rest — brands
+ * aren't marked "done" for the day, so a slow run just means a brand's
+ * refresh lands a bit later, never that it gets skipped.
+ */
+export async function syncStreetCatalog(): Promise<{ totalEnabled: number; results: CatalogSyncResult[] }> {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
-  const plan = getCatalogSyncPlan(requestedBatch);
-  const results: CatalogSyncResult[] = [];
-  for (const brand of plan.brands) results.push(await saveBrandCatalog(brand));
-  return { ...plan, results };
+  const brands = (await getAllBrands()).filter((brand) => brand.catalogEnabled);
+  const results = await mapWithConcurrency(brands, CATALOG_SYNC_CONCURRENCY, syncSingleBrand);
+  return { totalEnabled: brands.length, results };
 }

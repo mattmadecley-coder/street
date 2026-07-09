@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const brand = request.nextUrl.searchParams.get("brand");
   const product = request.nextUrl.searchParams.get("product") ?? undefined;
 
-  const destination = resolveOutboundDestination(brand, to);
+  const destination = await resolveOutboundDestination(brand, to);
   if (!destination || !brand) {
     return NextResponse.json({ ok: false, error: "Unrecognized or disallowed destination." }, { status: 400 });
   }

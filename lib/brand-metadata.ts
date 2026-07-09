@@ -54,7 +54,7 @@ function extractHeaderLogo(html: string, brand: StreetBrand) {
 
 export async function fetchBrandMetadata(brand: StreetBrand): Promise<BrandMetadata> {
   try {
-    const response = await fetch(brand.storeUrl, { cache: "no-store", headers });
+    const response = await fetch(brand.storeUrl, { cache: "no-store", headers, signal: AbortSignal.timeout(15_000) });
     if (!response.ok) return { logoUrl: null, instagramUrl: null };
     const html = await response.text();
     return { logoUrl: extractHeaderLogo(html, brand), instagramUrl: extractInstagram(html) };

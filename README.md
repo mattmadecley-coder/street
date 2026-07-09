@@ -61,7 +61,9 @@ This is an early product-discovery test. Before scaling to lots of brands, get b
 3. ~~Add a Vercel Cron sync route for daily database updates.~~ Done.
 4. ~~Add an admin dashboard for homepage/brand/product edits.~~ Done — see `/admin` above.
 5. ~~Add analytics tracking (searches, category popularity, price ranges, traffic sources).~~ Done — see `/admin/analytics`.
-6. Add a brand application / claim page.
-7. Bring in the next 5–10 brands through approved feeds or direct onboarding.
-8. Add verified size charts. Do not tell people an item runs large or small unless the brand provides measurements or a clear fit note.
-9. Product `sizes` values are whatever free-form strings each brand's Shopify feed provides, so the Shop All size filter (curated per-category options like shoe half-sizes or S/M/L) only matches products whose scraped size strings happen to line up exactly. Worth a normalization pass if size filtering needs to be reliable across all 32 brands.
+6. ~~Add a way to onboard a new brand from the admin dashboard instead of a code change.~~ Done — `/admin/brands/new`: paste a store URL (blocked if a brand with the same root domain already exists), find/approve/upload a logo, then import the full catalog and classify it, all without touching code.
+7. ~~Make the daily catalog refresh actually cover every brand, not a rotating subset.~~ Done — `syncStreetCatalog` (lib/catalog-store.ts) now attempts every catalog-enabled brand on every cron run (bounded concurrency + a 15s per-request fetch timeout so one slow site can't blow the whole run's budget), and `/admin/brands` shows each brand's last-synced time and status, with a manual "Sync now" per brand.
+8. ~~Cut AI classification cost.~~ Done — switched from a vision model (Gemini, sending every product photo) to a text-only OpenRouter model (DeepSeek by default — see `STREET_CLASSIFIER_MODEL`), classifying from title/description/source tags only. This trades some accuracy on vague/generic listings for a large per-classification cost drop; ambiguous items still land in `classification_status = needs_review` for a manual check in `/admin/products` rather than silently guessing.
+9. Add a brand application / claim page.
+10. Add verified size charts. Do not tell people an item runs large or small unless the brand provides measurements or a clear fit note.
+11. Product `sizes` values are whatever free-form strings each brand's Shopify feed provides, so the Shop All size filter (curated per-category options like shoe half-sizes or S/M/L) only matches products whose scraped size strings happen to line up exactly. Worth a normalization pass if size filtering needs to be reliable across all brands.

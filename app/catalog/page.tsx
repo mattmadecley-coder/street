@@ -2,9 +2,9 @@ import Link from "next/link";
 import { after } from "next/server";
 import { Header, ProductCard } from "@/components/storefront";
 import { PriceRangeSlider } from "@/components/price-slider";
-import { STREET_BRANDS } from "@/lib/brands";
 import { getCatalog, type StreetProduct } from "@/lib/catalog";
 import { CATALOG_PAGE_SIZE, getCatalogPage } from "@/lib/catalog-page";
+import { getAllBrands } from "@/lib/catalog-store";
 import { STREET_TAXONOMY, categoriesForGroup, typesForCategory } from "@/lib/street-taxonomy";
 import { logSiteEvent } from "@/lib/analytics";
 
@@ -300,7 +300,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
   const firstPiece = total ? (currentPage - 1) * CATALOG_PAGE_SIZE + 1 : 0;
   const lastPiece = Math.min(currentPage * CATALOG_PAGE_SIZE, total);
-  const brandOptions = [...STREET_BRANDS].sort((a, b) => a.name.localeCompare(b.name));
+  const brandOptions = (await getAllBrands()).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <main>

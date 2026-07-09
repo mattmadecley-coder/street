@@ -1,9 +1,11 @@
-import { getBrand } from "@/lib/brands";
+import { getBrandBySlug } from "@/lib/catalog-store";
 import { hasSupabaseCatalog, supabaseRest } from "@/lib/supabase-rest";
 
-export function resolveOutboundDestination(brandSlug: string | null, rawUrl: string | null): URL | null {
+export async function resolveOutboundDestination(brandSlug: string | null, rawUrl: string | null): Promise<URL | null> {
   if (!brandSlug || !rawUrl) return null;
-  const brand = getBrand(brandSlug);
+  // DB-aware lookup (not just the static seed list) so brands added through
+  // /admin/brands/new work here too, not just the original launch brands.
+  const brand = await getBrandBySlug(brandSlug);
   if (!brand) return null;
 
   let destination: URL;

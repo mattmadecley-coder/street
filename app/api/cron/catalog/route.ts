@@ -27,19 +27,21 @@ export async function GET(request: NextRequest) {
 
     if (mode === "classify") {
       const requestedLimit = Number(request.nextUrl.searchParams.get("limit"));
-      const run = await classifyPendingProducts(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined);
+      const brandSlug = request.nextUrl.searchParams.get("brand") ?? undefined;
+      const run = await classifyPendingProducts(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined, brandSlug);
       const failed = run.results.filter((result) => result.status === "error");
       if (run.results.some((result) => result.status === "classified")) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
       return NextResponse.json({ ok: failed.length === 0, mode: "classify", classifiedAt: new Date().toISOString(), ...run }, { status: failed.length ? 502 : 200 });
     }
 
-    const batchValue = Number(request.nextUrl.searchParams.get("batch"));
-    const sync = await syncStreetCatalog(Number.isInteger(batchValue) && batchValue > 0 ? batchValue : undefined);
+    // Every enabled brand is attempted on every run (see syncStreetCatalog) —
+    // there's no batch/rotation param anymore.
+    const sync = await syncStreetCatalog();
     const failed = sync.results.filter((result) => !result.ok);
     // Invalidate cached catalog reads the moment new data lands, so pages
-    // don't have to wait out the hourly TTL to show a freshly synced batch.
+    // don't have to wait out the hourly TTL to show freshly synced data.
     if (sync.results.some((result) => result.ok)) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
-    return NextResponse.json({ ok: failed.length === 0, mode: "catalog", syncedAt: new Date().toISOString(), batch: sync.batch, batchCount: sync.batchCount, totalEnabled: sync.totalEnabled, brands: sync.brands.map((brand) => brand.slug), results: sync.results }, { status: failed.length ? 502 : 200 });
+    return NextResponse.json({ ok: failed.length === 0, mode: "catalog", syncedAt: new Date().toISOString(), totalEnabled: sync.totalEnabled, results: sync.results }, { status: failed.length ? 502 : 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Catalog sync failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

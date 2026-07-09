@@ -13,8 +13,6 @@ type PendingPreviewRow = {
   product_images: ImageRow[] | null;
 };
 
-const MAX_PREVIEW_IMAGES = 6;
-
 export type ClassificationPreview = {
   id: string;
   title: string;
@@ -46,15 +44,12 @@ export async function previewPendingClassifications(requestedLimit?: number) {
 
   for (const product of products) {
     try {
-      const galleryUrls = (product.product_images ?? []).sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url);
-      const imageUrls = [...new Set([product.primary_image_url, ...galleryUrls].filter((url): url is string => !!url))].slice(0, MAX_PREVIEW_IMAGES);
       const { classification, model, usage } = await classifyProductWithAI({
         title: product.title,
         description: product.description,
         sourceCategory: product.category,
         sourceTags: product.tags ?? [],
         sourceColors: product.colors ?? [],
-        imageUrls,
       });
       results.push({
         id: product.id,
