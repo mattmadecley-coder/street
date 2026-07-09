@@ -6,6 +6,7 @@ import { Header, Footer, ProductCard } from "@/components/storefront";
 import { getCatalogPage, getDiverseProductShelf } from "@/lib/catalog-page";
 import { getSiteSettings } from "@/lib/site-settings";
 import { getBrandDirectory, getHomepageCategoryShowcase } from "@/lib/catalog-store";
+import { getActiveCollectionsForHomepage } from "@/lib/collections-store";
 import { logSiteEvent } from "@/lib/analytics";
 
 // This route is dynamic (it reads request headers for traffic-source
@@ -14,13 +15,14 @@ import { logSiteEvent } from "@/lib/analytics";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [settings, brands, requestHeaders, categoryShowcase, newIn, under50] = await Promise.all([
+  const [settings, brands, requestHeaders, categoryShowcase, newIn, under50, collections] = await Promise.all([
     getSiteSettings(),
     getBrandDirectory(),
     headers(),
     getHomepageCategoryShowcase(8),
     getDiverseProductShelf({ sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2 }),
     getDiverseProductShelf({ max: 50, sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2 }),
+    getActiveCollectionsForHomepage(),
   ]);
 
   // Only ever pick a brand that actually has products to show — otherwise
@@ -82,6 +84,16 @@ export default async function HomePage() {
             </div>
           </section>
         ) : null}
+
+        {collections.map((collection) => (
+          <section className="section" key={collection.slug}>
+            <div className="section-head">
+              <div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Collection</p><h2 className="section-title">{collection.title}</h2></div>
+              <Link href={`/collections/${collection.slug}`} className="link-small">View collection</Link>
+            </div>
+            <div className="grid">{collection.products.slice(0, 8).map((product) => <ProductCard key={product.id} product={product} />)}</div>
+          </section>
+        ))}
 
         {featuredBrand ? (
           <section className="section">
