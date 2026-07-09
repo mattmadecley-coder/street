@@ -1,0 +1,98 @@
+.wrapper {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 0;
+  pointer-events: none;
+  z-index: 60;
+}
+
+.mover {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 64px;
+  height: 80px;
+  transition-property: transform;
+  transition-timing-function: linear;
+  will-change: transform;
+}
+
+.sprite {
+  width: 64px;
+  height: 80px;
+  background-image: url(/mascot/sprite-sheet.png);
+  background-repeat: no-repeat;
+  background-size: 200% 100%;
+  background-position: 0 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.sprite.walking {
+  animation: walk-cycle 0.42s steps(1) infinite;
+}
+
+@keyframes walk-cycle {
+  0%, 49.9% { background-position: 0 0; }
+  50%, 100% { background-position: 100% 0; }
+}
+
+.bubble {
+  position: absolute;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 190px;
+  padding: 9px 11px;
+  background: #f4f3ee;
+  border: 1.5px solid #101010;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  text-align: center;
+  color: #101010;
+  box-shadow: 3px 3px 0 rgba(16, 16, 16, 0.92);
+  animation: bubble-pop 0.16s ease-out;
+}
+
+.bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid #101010;
+}
+
+.bubble::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5.5px solid #f4f3ee;
+  z-index: 1;
+}
+
+@keyframes bubble-pop {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.92); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@media (max-width: 640px) {
+  .mover { width: 48px; height: 60px; }
+  .sprite { width: 48px; height: 60px; }
+  .bubble { bottom: 68px; font-size: 10.5px; max-width: 150px; }
+}
