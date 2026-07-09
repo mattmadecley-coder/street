@@ -146,6 +146,49 @@ export async function getAllCatalogProducts(filters: Omit<CatalogPageFilters, "p
 }
 
 /**
+ * A "shelf" of products (homepage rows like New In / Under $50) that reads
+ * naturally across brands instead of accidentally becoming a single-brand
+ * showcase. Plain getCatalogPage(sort: newest) can return 40+ results from
+ * one brand in a row right after that brand gets (re)synced, since every
+ * one of its rows shares almost the same updated_at timestamp - this walks
+ * a larger newest-first pool and caps how many any one brand can contribute
+ * before filling the rest from other brands.
+ */
+export async function getDiverseProductShelf(
+  filters: Omit<CatalogPageFilters, "page">,
+  { limit = 10, perBrandCap = 2, poolPages = 4 }: { limit?: number; perBrandCap?: number; poolPages?: number } = {}
+): Promise<StreetProduct[]> {
+  const pool: StreetProduct[] = [];
+  for (let page = 1; page <= poolPages; page += 1) {
+    const result = await getCatalogPage({ ...filters, page });
+    if (!result || !result.products.length) break;
+    pool.push(...result.products);
+    if (pool.length >= result.total) break;
+  }
+
+  const perBrandCount = new Map<string, number>();
+  const picked: StreetProduct[] = [];
+  for (const product of pool) {
+    const count = perBrandCount.get(product.brandSlug) ?? 0;
+    if (count >= perBrandCap) continue;
+    perBrandCount.set(product.brandSlug, count + 1);
+    picked.push(product);
+    if (picked.length >= limit) break;
+  }
+  // If the cap left us short (e.g. too few distinct brands in the pool),
+  // top up with whatever's next in newest-first order regardless of brand.
+  if (picked.length < limit) {
+    const pickedIds = new Set(picked.map((p) => p.id));
+    for (const product of pool) {
+      if (picked.length >= limit) break;
+      if (pickedIds.has(product.id)) continue;
+      picked.push(product);
+    }
+  }
+  return picked;
+}
+
+/**
  * Look up a single product by its `brandSlug--handle` slug directly in
  * Supabase, instead of pulling the entire catalog into memory and scanning
  * it. This is what product detail pages should use: it's the difference

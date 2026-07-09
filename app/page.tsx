@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { after } from "next/server";
 import styles from "./home.module.css";
 import { Header, Footer, ProductCard } from "@/components/storefront";
-import { getCatalogPage } from "@/lib/catalog-page";
+import { getCatalogPage, getDiverseProductShelf } from "@/lib/catalog-page";
 import { getSiteSettings } from "@/lib/site-settings";
 import { getBrandDirectory, getHomepageCategoryShowcase } from "@/lib/catalog-store";
 import { logSiteEvent } from "@/lib/analytics";
@@ -14,16 +14,14 @@ import { logSiteEvent } from "@/lib/analytics";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [settings, brands, requestHeaders, categoryShowcase, newInPage, under50Page] = await Promise.all([
+  const [settings, brands, requestHeaders, categoryShowcase, newIn, under50] = await Promise.all([
     getSiteSettings(),
     getBrandDirectory(),
     headers(),
     getHomepageCategoryShowcase(8),
-    getCatalogPage({ sort: "newest", availability: "in_stock" }),
-    getCatalogPage({ max: 50, sort: "newest", availability: "in_stock" }),
+    getDiverseProductShelf({ sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2 }),
+    getDiverseProductShelf({ max: 50, sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2 }),
   ]);
-  const newIn = newInPage?.products.slice(0, 10) ?? [];
-  const under50 = under50Page?.products.slice(0, 10) ?? [];
 
   // Only ever pick a brand that actually has products to show — otherwise
   // the hero spotlight and "Featured brand" section could link to an empty
