@@ -62,7 +62,12 @@ export function CategoryMenu({ summary }: { summary: CategorySummary[] }) {
         className="nav-search-trigger"
         aria-expanded={open}
         aria-haspopup="true"
-        onClick={() => setOpen((value) => !value)}
+        // Always opens (never toggles closed) — a real mouse click on this
+        // button fires mouseenter (via openNow, from the wrapping div) right
+        // before the click event, so a naive toggle would immediately flip
+        // it back closed. Closing happens via mouseleave, Escape, the
+        // backdrop, or clicking a category link instead.
+        onClick={openNow}
       >
         Categories
       </button>
