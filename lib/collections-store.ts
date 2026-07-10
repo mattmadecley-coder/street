@@ -2,6 +2,10 @@ import { hasSupabaseCatalog, supabaseRest, supabaseRestAll } from "@/lib/supabas
 import type { StreetProduct } from "@/lib/catalog";
 
 type ImageRow = { source_url: string; sort_order: number };
+// Only variant IDs are selected here (see select clauses below) - these are
+// preview contexts (collection shelves/pages), so a count is all that's
+// needed; the product detail page is what fetches full variant detail.
+type VariantRow = { external_id: string };
 type ProductRow = {
   id: string;
   handle: string;
@@ -20,6 +24,7 @@ type ProductRow = {
   last_synced_at: string;
   brands: { slug: string; name: string } | null;
   product_images: ImageRow[] | null;
+  product_variants: VariantRow[] | null;
   street_group: string | null;
   street_category: string | null;
   street_type: string | null;
@@ -55,6 +60,7 @@ function toStreetProduct(row: ProductRow): StreetProduct {
     streetCategory: row.street_category ?? undefined,
     streetType: row.street_type ?? undefined,
     streetDetail: row.street_detail ?? undefined,
+    variantCount: (row.product_variants ?? []).length,
   };
 }
 
@@ -123,7 +129,7 @@ export async function getCollectionBySlug(slug: string): Promise<CollectionWithP
 
     const idList = links.map((link) => link.product_id).join(",");
     const productRows = await supabaseRest<ProductRow[]>(
-      `products?id=in.(${idList})&select=*,brands(slug,name),product_images(source_url,sort_order)`,
+      `products?id=in.(${idList})&select=*,brands(slug,name),product_images(source_url,sort_order),product_variants(external_id)`,
       { noStore: true }
     );
     // Sort by the raw product UUID (row.id) before mapping to StreetProduct -
@@ -158,7 +164,7 @@ export async function getActiveCollectionsForHomepage(): Promise<Array<{ slug: s
     if (!productIds.length) return [];
 
     const productRows = await supabaseRest<ProductRow[]>(
-      `products?id=in.(${productIds.join(",")})&is_active=eq.true&is_hidden=eq.false&select=*,brands!inner(slug,name),product_images(source_url,sort_order)`
+      `products?id=in.(${productIds.join(",")})&is_active=eq.true&is_hidden=eq.false&select=*,brands!inner(slug,name),product_images(source_url,sort_order),product_variants(external_id)`
     );
     const productById = new Map(productRows.map((row) => [row.id, toStreetProduct(row)]));
 
@@ -198,7 +204,7 @@ export async function getPublicCollection(slug: string): Promise<{ title: string
 
     const productIds = links.map((link) => link.product_id);
     const productRows = await supabaseRest<ProductRow[]>(
-      `products?id=in.(${productIds.join(",")})&is_active=eq.true&is_hidden=eq.false&select=*,brands!inner(slug,name),product_images(source_url,sort_order)`
+      `products?id=in.(${productIds.join(",")})&is_active=eq.true&is_hidden=eq.false&select=*,brands!inner(slug,name),product_images(source_url,sort_order),product_variants(external_id)`
     );
     const bySortOrder = new Map(links.map((link) => [link.product_id, link.sort_order]));
     const products = [...productRows]

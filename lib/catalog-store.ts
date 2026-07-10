@@ -31,10 +31,15 @@ const CLASSIFICATION_BATCH_MAX = 25;
 const CATALOG_SYNC_CONCURRENCY = 6;
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
 
+function toVariantSummary(row: VariantRow) {
+  return { externalId: row.external_id, title: row.title ?? "", price: number(row.price), compareAtPrice: row.compare_at_price === null ? undefined : number(row.compare_at_price), available: row.available, option1: row.option1 ?? undefined, option2: row.option2 ?? undefined, option3: row.option3 ?? undefined };
+}
+
 function toStreetProduct(row: ProductRow): StreetProduct {
   const brand = row.brands;
   const images = [...(row.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url);
-  return { id: row.id, slug: `${brand?.slug ?? "brand"}--${row.handle}`, handle: row.handle, brandSlug: brand?.slug ?? "brand", brandName: brand?.name ?? "Unknown brand", description: row.description, sourceUrl: row.source_url, title: row.title, price: number(row.price), compareAtPrice: row.compare_at_price === null ? undefined : number(row.compare_at_price), stockStatus: row.stock_status, isPreorder: row.is_preorder, primaryImage: row.primary_image_url ?? images[0] ?? "", images, colors: row.colors ?? [], sizes: row.sizes ?? [], category: row.category, tags: row.tags ?? [], lastSyncedAt: row.last_synced_at, streetGroup: row.street_group ?? undefined, streetCategory: row.street_category ?? undefined, streetType: row.street_type ?? undefined, streetDetail: row.street_detail ?? undefined };
+  const variants = row.product_variants ?? [];
+  return { id: row.id, slug: `${brand?.slug ?? "brand"}--${row.handle}`, handle: row.handle, brandSlug: brand?.slug ?? "brand", brandName: brand?.name ?? "Unknown brand", description: row.description, sourceUrl: row.source_url, title: row.title, price: number(row.price), compareAtPrice: row.compare_at_price === null ? undefined : number(row.compare_at_price), stockStatus: row.stock_status, isPreorder: row.is_preorder, primaryImage: row.primary_image_url ?? images[0] ?? "", images, colors: row.colors ?? [], sizes: row.sizes ?? [], category: row.category, tags: row.tags ?? [], lastSyncedAt: row.last_synced_at, streetGroup: row.street_group ?? undefined, streetCategory: row.street_category ?? undefined, streetType: row.street_type ?? undefined, streetDetail: row.street_detail ?? undefined, variantCount: variants.length, variants: variants.map(toVariantSummary) };
 }
 
 function toStreetBrand(row: BrandRow): StreetBrand {

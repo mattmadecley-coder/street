@@ -3,6 +3,22 @@ import { getStoredCatalog } from "@/lib/catalog-store";
 import { getStoredProduct } from "@/lib/catalog-page";
 import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
 
+// A single purchasable option (a Shopify variant) under a product - usually
+// a color/size combination. Every read path populates variantCount; the
+// full variants array is only populated where the UI actually needs
+// per-option detail (currently: the product detail page) to keep listing
+// queries (catalog grid, homepage shelves, collections) cheap.
+export type ProductVariantSummary = {
+  externalId: string;
+  title: string;
+  price: number;
+  compareAtPrice?: number;
+  available: boolean;
+  option1?: string;
+  option2?: string;
+  option3?: string;
+};
+
 export type StreetProduct = {
   id: string;
   slug: string;
@@ -30,6 +46,13 @@ export type StreetProduct = {
   streetCategory?: string;
   streetType?: string;
   streetDetail?: string;
+  // How many purchasable variants (color/size combinations) this product
+  // has on the brand's own store. Always populated; used for the "N
+  // options" badge on product cards.
+  variantCount: number;
+  // Per-variant detail (title, price, availability). Only populated by read
+  // paths that need it - see the comment on ProductVariantSummary.
+  variants?: ProductVariantSummary[];
 };
 
 type CatalogSource = "database" | "live" | "fallback";
@@ -55,12 +78,23 @@ function toStreetProduct(brandSlug: string, brandName: string, product: Imported
     category: product.category,
     tags: product.tags,
     lastSyncedAt: new Date().toISOString(),
+    variantCount: product.variants.length,
+    variants: product.variants.map((variant) => ({
+      externalId: variant.externalId,
+      title: variant.title,
+      price: variant.price,
+      compareAtPrice: variant.compareAtPrice,
+      available: variant.available,
+      option1: variant.option1,
+      option2: variant.option2,
+      option3: variant.option3,
+    })),
   };
 }
 
 const fallbackProducts: StreetProduct[] = [
-  { id: "fallback-74-army", slug: "seventy-four-uniform--army-moto-bike-jacket", handle: "army-moto-bike-jacket", brandSlug: "seventy-four-uniform", brandName: "Seventy Four Uniform", title: "Army Moto-Bike Jacket", description: "Catalog data will appear after the first completed database sync.", sourceUrl: "https://www.seventyfouruniform.com/products/army-moto-bike-jacket", price: 220, stockStatus: "in_stock", isPreorder: false, primaryImage: "", images: [], colors: ["Army", "Green"], sizes: [], category: "Outerwear", tags: ["streetwear", "moto", "military"], lastSyncedAt: new Date().toISOString() },
-  { id: "fallback-clutch-sweatshirt", slug: "clutch-supply--cars-4-christ-sweatshirt", handle: "cars-4-christ-sweatshirt", brandSlug: "clutch-supply", brandName: "Clutch Supply", title: "Cars 4 Christ Sweatshirt", description: "Catalog data will appear after the first completed database sync.", sourceUrl: "https://clutchsupplyla.com/products/cars-4-christ-sweatshirt", price: 98, stockStatus: "in_stock", isPreorder: false, primaryImage: "", images: [], colors: [], sizes: [], category: "Hoodies & Sweatshirts", tags: ["streetwear", "sweatshirt"], lastSyncedAt: new Date().toISOString() },
+  { id: "fallback-74-army", slug: "seventy-four-uniform--army-moto-bike-jacket", handle: "army-moto-bike-jacket", brandSlug: "seventy-four-uniform", brandName: "Seventy Four Uniform", title: "Army Moto-Bike Jacket", description: "Catalog data will appear after the first completed database sync.", sourceUrl: "https://www.seventyfouruniform.com/products/army-moto-bike-jacket", price: 220, stockStatus: "in_stock", isPreorder: false, primaryImage: "", images: [], colors: ["Army", "Green"], sizes: [], category: "Outerwear", tags: ["streetwear", "moto", "military"], lastSyncedAt: new Date().toISOString(), variantCount: 0 },
+  { id: "fallback-clutch-sweatshirt", slug: "clutch-supply--cars-4-christ-sweatshirt", handle: "cars-4-christ-sweatshirt", brandSlug: "clutch-supply", brandName: "Clutch Supply", title: "Cars 4 Christ Sweatshirt", description: "Catalog data will appear after the first completed database sync.", sourceUrl: "https://clutchsupplyla.com/products/cars-4-christ-sweatshirt", price: 98, stockStatus: "in_stock", isPreorder: false, primaryImage: "", images: [], colors: [], sizes: [], category: "Hoodies & Sweatshirts", tags: ["streetwear", "sweatshirt"], lastSyncedAt: new Date().toISOString(), variantCount: 0 },
 ];
 
 export async function getCatalog(): Promise<{ products: StreetProduct[]; source: CatalogSource }> {

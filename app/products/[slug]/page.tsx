@@ -56,6 +56,21 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
           <Info label="Product images" value={`${product.images.length || 0} official photo${product.images.length === 1 ? "" : "s"} imported`} />
           {product.colors.length ? <Info label="Color" value={product.colors.join(", ")} /> : null}
           <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "Size choices were not supplied by the source catalog."} />
+          {product.variants && product.variants.length > 1 ? (
+            <div className="info-block">
+              <p className="brand" style={{ marginTop: 0 }}>Variations ({product.variants.length})</p>
+              <div className="variant-list">
+                {product.variants.map((variant) => {
+                  const label = variant.title || [variant.option1, variant.option2, variant.option3].filter(Boolean).join(" / ") || "Variant";
+                  return (
+                    <span key={variant.externalId} className={`variant-chip${variant.available ? "" : " variant-chip-sold-out"}`}>
+                      {label}{variant.available ? "" : " · Sold out"}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           <Info label="Description" value={product.description || "See the brand website for complete product details and shipping information."} />
           <a
             className="cta"

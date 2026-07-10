@@ -80,6 +80,7 @@ export function ProductCard({ product, searchQuery }: { product: StreetProduct; 
           <div style={{ height: "100%", width: "100%", background: "linear-gradient(135deg, #d7d4cc, #a7a49e)" }} />
         )}
         {product.stockStatus === "sold_out" ? <span className="badge">Sold out</span> : null}
+        {product.variantCount > 1 ? <span className="badge badge-variants">{product.variantCount} options</span> : null}
       </div>
       <p className="brand">{product.brandName}</p>
       <p className="name">{product.title}</p>

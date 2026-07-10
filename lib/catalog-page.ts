@@ -3,6 +3,12 @@ import { hasSupabaseCatalog, supabaseRest, supabaseRestPage } from "@/lib/supaba
 
 type BrandRow = { slug: string; name: string } | null;
 type ImageRow = { source_url: string; sort_order: number };
+// Listing queries (productPath, below) only select product_variants(id) -
+// just enough to count options - to keep the catalog grid/homepage
+// shelves cheap. getStoredProduct selects the full row (title/price/
+// availability/options) since the product detail page shows each one.
+// Every field but external_id is therefore optional here.
+type VariantRow = { external_id: string; title?: string | null; price?: string | number; compare_at_price?: string | number | null; available?: boolean; option1?: string | null; option2?: string | null; option3?: string | null };
 type ProductRow = {
   id: string;
   handle: string;
@@ -21,6 +27,7 @@ type ProductRow = {
   last_synced_at: string;
   brands: BrandRow;
   product_images: ImageRow[] | null;
+  product_variants: VariantRow[] | null;
   // Street taxonomy (lib/street-taxonomy.ts), set once a product has been
   // classified. Null until then.
   street_group: string | null;
@@ -53,8 +60,13 @@ export const CATALOG_PAGE_SIZE = 50;
 
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
 
+function toVariantSummary(row: VariantRow) {
+  return { externalId: row.external_id, title: row.title ?? "", price: number(row.price), compareAtPrice: row.compare_at_price == null ? undefined : number(row.compare_at_price), available: Boolean(row.available), option1: row.option1 ?? undefined, option2: row.option2 ?? undefined, option3: row.option3 ?? undefined };
+}
+
 function toStreetProduct(row: ProductRow): StreetProduct {
   const images = [...(row.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url);
+  const variants = row.product_variants ?? [];
   return {
     id: row.id,
     slug: `${row.brands?.slug ?? "brand"}--${row.handle}`,
@@ -79,6 +91,8 @@ function toStreetProduct(row: ProductRow): StreetProduct {
     streetCategory: row.street_category ?? undefined,
     streetType: row.street_type ?? undefined,
     streetDetail: row.street_detail ?? undefined,
+    variantCount: variants.length,
+    variants: variants.map(toVariantSummary),
   };
 }
 
@@ -88,7 +102,7 @@ function arrayContains(value: string) {
 
 function productPath(filters: CatalogPageFilters) {
   const params = new URLSearchParams();
-  params.set("select", "*,brands!inner(slug,name),product_images(source_url,sort_order)");
+  params.set("select", "*,brands!inner(slug,name),product_images(source_url,sort_order),product_variants(external_id)");
   params.set("is_active", "eq.true");
   params.set("is_hidden", "eq.false");
   params.set("order", filters.sort === "price-low" ? "price.asc,id.asc" : filters.sort === "price-high" ? "price.desc,id.desc" : "updated_at.desc,id.desc");
@@ -205,7 +219,7 @@ export async function getStoredProduct(slug: string): Promise<StreetProduct | nu
   if (!brandSlug || !handle) return null;
 
   const params = new URLSearchParams();
-  params.set("select", "*,brands!inner(slug,name),product_images(source_url,sort_order)");
+  params.set("select", "*,brands!inner(slug,name),product_images(source_url,sort_order),product_variants(*)");
   params.set("brands.slug", `eq.${brandSlug}`);
   params.set("handle", `eq.${handle}`);
   params.set("is_active", "eq.true");
