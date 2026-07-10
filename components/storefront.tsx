@@ -3,6 +3,7 @@ import Image from "next/image";
 import type { StreetProduct } from "@/lib/catalog";
 import { SearchToggle } from "@/components/search-overlay";
 import { CategoryMenu } from "@/components/category-menu";
+import { MobileMoreMenu } from "@/components/mobile-more-menu";
 import { getActiveCategorySummary } from "@/lib/catalog-store";
 
 export async function Header() {
@@ -15,6 +16,7 @@ export async function Header() {
         <CategoryMenu summary={categorySummary} />
         <Link href="/catalog?sort=newest" className="nav-hide-mobile">New in</Link>
         <Link href="/brands" className="nav-hide-mobile">Brands</Link>
+        <MobileMoreMenu />
       </nav>
       <SearchToggle />
     </header>

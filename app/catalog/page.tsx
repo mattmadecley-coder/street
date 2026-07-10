@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { after } from "next/server";
 import { Header, Footer, ProductCard } from "@/components/storefront";
+import { CategorySidebar } from "@/components/category-sidebar";
 import { PriceRangeSlider } from "@/components/price-slider";
 import { getCatalog, type StreetProduct } from "@/lib/catalog";
 import { CATALOG_PAGE_SIZE, getCatalogPage } from "@/lib/catalog-page";
 import { getAllBrands } from "@/lib/catalog-store";
-import { STREET_TAXONOMY, categoriesForGroup, typesForCategory } from "@/lib/street-taxonomy";
 import { logSiteEvent } from "@/lib/analytics";
 
 // This route reads `searchParams`, so Next always renders it per-request —
@@ -13,7 +13,7 @@ import { logSiteEvent } from "@/lib/analytics";
 // fetches are still cached (see lib/supabase-rest.ts), so repeat views of the
 // same filter combination reuse cached data instead of re-querying every time.
 
-type Params = {
+export type Params = {
   q?: string;
   brand?: string;
   // Street taxonomy filters (lib/street-taxonomy.ts): group -> category -> type.
@@ -53,10 +53,6 @@ const COLOR_SWATCHES: Record<string, string> = {
 };
 const colors = Object.keys(COLOR_SWATCHES);
 const LIGHT_SWATCHES = new Set(["white", "cream", "tan", "yellow"]);
-
-// Groups shown expanded by default (no filter selected yet) — mirrors GOAT
-// defaulting to its two biggest departments open in the sidebar.
-const DEFAULT_OPEN_GROUPS = new Set(["Footwear", "Apparel", "Collectibles"]);
 
 // Sizing is category-relative (a sneaker size means nothing on a t-shirt), so
 // the size filter only appears once a group/category narrows what "size"
@@ -102,96 +98,6 @@ function clearParamHref(params: Params, key: keyof Params) {
   return catalogHref({ ...params, [key]: undefined }, 1);
 }
 
-/**
- * Href for a sidebar category link. Every link carries its full ancestor
- * chain (a type link sets group+category+type, not just type) so the URL is
- * always self-consistent even though category/type names happen to be
- * unique across the whole taxonomy. Clicking the already-active leaf toggles
- * it off and collapses back to its parent level, instead of re-selecting it
- * — the same "click to filter, click again to clear" pattern GOAT's own
- * category sidebar uses.
- */
-function sidebarHref(params: Params, target: { group: string; category?: string; type?: string }) {
-  const next: Params = { ...params, page: undefined };
-  if (target.type !== undefined) {
-    const isActive = params.type === target.type;
-    next.group = target.group;
-    next.category = target.category;
-    next.type = isActive ? undefined : target.type;
-  } else if (target.category !== undefined) {
-    const isActive = params.category === target.category && !params.type;
-    next.group = target.group;
-    next.category = isActive ? undefined : target.category;
-    next.type = undefined;
-  } else {
-    const isActive = params.group === target.group && !params.category && !params.type;
-    next.group = isActive ? undefined : target.group;
-    next.category = undefined;
-    next.type = undefined;
-  }
-  // A group/category change can invalidate the previously-selected size
-  // (e.g. leaving Footwear should drop a shoe size), so size is cleared
-  // whenever the taxonomy selection changes.
-  next.size = undefined;
-  const search = new URLSearchParams();
-  for (const [key, val] of Object.entries(next)) if (val) search.set(key, val);
-  const query = search.toString();
-  return query ? `/catalog?${query}` : "/catalog";
-}
-
-function clearCategoryHref(params: Params) {
-  return catalogHref({ ...params, group: undefined, category: undefined, type: undefined, size: undefined }, 1);
-}
-
-/** GOAT-style nested category sidebar, driven entirely by STREET_TAXONOMY. */
-function CategorySidebar({ params }: { params: Params }) {
-  const groups = Object.keys(STREET_TAXONOMY);
-  const hasFilter = Boolean(params.group || params.category || params.type);
-
-  return (
-    <nav className="sidebar" aria-label="Shop by category">
-      <div className="sidebar-head">
-        <p className="sidebar-heading">Category</p>
-        {hasFilter ? <Link href={clearCategoryHref(params)} className="sidebar-reset">Reset</Link> : null}
-      </div>
-      {hasFilter ? (
-        <p className="sidebar-breadcrumb">{[params.group, params.category, params.type].filter(Boolean).join(" / ")}</p>
-      ) : null}
-      {groups.map((group) => {
-        const categoriesInGroup = categoriesForGroup(group);
-        const isGroupActive = params.group === group && !params.category && !params.type;
-        const isOpen = params.group === group || (!params.group && DEFAULT_OPEN_GROUPS.has(group));
-        return (
-          <details key={group} className="sidebar-group" open={isOpen}>
-            <summary>
-              <Link href={sidebarHref(params, { group })} className={isGroupActive ? "active" : undefined}>{group}</Link>
-            </summary>
-            <ul>
-              {categoriesInGroup.map((category) => {
-                const typesInCategory = typesForCategory(group, category);
-                const isCategoryActive = params.category === category && !params.type;
-                return (
-                  <li key={category}>
-                    <Link href={sidebarHref(params, { group, category })} className={isCategoryActive ? "active" : undefined}>{category}</Link>
-                    {typesInCategory.length ? (
-                      <ul className="sidebar-types">
-                        {typesInCategory.map((type) => (
-                          <li key={type}>
-                            <Link href={sidebarHref(params, { group, category, type })} className={params.type === type ? "active" : undefined}>{type}</Link>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          </details>
-        );
-      })}
-    </nav>
-  );
-}
 
 function ColorSwatches({ params }: { params: Params }) {
   return (
