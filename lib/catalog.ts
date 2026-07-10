@@ -17,6 +17,10 @@ export type ProductVariantSummary = {
   option1?: string;
   option2?: string;
   option3?: string;
+  // The photo that represents this specific variant (e.g. this color), if
+  // the source data provided one - see lib/source-import.ts. Only populated
+  // reliably for brands synced via the primary Shopify products.json path.
+  imageUrl?: string;
 };
 
 export type StreetProduct = {
@@ -88,6 +92,7 @@ function toStreetProduct(brandSlug: string, brandName: string, product: Imported
       option1: variant.option1,
       option2: variant.option2,
       option3: variant.option3,
+      imageUrl: variant.imageUrl,
     })),
   };
 }

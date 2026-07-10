@@ -8,7 +8,7 @@ type ImageRow = { source_url: string; sort_order: number };
 // shelves cheap. getStoredProduct selects the full row (title/price/
 // availability/options) since the product detail page shows each one.
 // Every field but external_id is therefore optional here.
-type VariantRow = { external_id: string; title?: string | null; price?: string | number; compare_at_price?: string | number | null; available?: boolean; option1?: string | null; option2?: string | null; option3?: string | null };
+type VariantRow = { external_id: string; title?: string | null; price?: string | number; compare_at_price?: string | number | null; available?: boolean; option1?: string | null; option2?: string | null; option3?: string | null; image_url?: string | null };
 type ProductRow = {
   id: string;
   handle: string;
@@ -61,7 +61,7 @@ export const CATALOG_PAGE_SIZE = 50;
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
 
 function toVariantSummary(row: VariantRow) {
-  return { externalId: row.external_id, title: row.title ?? "", price: number(row.price), compareAtPrice: row.compare_at_price == null ? undefined : number(row.compare_at_price), available: Boolean(row.available), option1: row.option1 ?? undefined, option2: row.option2 ?? undefined, option3: row.option3 ?? undefined };
+  return { externalId: row.external_id, title: row.title ?? "", price: number(row.price), compareAtPrice: row.compare_at_price == null ? undefined : number(row.compare_at_price), available: Boolean(row.available), option1: row.option1 ?? undefined, option2: row.option2 ?? undefined, option3: row.option3 ?? undefined, imageUrl: row.image_url ?? undefined };
 }
 
 function toStreetProduct(row: ProductRow): StreetProduct {

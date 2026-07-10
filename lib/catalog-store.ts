@@ -8,7 +8,7 @@ import type { StreetProduct } from "@/lib/catalog";
 
 type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean; catalog_enabled?: boolean };
 type ImageRow = { source_url: string; sort_order: number; alt_text?: string | null };
-type VariantRow = { external_id: string; title: string | null; price: string | number; compare_at_price: string | number | null; available: boolean; option1: string | null; option2: string | null; option3: string | null };
+type VariantRow = { external_id: string; title: string | null; price: string | number; compare_at_price: string | number | null; available: boolean; option1: string | null; option2: string | null; option3: string | null; image_url: string | null };
 type ProductRow = { id: string; brand_id: string; external_id: string; handle: string; title: string; description: string; source_url: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; category: string; tags: string[]; colors: string[]; sizes: string[]; primary_image_url: string | null; last_synced_at: string; is_active: boolean; brands: BrandRow | null; product_images: ImageRow[] | null; product_variants: VariantRow[] | null; street_group: string | null; street_category: string | null; street_type: string | null; street_detail: string | null };
 type PendingClassificationRow = { id: string; title: string; description: string; category: string; tags: string[]; colors: string[] };
 type ProductCountRow = { brand_id: string };
@@ -32,7 +32,7 @@ const CATALOG_SYNC_CONCURRENCY = 6;
 const number = (value: string | number | null | undefined) => Number(value ?? 0);
 
 function toVariantSummary(row: VariantRow) {
-  return { externalId: row.external_id, title: row.title ?? "", price: number(row.price), compareAtPrice: row.compare_at_price === null ? undefined : number(row.compare_at_price), available: row.available, option1: row.option1 ?? undefined, option2: row.option2 ?? undefined, option3: row.option3 ?? undefined };
+  return { externalId: row.external_id, title: row.title ?? "", price: number(row.price), compareAtPrice: row.compare_at_price === null ? undefined : number(row.compare_at_price), available: row.available, option1: row.option1 ?? undefined, option2: row.option2 ?? undefined, option3: row.option3 ?? undefined, imageUrl: row.image_url ?? undefined };
 }
 
 function toStreetProduct(row: ProductRow): StreetProduct {
@@ -332,7 +332,7 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
     const ids = new Map(saved.map((product) => [product.external_id, product.id]));
     await Promise.all(saved.flatMap((product) => [supabaseRest(`product_images?product_id=eq.${product.id}`, { method: "DELETE", prefer: "return=minimal" }), supabaseRest(`product_variants?product_id=eq.${product.id}`, { method: "DELETE", prefer: "return=minimal" })]));
     const images = imported.flatMap((product) => { const productId = ids.get(product.externalId); return productId ? product.images.map((sourceUrl, sortOrder) => ({ product_id: productId, source_url: sourceUrl, sort_order: sortOrder, alt_text: product.title })) : []; });
-    const variants = imported.flatMap((product) => { const productId = ids.get(product.externalId); return productId ? product.variants.map((variant) => ({ product_id: productId, external_id: variant.externalId, title: variant.title || null, price: variant.price, compare_at_price: variant.compareAtPrice ?? null, available: variant.available, option1: variant.option1 ?? null, option2: variant.option2 ?? null, option3: variant.option3 ?? null })) : []; });
+    const variants = imported.flatMap((product) => { const productId = ids.get(product.externalId); return productId ? product.variants.map((variant) => ({ product_id: productId, external_id: variant.externalId, title: variant.title || null, price: variant.price, compare_at_price: variant.compareAtPrice ?? null, available: variant.available, option1: variant.option1 ?? null, option2: variant.option2 ?? null, option3: variant.option3 ?? null, image_url: variant.imageUrl ?? null })) : []; });
     if (images.length) await supabaseRest("product_images", { method: "POST", body: images, prefer: "return=minimal" });
     if (variants.length) await supabaseRest("product_variants", { method: "POST", body: variants, prefer: "return=minimal" });
     if (runId) await supabaseRest(`catalog_sync_runs?id=eq.${runId}`, { method: "PATCH", body: { status: "success", completed_at: new Date().toISOString(), product_count: imported.length }, prefer: "return=minimal" });

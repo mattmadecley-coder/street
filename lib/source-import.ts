@@ -1,9 +1,18 @@
 import type { StreetBrand } from "@/lib/brands";
 
-export type ImportedVariant = { externalId: string; title: string; price: number; compareAtPrice?: number; available: boolean; option1?: string; option2?: string; option3?: string };
+// imageUrl: the one photo (of the product's full set) that best represents
+// this specific variant - e.g. the front shot of a color option - so a
+// shopper picking "Black" on the product page can see black, not whatever
+// happened to sync as the primary image. Not every source provides this
+// (see normalize() below), so it's optional throughout.
+export type ImportedVariant = { externalId: string; title: string; price: number; compareAtPrice?: number; available: boolean; option1?: string; option2?: string; option3?: string; imageUrl?: string };
 export type ImportedProduct = { externalId: string; handle: string; title: string; description: string; sourceUrl: string; price: number; compareAtPrice?: number; stockStatus: "in_stock" | "sold_out"; isPreorder: boolean; category: string; tags: string[]; images: string[]; colors: string[]; sizes: string[]; variants: ImportedVariant[] };
-type RawVariant = { id: number | string; title?: string; price: number | string; compare_at_price?: number | string | null; available: boolean; option1?: string | null; option2?: string | null; option3?: string | null };
-type RawProduct = { id: number | string; title: string; handle: string; body_html?: string | null; description?: string | null; product_type?: string; type?: string; tags?: string | string[]; options?: Array<{ name: string; values: string[] }>; variants?: RawVariant[]; images?: Array<{ src: string; position?: number }> | string[] };
+// image_id: Shopify's per-variant "which photo represents this option" link.
+// images[].variant_ids: the reverse of that same link, populated by Shopify
+// on the image side when a merchant assigns a photo to specific variants -
+// used as a fallback since not every theme/feed populates image_id reliably.
+type RawVariant = { id: number | string; title?: string; price: number | string; compare_at_price?: number | string | null; available: boolean; option1?: string | null; option2?: string | null; option3?: string | null; image_id?: number | string | null };
+type RawProduct = { id: number | string; title: string; handle: string; body_html?: string | null; description?: string | null; product_type?: string; type?: string; tags?: string | string[]; options?: Array<{ name: string; values: string[] }>; variants?: RawVariant[]; images?: Array<{ id?: number | string; src: string; position?: number; variant_ids?: Array<number | string> }> | string[] };
 const headers = { Accept: "application/json, text/html, text/plain, */*", "User-Agent": "Mozilla/5.0 (compatible; StreetCatalog/1.0)" };
 const colors = ["black", "white", "gray", "grey", "blue", "navy", "green", "army", "brown", "tan", "cream", "red", "purple", "yellow", "pink", "camo"];
 const text = (value = "") => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -14,14 +23,25 @@ function normalize(raw: RawProduct, brand: StreetBrand, cents: boolean): Importe
   const productType = raw.product_type ?? raw.type ?? "";
   const description = text(raw.body_html ?? raw.description ?? "");
   const tags = Array.isArray(raw.tags) ? raw.tags : (raw.tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean);
-  const variants = (raw.variants ?? []).map((variant) => ({ externalId: String(variant.id), title: variant.title ?? [variant.option1, variant.option2, variant.option3].filter((value): value is string => typeof value === "string").join(" / "), price: money(variant.price, cents), compareAtPrice: variant.compare_at_price ? money(variant.compare_at_price, cents) : undefined, available: Boolean(variant.available), option1: variant.option1 ?? undefined, option2: variant.option2 ?? undefined, option3: variant.option3 ?? undefined }));
+  // Normalize raw.images once, keeping id/variant_ids around long enough to
+  // build the two variant->photo lookups below; `images` (the flat src list
+  // every product already exposed) is unchanged from before.
+  const rawImages = (raw.images ?? []).map((image, index) => typeof image === "string" ? { id: undefined as number | string | undefined, src: image, position: index, variantIds: undefined as Array<number | string> | undefined } : { id: image.id, src: image.src, position: image.position ?? index, variantIds: image.variant_ids });
+  const sortedRawImages = [...rawImages].sort((a, b) => a.position - b.position);
+  const absoluteSrc = (src: string) => (src.startsWith("//") ? `https:${src}` : src);
+  const images = sortedRawImages.map((image) => absoluteSrc(image.src));
+  const imageById = new Map(rawImages.filter((image) => image.id !== undefined).map((image) => [String(image.id), absoluteSrc(image.src)]));
+  const imageByVariantId = new Map<string, string>();
+  for (const image of rawImages) {
+    for (const variantId of image.variantIds ?? []) imageByVariantId.set(String(variantId), absoluteSrc(image.src));
+  }
+  const variants = (raw.variants ?? []).map((variant) => ({ externalId: String(variant.id), title: variant.title ?? [variant.option1, variant.option2, variant.option3].filter((value): value is string => typeof value === "string").join(" / "), price: money(variant.price, cents), compareAtPrice: variant.compare_at_price ? money(variant.compare_at_price, cents) : undefined, available: Boolean(variant.available), option1: variant.option1 ?? undefined, option2: variant.option2 ?? undefined, option3: variant.option3 ?? undefined, imageUrl: (variant.image_id != null ? imageById.get(String(variant.image_id)) : undefined) ?? imageByVariantId.get(String(variant.id)) }));
   const options = raw.options ?? [];
   const colorOption = options.find((option) => /color|colour/.test(option.name));
   const sizeOption = options.find((option) => /size/.test(option.name));
   const haystack = `${raw.title} ${productType} ${tags.join(" ")} ${description}`.toLowerCase();
   const productColors = colorOption?.values?.length ? colorOption.values : colors.filter((value) => haystack.includes(value));
   const sizes = sizeOption?.values?.length ? sizeOption.values : [...new Set(variants.flatMap((variant) => [variant.option1, variant.option2, variant.option3]).filter((value): value is string => typeof value === "string" && /^(xxs|xs|s|m|l|xl|xxl|\d{2,3})$/i.test(value)))];
-  const images = (raw.images ?? []).map((image, index) => ({ src: typeof image === "string" ? image : image.src, position: typeof image === "string" ? index : image.position ?? index })).sort((a, b) => a.position - b.position).map((image) => image.src.startsWith("//") ? `https:${image.src}` : image.src);
   const productCategory = category(raw.title, productType);
   const generated = new Set(["streetwear", productCategory.toLowerCase(), ...tags.map((tag) => tag.toLowerCase()), ...productColors.map((color) => color.toLowerCase())]);
   if (/moto|bike|motocross|racing/.test(haystack)) ["moto", "motorcycle", "racing"].forEach((tag) => generated.add(tag));

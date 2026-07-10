@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import styles from "./product-gallery.module.css";
+import { useProductVariantFocus } from "@/components/product-variant-context";
 
 /**
  * Desktop keeps the original layout: every photo stacked vertically, all
@@ -15,8 +16,24 @@ import styles from "./product-gallery.module.css";
  */
 export function ProductGallery({ images, title }: { images: string[]; title: string }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const slideRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [active, setActive] = useState(0);
   const galleryImages = images.length ? images : [""];
+  const { focusImage } = useProductVariantFocus();
+
+  // When a shopper picks a variant with an associated photo (VariantPicker,
+  // via the shared context in product-variant-context.tsx), jump the
+  // gallery to that photo if it's one of this product's images.
+  // scrollIntoView (rather than manually computing horizontal/vertical
+  // offsets) works for both layouts unchanged: the mobile scroll-snap
+  // carousel and the desktop vertical stack.
+  useEffect(() => {
+    if (!focusImage) return;
+    const index = galleryImages.indexOf(focusImage);
+    if (index === -1) return;
+    slideRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    setActive(index);
+  }, [focusImage, galleryImages]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -46,7 +63,7 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
     <section className={styles.gallery} aria-label={`${title} image gallery`}>
       <div className={styles.track} ref={trackRef}>
         {galleryImages.map((image, index) => (
-          <div className={styles.slide} key={`${image}-${index}`}>
+          <div className={styles.slide} key={`${image}-${index}`} ref={(el) => { slideRefs.current[index] = el; }}>
             {image ? (
               <Image
                 src={image}

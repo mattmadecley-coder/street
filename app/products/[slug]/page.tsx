@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { Header, Footer } from "@/components/storefront";
 import { ProductGallery } from "@/components/product-gallery";
+import { ProductVariantProvider } from "@/components/product-variant-context";
+import { VariantPicker } from "@/components/variant-picker";
 import { getProduct } from "@/lib/catalog";
 import { logSiteEvent } from "@/lib/analytics";
 
@@ -46,44 +48,32 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   return (
     <main>
       <Header />
-      <div className="shell product-layout">
-        <ProductGallery images={product.images} title={product.title} />
-        <aside className="product-info">
-          <p className="brand">{product.brandName}</p>
-          <h1>{product.title}</h1>
-          <p className="price" style={{ fontSize: 18, marginBottom: 14 }}>${product.price.toFixed(2)}</p>
-          <span className="status">{product.stockStatus === "in_stock" ? "In stock" : "Sold out"}{product.isPreorder ? " · Pre-order" : ""}</span>
-          <Info label="Product images" value={`${product.images.length || 0} official photo${product.images.length === 1 ? "" : "s"} imported`} />
-          {product.colors.length ? <Info label="Color" value={product.colors.join(", ")} /> : null}
-          <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "Size choices were not supplied by the source catalog."} />
-          {product.variants && product.variants.length > 1 ? (
-            <div className="info-block">
-              <p className="brand" style={{ marginTop: 0 }}>Variations ({product.variants.length})</p>
-              <div className="variant-list">
-                {product.variants.map((variant) => {
-                  const label = variant.title || [variant.option1, variant.option2, variant.option3].filter(Boolean).join(" / ") || "Variant";
-                  return (
-                    <span key={variant.externalId} className={`variant-chip${variant.available ? "" : " variant-chip-sold-out"}`}>
-                      {label}{variant.available ? "" : " · Sold out"}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-          <Info label="Description" value={product.description || "See the brand website for complete product details and shipping information."} />
-          <a
-            className="cta"
-            href={`/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span>Shop at {product.brandName}</span><span>↗</span>
-          </a>
-          <p className="results" style={{ lineHeight: 1.45 }}>{sourceMessage}</p>
-          <div className="tags">{product.tags.slice(0, 12).map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
-        </aside>
-      </div>
+      <ProductVariantProvider>
+        <div className="shell product-layout">
+          <ProductGallery images={product.images} title={product.title} />
+          <aside className="product-info">
+            <p className="brand">{product.brandName}</p>
+            <h1>{product.title}</h1>
+            <p className="price" style={{ fontSize: 18, marginBottom: 14 }}>${product.price.toFixed(2)}</p>
+            <span className="status">{product.stockStatus === "in_stock" ? "In stock" : "Sold out"}{product.isPreorder ? " · Pre-order" : ""}</span>
+            <Info label="Product images" value={`${product.images.length || 0} official photo${product.images.length === 1 ? "" : "s"} imported`} />
+            {product.colors.length ? <Info label="Color" value={product.colors.join(", ")} /> : null}
+            <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "Size choices were not supplied by the source catalog."} />
+            <VariantPicker variants={product.variants ?? []} />
+            <Info label="Description" value={product.description || "See the brand website for complete product details and shipping information."} />
+            <a
+              className="cta"
+              href={`/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>Shop at {product.brandName}</span><span>↗</span>
+            </a>
+            <p className="results" style={{ lineHeight: 1.45 }}>{sourceMessage}</p>
+            <div className="tags">{product.tags.slice(0, 12).map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
+          </aside>
+        </div>
+      </ProductVariantProvider>
       <Footer />
     </main>
   );
