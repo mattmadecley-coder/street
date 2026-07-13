@@ -17,6 +17,9 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "synced", label: "Last synced" },
 ];
 
+const STALE_IMPORT_MS = 10 * 60_000;
+const ACTIVE_CLASSIFICATION_WINDOW_MS = 5 * 60_000;
+
 function timeAgo(iso: string | null): string {
   if (!iso) return "Never synced";
   const ms = Date.now() - new Date(iso).getTime();
@@ -29,20 +32,46 @@ function timeAgo(iso: string | null): string {
   return `${days}d ago`;
 }
 
+function ageMs(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const timestamp = new Date(iso).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.max(0, Date.now() - timestamp);
+}
+
 type Progress =
   | { state: "importing" }
   | { state: "classifying"; done: number; total: number }
+  | { state: "waiting"; done: number; total: number; pending: number }
   | { state: "finished" }
   | { state: "failed"; error: string | null }
   | { state: "idle" };
 
-function progressFor(brand: StreetBrandProfile, status: BrandSyncStatus | undefined, pending: number, justAdded: boolean): Progress {
-  if (status?.lastStatus === "running" || (justAdded && !status)) return { state: "importing" };
-  if (status?.lastStatus === "failed" && !pending) return { state: "failed", error: status.lastError };
-  if (pending > 0 && (status?.lastStatus === "success" || justAdded)) {
-    return { state: "classifying", done: Math.max(0, brand.productCount - pending), total: brand.productCount };
+function progressFor(brand: StreetBrandProfile, status: BrandSyncStatus | undefined, pending: number, classificationWasStarted: boolean): Progress {
+  const syncAge = ageMs(status?.lastSyncedAt);
+  const staleRunning = status?.lastStatus === "running" && syncAge !== null && syncAge > STALE_IMPORT_MS;
+
+  if ((status?.lastStatus === "running" && !staleRunning) || (classificationWasStarted && !status)) {
+    return { state: "importing" };
   }
-  if (status?.lastStatus === "success" && pending === 0) return { state: "finished" };
+
+  if (staleRunning) {
+    return {
+      state: "failed",
+      error: status?.lastError ?? "This import stopped before it could finish. Use Sync now to retry it.",
+    };
+  }
+
+  if (status?.lastStatus === "failed") return { state: "failed", error: status.lastError };
+
+  if (pending > 0) {
+    const done = Math.max(0, brand.productCount - pending);
+    const recentlySynced = status?.lastStatus === "success" && syncAge !== null && syncAge <= ACTIVE_CLASSIFICATION_WINDOW_MS;
+    if (classificationWasStarted && recentlySynced) return { state: "classifying", done, total: brand.productCount };
+    return { state: "waiting", done, total: brand.productCount, pending };
+  }
+
+  if (status?.lastStatus === "success") return { state: "finished" };
   return { state: "idle" };
 }
 
@@ -64,17 +93,23 @@ function BrandRow({ brand, status, pending, progress }: { brand: StreetBrandProf
   return (
     <details className={styles.row}>
       <summary className={styles.rowSummary}>
-        <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           {brand.logoUrl ? <img src={brand.logoUrl} alt="" /> : <span className={styles.pill}>No logo</span>}
           <strong>{brand.name}</strong>
           {brand.featured ? <span className={styles.pill}>Featured</span> : null}
           {!brand.catalogEnabled ? <span className={styles.pill}>Not in daily sync</span> : null}
-          {progress.state === "failed" ? <span className={styles.pill}>Last sync failed</span> : null}
+          {progress.state === "failed" ? <span className={styles.pill}>Import interrupted</span> : null}
+          {progress.state === "waiting" ? <span className={styles.pill}>{progress.pending} waiting to classify</span> : null}
         </span>
         <span className={styles.rowMeta}>{brand.productCount} pieces · {timeAgo(status?.lastSyncedAt ?? null)}</span>
       </summary>
       <div className={styles.rowBody}>
-        {progress.state === "failed" && progress.error ? <p className={styles.noticeError}>Last sync error: {progress.error}</p> : null}
+        {progress.state === "failed" && progress.error ? <p className={styles.noticeError}>{progress.error}</p> : null}
+        {progress.state === "waiting" ? (
+          <p className={styles.notice}>
+            {progress.done} of {progress.total} products are classified. The remaining {progress.pending} are waiting, not actively processing.
+          </p>
+        ) : null}
         <div className={styles.actions} style={{ marginBottom: 16 }}>
           <form action={syncBrandNow}>
             <input type="hidden" name="slug" value={brand.slug} />
@@ -115,15 +150,16 @@ function BrandRow({ brand, status, pending, progress }: { brand: StreetBrandProf
   );
 }
 
-export default async function AdminBrandsPage({ searchParams }: { searchParams: Promise<{ saved?: string; synced?: string; syncError?: string; justAdded?: string; sort?: string }> }) {
-  const { saved, synced, syncError, justAdded, sort: sortParam } = await searchParams;
+export default async function AdminBrandsPage({ searchParams }: { searchParams: Promise<{ saved?: string; synced?: string; syncError?: string; justAdded?: string; classifying?: string; sort?: string }> }) {
+  const { saved, synced, syncError, justAdded, classifying, sort: sortParam } = await searchParams;
   const sort: SortKey = SORT_OPTIONS.some((option) => option.value === sortParam) ? (sortParam as SortKey) : "name";
   const [brands, syncStatuses, pendingByBrand] = await Promise.all([getBrandDirectory(), getBrandSyncStatuses(), getBrandClassificationProgress()]);
 
+  const classificationStartedSlugs = new Set([justAdded, classifying].filter((slug): slug is string => Boolean(slug)));
   const withProgress = brands.map((brand) => {
     const status = syncStatuses.get(brand.slug);
     const pending = pendingByBrand.get(brand.slug) ?? 0;
-    const progress = progressFor(brand, status, pending, brand.slug === justAdded);
+    const progress = progressFor(brand, status, pending, classificationStartedSlugs.has(brand.slug));
     return { brand, status, pending, progress };
   });
 
@@ -133,7 +169,9 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
   // the wizard hands off, so "Recently added" never looks empty.
   if (justAdded && !inProgress.some((item) => item.brand.slug === justAdded)) {
     const match = withProgress.find((item) => item.brand.slug === justAdded);
-    if (match) inProgress.unshift({ ...match, progress: { state: "importing" } });
+    if (match && match.progress.state !== "waiting" && match.progress.state !== "failed") {
+      inProgress.unshift({ ...match, progress: { state: "importing" } });
+    }
   }
   const inProgressSlugs = new Set(inProgress.map((item) => item.brand.slug));
   const recentlyFinished = withProgress
@@ -148,7 +186,7 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
   const allSorted = sortBrands(brands, syncStatuses, sort).map((brand) => {
     const status = syncStatuses.get(brand.slug);
     const pending = pendingByBrand.get(brand.slug) ?? 0;
-    return { brand, status, pending, progress: progressFor(brand, status, pending, brand.slug === justAdded) };
+    return { brand, status, pending, progress: progressFor(brand, status, pending, classificationStartedSlugs.has(brand.slug)) };
   });
 
   return (
@@ -164,13 +202,13 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
       </div>
 
       {saved ? <p className={styles.notice}>Saved {saved}.</p> : null}
-      {synced ? <p className={syncError ? styles.noticeError : styles.notice}>{syncError ? `Sync failed for ${synced}: ${syncError}` : `Synced ${synced}.`}</p> : null}
+      {synced ? <p className={syncError ? styles.noticeError : styles.notice}>{syncError ? `Sync failed for ${synced}: ${syncError}` : `Synced ${synced}. Classification will continue in the background.`}</p> : null}
 
       {inProgress.length ? (
         <div className={styles.section} style={{ marginTop: 0 }}>
           <div className={styles.sectionHead}><h2>Recently added</h2></div>
           <div className={styles.rowList}>
-            {inProgress.map(({ brand, status, pending, progress }) => (
+            {inProgress.map(({ brand, progress }) => (
               <div key={brand.slug} className={styles.row}>
                 <div className={styles.rowSummary} style={{ cursor: "default" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
