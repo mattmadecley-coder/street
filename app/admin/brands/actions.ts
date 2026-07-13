@@ -39,12 +39,9 @@ export async function updateBrand(formData: FormData) {
  * Manually re-syncs one brand's products right now, instead of waiting for
  * the next daily cron run. Import happens inline (so the admin sees the
  * result immediately), then classification of whatever just came in is
- * handed off to a background task — same after() pattern as the new-brand
- * wizard's runImport, and for the same reason: a big catalog's worth of AI
- * classification calls can run past what's reasonable to block a redirect
- * on. Without this, newly (re-)imported products used to sit at
- * classification_status=pending until an admin noticed and clicked the
- * per-brand "Classify" button by hand.
+ * handed off to a background task. The Brands page only presents that task
+ * as active for a short window; anything left pending is clearly labeled as
+ * waiting and is also picked up by the classification recovery cron.
  */
 export async function syncBrandNow(formData: FormData) {
   const slug = String(formData.get("slug") ?? "").trim();
@@ -66,5 +63,5 @@ export async function syncBrandNow(formData: FormData) {
     });
   }
   revalidatePath("/admin/brands");
-  redirect(`/admin/brands?synced=${encodeURIComponent(slug)}${result.ok ? "" : `&syncError=${encodeURIComponent(result.error ?? "Sync failed")}`}`);
+  redirect(`/admin/brands?synced=${encodeURIComponent(slug)}${result.ok ? `&classifying=${encodeURIComponent(slug)}` : `&syncError=${encodeURIComponent(result.error ?? "Sync failed")}`}`);
 }
