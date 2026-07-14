@@ -13,7 +13,6 @@ type ProductContext = {
   colors: string[];
 };
 
-type Pose = "idle" | "walking" | "point-left" | "point-right" | "point-up" | "thinking" | "sleeping" | "celebrating";
 type VariantEvent = CustomEvent<{ label?: string; available?: boolean }>;
 
 const BUBBLE_VISIBLE_MS = 9_000;
@@ -21,7 +20,6 @@ const WALK_SPEED_PX_PER_MS = 0.05;
 const IDLE_MIN_MS = 3_000;
 const IDLE_MAX_MS = 8_000;
 const REACTION_COOLDOWN_MS = 8_000;
-const SLEEP_AFTER_MS = 45_000;
 
 function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
@@ -47,6 +45,7 @@ function readProductContext(): ProductContext | null {
 function firstProductComment(product: ProductContext): string {
   const category = product.category.toLowerCase();
   const colors = product.colors.map((color) => color.toLowerCase());
+
   if (product.stock === "sold_out") return "Of course the good one is sold out.";
   if (product.price > 0 && product.price <= 50) return "Wait... this is actually a good price.";
   if (product.price >= 250) return "I like it too, but that price is serious.";
@@ -61,7 +60,6 @@ function firstProductComment(product: ProductContext): string {
 export function SiteMascot() {
   const pathname = usePathname();
   const [bubbleText, setBubbleText] = useState<string | null>(null);
-  const [pose, setPose] = useState<Pose>("idle");
 
   const moverRef = useRef<HTMLDivElement | null>(null);
   const spriteRef = useRef<HTMLDivElement | null>(null);
@@ -69,39 +67,18 @@ export function SiteMascot() {
   const walkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reactionTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const sleepTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastReactionAtRef = useRef(0);
   const targetLockUntilRef = useRef(0);
-  const hidden = pathname?.startsWith("/admin") ?? false;
 
-  const wakeMascot = useCallback(() => {
-    if (sleepTimeoutRef.current) clearTimeout(sleepTimeoutRef.current);
-    setPose((current) => {
-      if (current === "sleeping") {
-        targetLockUntilRef.current = 0;
-        return "idle";
-      }
-      return current;
-    });
-    sleepTimeoutRef.current = setTimeout(() => {
-      if (Date.now() >= targetLockUntilRef.current) {
-        targetLockUntilRef.current = Date.now() + SLEEP_AFTER_MS * 10;
-        setPose("sleeping");
-      }
-    }, SLEEP_AFTER_MS);
-  }, []);
+  const hidden = pathname?.startsWith("/admin") ?? false;
 
   const showBubble = useCallback((text: string, force = false) => {
     const now = Date.now();
     if (!force && now - lastReactionAtRef.current < REACTION_COOLDOWN_MS) return false;
     lastReactionAtRef.current = now;
     setBubbleText(text);
-    setPose((current) => current === "idle" || current === "sleeping" ? "thinking" : current);
     if (bubbleTimeoutRef.current) clearTimeout(bubbleTimeoutRef.current);
-    bubbleTimeoutRef.current = setTimeout(() => {
-      setBubbleText(null);
-      setPose((current) => current === "thinking" ? "idle" : current);
-    }, BUBBLE_VISIBLE_MS);
+    bubbleTimeoutRef.current = setTimeout(() => setBubbleText(null), BUBBLE_VISIBLE_MS);
     return true;
   }, []);
 
@@ -109,23 +86,27 @@ export function SiteMascot() {
     const button = document.querySelector<HTMLElement>('[data-mascot-target="shop-button"]');
     const mover = moverRef.current;
     if (!button || !mover) return false;
+
     const rect = button.getBoundingClientRect();
-    const charWidth = mover.offsetWidth || 72;
-    if (!(rect.bottom > 0 && rect.top < window.innerHeight)) return false;
+    const charWidth = mover.offsetWidth || 64;
+    const isVisible = rect.bottom > 0 && rect.top < window.innerHeight;
+    if (!isVisible) return false;
 
     const buttonCenter = rect.left + rect.width / 2;
     const targetX = clamp(buttonCenter - charWidth - 12, 4, window.innerWidth - charWidth - 4);
-    const buttonIsLeft = buttonCenter < targetX + charWidth / 2;
+    const facingLeft = buttonCenter < targetX + charWidth / 2;
     const distance = Math.abs(targetX - currentXRef.current);
     const durationMs = Math.max(250, distance / WALK_SPEED_PX_PER_MS);
 
     targetLockUntilRef.current = Date.now() + durationMs + BUBBLE_VISIBLE_MS;
-    setPose("walking");
     mover.style.transitionDuration = `${durationMs}ms`;
     mover.style.transform = `translateX(${targetX}px)`;
     currentXRef.current = targetX;
-    if (spriteRef.current) spriteRef.current.style.transform = buttonIsLeft ? "scaleX(-1)" : "scaleX(1)";
-    setTimeout(() => setPose(buttonIsLeft ? "point-left" : "point-right"), durationMs);
+    if (spriteRef.current) {
+      spriteRef.current.style.transform = facingLeft ? "scaleX(-1)" : "scaleX(1)";
+      spriteRef.current.classList.add(styles.attention);
+      setTimeout(() => spriteRef.current?.classList.remove(styles.attention), durationMs + BUBBLE_VISIBLE_MS);
+    }
     return true;
   }, []);
 
@@ -133,14 +114,21 @@ export function SiteMascot() {
     if (hidden) return;
     let cancelled = false;
 
-    function charWidth() { return moverRef.current?.offsetWidth ?? 72; }
+    function charWidth() {
+      return moverRef.current?.offsetWidth ?? 64;
+    }
+
     function settleAt(x: number) {
       currentXRef.current = x;
       if (moverRef.current) moverRef.current.style.transform = `translateX(${x}px)`;
     }
+
     function scheduleNext(delay: number) {
-      walkTimeoutRef.current = setTimeout(() => { if (!cancelled) walk(); }, delay);
+      walkTimeoutRef.current = setTimeout(() => {
+        if (!cancelled) walk();
+      }, delay);
     }
+
     function walk() {
       if (Date.now() < targetLockUntilRef.current) {
         scheduleNext(2_000);
@@ -150,28 +138,32 @@ export function SiteMascot() {
       const targetX = randomBetween(0, maxX);
       const distance = Math.abs(targetX - currentXRef.current);
       if (distance < 8) {
-        setPose("idle");
         scheduleNext(randomBetween(IDLE_MIN_MS, IDLE_MAX_MS));
         return;
       }
       const facingLeft = targetX < currentXRef.current;
       const durationMs = distance / WALK_SPEED_PX_PER_MS;
-      if (spriteRef.current) spriteRef.current.style.transform = facingLeft ? "scaleX(-1)" : "scaleX(1)";
-      setPose("walking");
+
+      if (spriteRef.current) {
+        spriteRef.current.style.transform = facingLeft ? "scaleX(-1)" : "scaleX(1)";
+        spriteRef.current.classList.add(styles.walking);
+      }
       if (moverRef.current) {
         moverRef.current.style.transitionDuration = `${durationMs}ms`;
         moverRef.current.style.transform = `translateX(${targetX}px)`;
       }
       currentXRef.current = targetX;
+
       walkTimeoutRef.current = setTimeout(() => {
         if (cancelled) return;
-        setPose("idle");
+        spriteRef.current?.classList.remove(styles.walking);
         scheduleNext(randomBetween(IDLE_MIN_MS, IDLE_MAX_MS));
       }, durationMs);
     }
 
     settleAt(randomBetween(20, 120));
     scheduleNext(randomBetween(1_500, 4_000));
+
     return () => {
       cancelled = true;
       if (walkTimeoutRef.current) clearTimeout(walkTimeoutRef.current);
@@ -179,22 +171,10 @@ export function SiteMascot() {
   }, [hidden]);
 
   useEffect(() => {
-    if (hidden) return;
-    const activityEvents = ["pointerdown", "pointermove", "keydown", "scroll"] as const;
-    activityEvents.forEach((eventName) => window.addEventListener(eventName, wakeMascot, { passive: true }));
-    wakeMascot();
-    return () => {
-      activityEvents.forEach((eventName) => window.removeEventListener(eventName, wakeMascot));
-      if (sleepTimeoutRef.current) clearTimeout(sleepTimeoutRef.current);
-    };
-  }, [hidden, wakeMascot]);
-
-  useEffect(() => {
     reactionTimeoutsRef.current.forEach(clearTimeout);
     reactionTimeoutsRef.current = [];
     if (bubbleTimeoutRef.current) clearTimeout(bubbleTimeoutRef.current);
     setBubbleText(null);
-    setPose("idle");
     lastReactionAtRef.current = 0;
     targetLockUntilRef.current = 0;
 
@@ -213,7 +193,6 @@ export function SiteMascot() {
     function onVariantSelected(event: Event) {
       const detail = (event as VariantEvent).detail ?? {};
       if (detail.available === false) {
-        setPose("thinking");
         showBubble("That one is sold out. Tragic.");
         return;
       }
@@ -224,9 +203,9 @@ export function SiteMascot() {
     const shopButton = document.querySelector<HTMLElement>('[data-mascot-target="shop-button"]');
     function onShopClick() {
       targetLockUntilRef.current = Date.now() + 5_000;
-      setPose("celebrating");
+      spriteRef.current?.classList.add(styles.celebrating);
       showBubble("Okayyy. Go see what they're talking about.", true);
-      setTimeout(() => setPose("idle"), 3_000);
+      setTimeout(() => spriteRef.current?.classList.remove(styles.celebrating), 3_000);
     }
 
     window.addEventListener("street:variant-selected", onVariantSelected);
@@ -244,7 +223,7 @@ export function SiteMascot() {
     <div className={styles.wrapper} aria-hidden="true">
       <div ref={moverRef} className={styles.mover}>
         {bubbleText ? <div className={styles.bubble}>{bubbleText}</div> : null}
-        <div ref={spriteRef} className={styles.sprite} data-pose={pose} />
+        <div ref={spriteRef} className={styles.sprite} />
       </div>
     </div>
   );

@@ -12,53 +12,48 @@
   position: absolute;
   bottom: 0;
   left: 0;
-  width: 72px;
-  height: 90px;
+  width: 64px;
+  height: 80px;
   transition-property: transform;
   transition-timing-function: linear;
   will-change: transform;
 }
 
 .sprite {
-  width: 72px;
-  height: 90px;
-  background-image: url(/mascot/v2/atlas.svg);
+  width: 64px;
+  height: 80px;
+  background-image: url(/mascot/sprite-sheet.png);
   background-repeat: no-repeat;
-  background-size: 1400% 100%;
+  background-size: 200% 100%;
   background-position: 0 0;
-  image-rendering: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
   transform-origin: center bottom;
-  filter: drop-shadow(0 3px 1px rgba(16, 16, 16, 0.18));
 }
 
-.sprite[data-pose="idle"] { background-position-x: 0%; }
-.sprite[data-pose="point-left"] { background-position-x: 61.538%; }
-.sprite[data-pose="point-right"] { background-position-x: 69.231%; }
-.sprite[data-pose="point-up"] { background-position-x: 76.923%; }
-.sprite[data-pose="thinking"] { background-position-x: 84.615%; }
-.sprite[data-pose="sleeping"] { background-position-x: 92.308%; }
-.sprite[data-pose="celebrating"] { background-position-x: 100%; animation: celebrate .45s ease-in-out infinite alternate; }
-.sprite[data-pose="walking"] { animation: walk-cycle .64s steps(1) infinite; }
+.sprite.walking { animation: walk-cycle 0.42s steps(1) infinite; }
+.sprite.attention { animation: attention-hop 0.8s ease-in-out infinite; }
+.sprite.celebrating { animation: celebrate 0.42s ease-in-out infinite alternate; }
 
 @keyframes walk-cycle {
-  0%, 14.27% { background-position-x: 7.692%; }
-  14.28%, 28.55% { background-position-x: 15.385%; }
-  28.56%, 42.83% { background-position-x: 23.077%; }
-  42.84%, 57.11% { background-position-x: 30.769%; }
-  57.12%, 71.39% { background-position-x: 38.462%; }
-  71.40%, 85.67% { background-position-x: 46.154%; }
-  85.68%, 100% { background-position-x: 53.846%; }
+  0%, 49.9% { background-position: 0 0; }
+  50%, 100% { background-position: 100% 0; }
+}
+
+@keyframes attention-hop {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -5px; }
 }
 
 @keyframes celebrate {
-  from { translate: 0 0; rotate: -3deg; }
-  to { translate: 0 -7px; rotate: 3deg; }
+  from { translate: 0 0; rotate: -5deg; }
+  to { translate: 0 -8px; rotate: 5deg; }
 }
 
 .bubble {
   position: absolute;
   left: 50%;
-  bottom: 98px;
+  bottom: 88px;
   transform: translateX(-50%);
   width: max-content;
   max-width: 190px;
@@ -67,12 +62,12 @@
   border: 1.5px solid #101010;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .01em;
+  letter-spacing: 0.01em;
   line-height: 1.35;
   text-align: center;
   color: #101010;
-  box-shadow: 3px 3px 0 rgba(16,16,16,.92);
-  animation: bubble-pop .16s ease-out;
+  box-shadow: 3px 3px 0 rgba(16, 16, 16, 0.92);
+  animation: bubble-pop 0.16s ease-out;
 }
 
 .bubble::after {
@@ -81,6 +76,8 @@
   left: 50%;
   bottom: -7px;
   transform: translateX(-50%);
+  width: 0;
+  height: 0;
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
   border-top: 7px solid #101010;
@@ -92,6 +89,8 @@
   left: 50%;
   bottom: -5px;
   transform: translateX(-50%);
+  width: 0;
+  height: 0;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
   border-top: 5.5px solid #f4f3ee;
@@ -99,17 +98,17 @@
 }
 
 @keyframes bubble-pop {
-  from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(.92); }
+  from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.92); }
   to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }
 
 @media (max-width: 640px) {
-  .mover { width: 58px; height: 72px; }
-  .sprite { width: 58px; height: 72px; }
-  .bubble { bottom: 78px; font-size: 10.5px; max-width: 150px; }
+  .mover { width: 48px; height: 60px; }
+  .sprite { width: 48px; height: 60px; }
+  .bubble { bottom: 68px; font-size: 10.5px; max-width: 150px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mover { transition-duration: 0ms !important; }
-  .sprite[data-pose="walking"], .sprite[data-pose="celebrating"] { animation: none; }
+  .sprite.walking, .sprite.attention, .sprite.celebrating { animation: none; }
 }
