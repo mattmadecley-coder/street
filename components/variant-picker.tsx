@@ -6,13 +6,9 @@ import { useProductVariantFocus } from "@/components/product-variant-context";
 
 /**
  * Renders the "Variations (N)" list on the product page as tappable chips
- * instead of inert text. Picking one selects it (visually) and, when that
- * variant has an associated photo (see lib/source-import.ts - not every
- * source provides this), tells ProductGallery to jump to it via the shared
- * context in product-variant-context.tsx. Street doesn't sell directly, so
- * sold-out variants stay selectable - there's no cart step where that
- * would matter, and a shopper may still want to see what a sold-out
- * colorway looked like.
+ * instead of inert text. Picking one selects it, focuses its product photo,
+ * and emits a lightweight browser event so the mascot can react without the
+ * product page and the global mascot needing to share React state directly.
  */
 export function VariantPicker({ variants }: { variants: ProductVariantSummary[] }) {
   const { setFocusImage } = useProductVariantFocus();
@@ -36,6 +32,9 @@ export function VariantPicker({ variants }: { variants: ProductVariantSummary[] 
               onClick={() => {
                 setSelectedId(variant.externalId);
                 setFocusImage(variant.imageUrl);
+                window.dispatchEvent(new CustomEvent("street:variant-selected", {
+                  detail: { label, available: variant.available },
+                }));
               }}
             >
               {label}{variant.available ? "" : " · Sold out"}
