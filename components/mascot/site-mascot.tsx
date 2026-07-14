@@ -76,9 +76,18 @@ export function SiteMascot() {
 
   const wakeMascot = useCallback(() => {
     if (sleepTimeoutRef.current) clearTimeout(sleepTimeoutRef.current);
-    setPose((current) => current === "sleeping" ? "idle" : current);
+    setPose((current) => {
+      if (current === "sleeping") {
+        targetLockUntilRef.current = 0;
+        return "idle";
+      }
+      return current;
+    });
     sleepTimeoutRef.current = setTimeout(() => {
-      if (Date.now() >= targetLockUntilRef.current) setPose("sleeping");
+      if (Date.now() >= targetLockUntilRef.current) {
+        targetLockUntilRef.current = Date.now() + SLEEP_AFTER_MS * 10;
+        setPose("sleeping");
+      }
     }, SLEEP_AFTER_MS);
   }, []);
 
@@ -133,7 +142,7 @@ export function SiteMascot() {
       walkTimeoutRef.current = setTimeout(() => { if (!cancelled) walk(); }, delay);
     }
     function walk() {
-      if (Date.now() < targetLockUntilRef.current || pose === "sleeping") {
+      if (Date.now() < targetLockUntilRef.current) {
         scheduleNext(2_000);
         return;
       }
@@ -167,7 +176,7 @@ export function SiteMascot() {
       cancelled = true;
       if (walkTimeoutRef.current) clearTimeout(walkTimeoutRef.current);
     };
-  }, [hidden, pose]);
+  }, [hidden]);
 
   useEffect(() => {
     if (hidden) return;
