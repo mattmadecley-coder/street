@@ -1,32 +1,60 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import styles from "./site-mascot.module.css";
 
-/**
- * A small persistent character that lives at the bottom of the viewport
- * (position: fixed, so it survives scrolling and page navigation since it's
- * mounted once in the root layout) and wanders left/right on its own. On
- * product pages it reacts to how long the visitor has been looking: a
- * speech bubble after ~1 minute, a different one after ~3 minutes on the
- * same product. Both the walking and the reactions are intentionally simple
- * to start — more triggers (add-to-bag hesitation, price-drop pages, etc.)
- * can hang off the same dwellTimers pattern later.
- */
+type ProductContext = {
+  title: string;
+  brand: string;
+  price: number;
+  stock: string;
+  category: string;
+  colors: string[];
+};
 
-const DWELL_MESSAGES: Array<{ afterMs: number; text: string }> = [
-  { afterMs: 60_000, text: "You'd look really nice in these." },
-  { afterMs: 180_000, text: "You must really like these." },
-];
+type VariantEvent = CustomEvent<{ label?: string; available?: boolean }>;
 
-const BUBBLE_VISIBLE_MS = 12_000;
-const WALK_SPEED_PX_PER_MS = 0.05; // ~50px/sec
+const BUBBLE_VISIBLE_MS = 9_000;
+const WALK_SPEED_PX_PER_MS = 0.05;
 const IDLE_MIN_MS = 3_000;
 const IDLE_MAX_MS = 8_000;
+const REACTION_COOLDOWN_MS = 8_000;
 
 function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function readProductContext(): ProductContext | null {
+  const node = document.querySelector<HTMLElement>("[data-mascot-product]");
+  if (!node) return null;
+  return {
+    title: node.dataset.title ?? "",
+    brand: node.dataset.brand ?? "",
+    price: Number(node.dataset.price ?? 0),
+    stock: node.dataset.stock ?? "",
+    category: node.dataset.category ?? "",
+    colors: (node.dataset.colors ?? "").split("|").map((color) => color.trim()).filter(Boolean),
+  };
+}
+
+function firstProductComment(product: ProductContext): string {
+  const category = product.category.toLowerCase();
+  const colors = product.colors.map((color) => color.toLowerCase());
+
+  if (product.stock === "sold_out") return "Of course the good one is sold out.";
+  if (product.price > 0 && product.price <= 50) return "Wait... this is actually a good price.";
+  if (product.price >= 250) return "I like it too, but that price is serious.";
+  if (colors.some((color) => color.includes("red"))) return "The red is doing all the work here.";
+  if (category.includes("dress")) return "Okay, where are we wearing this?";
+  if (category.includes("hoodie")) return "A good hoodie is hard to argue with.";
+  if (category.includes("jacket") || category.includes("outerwear")) return "This could carry the whole outfit.";
+  if (category.includes("shoe") || category.includes("sneaker") || category.includes("footwear")) return "These would change the whole fit.";
+  return product.brand ? `${product.brand} knew what they were doing with this one.` : "This one has your attention.";
 }
 
 export function SiteMascot() {
@@ -35,18 +63,53 @@ export function SiteMascot() {
 
   const moverRef = useRef<HTMLDivElement | null>(null);
   const spriteRef = useRef<HTMLDivElement | null>(null);
-
   const currentXRef = useRef(24);
   const walkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dwellTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const reactionTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const lastReactionAtRef = useRef(0);
+  const targetLockUntilRef = useRef(0);
 
   const hidden = pathname?.startsWith("/admin") ?? false;
 
-  // Walking loop: pick a random spot, glide there at a constant speed with a
-  // walk-cycle animation, pause a few seconds, repeat. Runs entirely by
-  // mutating refs/DOM style directly (no per-frame React state) so it's
-  // cheap and doesn't fight with the speech-bubble state above it.
+  const showBubble = useCallback((text: string, force = false) => {
+    const now = Date.now();
+    if (!force && now - lastReactionAtRef.current < REACTION_COOLDOWN_MS) return false;
+    lastReactionAtRef.current = now;
+    setBubbleText(text);
+    if (bubbleTimeoutRef.current) clearTimeout(bubbleTimeoutRef.current);
+    bubbleTimeoutRef.current = setTimeout(() => setBubbleText(null), BUBBLE_VISIBLE_MS);
+    return true;
+  }, []);
+
+  const moveNearShopButton = useCallback(() => {
+    const button = document.querySelector<HTMLElement>('[data-mascot-target="shop-button"]');
+    const mover = moverRef.current;
+    if (!button || !mover) return false;
+
+    const rect = button.getBoundingClientRect();
+    const charWidth = mover.offsetWidth || 64;
+    const isVisible = rect.bottom > 0 && rect.top < window.innerHeight;
+    if (!isVisible) return false;
+
+    const buttonCenter = rect.left + rect.width / 2;
+    const targetX = clamp(buttonCenter - charWidth - 12, 4, window.innerWidth - charWidth - 4);
+    const facingLeft = buttonCenter < targetX + charWidth / 2;
+    const distance = Math.abs(targetX - currentXRef.current);
+    const durationMs = Math.max(250, distance / WALK_SPEED_PX_PER_MS);
+
+    targetLockUntilRef.current = Date.now() + durationMs + BUBBLE_VISIBLE_MS;
+    mover.style.transitionDuration = `${durationMs}ms`;
+    mover.style.transform = `translateX(${targetX}px)`;
+    currentXRef.current = targetX;
+    if (spriteRef.current) {
+      spriteRef.current.style.transform = facingLeft ? "scaleX(-1)" : "scaleX(1)";
+      spriteRef.current.classList.add(styles.attention);
+      setTimeout(() => spriteRef.current?.classList.remove(styles.attention), durationMs + BUBBLE_VISIBLE_MS);
+    }
+    return true;
+  }, []);
+
   useEffect(() => {
     if (hidden) return;
     let cancelled = false;
@@ -67,6 +130,10 @@ export function SiteMascot() {
     }
 
     function walk() {
+      if (Date.now() < targetLockUntilRef.current) {
+        scheduleNext(2_000);
+        return;
+      }
       const maxX = Math.max(0, window.innerWidth - charWidth());
       const targetX = randomBetween(0, maxX);
       const distance = Math.abs(targetX - currentXRef.current);
@@ -94,7 +161,6 @@ export function SiteMascot() {
       }, durationMs);
     }
 
-    // Start somewhere near the left on first mount.
     settleAt(randomBetween(20, 120));
     scheduleNext(randomBetween(1_500, 4_000));
 
@@ -104,30 +170,52 @@ export function SiteMascot() {
     };
   }, [hidden]);
 
-  // Dwell-time reactions: reset whenever the route changes, only arm on
-  // product pages, and only fire each threshold once per page visit.
   useEffect(() => {
-    dwellTimeoutsRef.current.forEach(clearTimeout);
-    dwellTimeoutsRef.current = [];
+    reactionTimeoutsRef.current.forEach(clearTimeout);
+    reactionTimeoutsRef.current = [];
     if (bubbleTimeoutRef.current) clearTimeout(bubbleTimeoutRef.current);
     setBubbleText(null);
+    lastReactionAtRef.current = 0;
+    targetLockUntilRef.current = 0;
 
-    if (hidden) return;
-    const isProductPage = /^\/products\//.test(pathname ?? "");
-    if (!isProductPage) return;
+    if (hidden || !/^\/products\//.test(pathname ?? "")) return;
+    const product = readProductContext();
+    if (!product) return;
 
-    dwellTimeoutsRef.current = DWELL_MESSAGES.map(({ afterMs, text }) =>
+    reactionTimeoutsRef.current.push(
+      setTimeout(() => showBubble(firstProductComment(product)), 22_000),
+      setTimeout(() => showBubble("You've been looking at this for a minute."), 60_000),
       setTimeout(() => {
-        setBubbleText(text);
-        if (bubbleTimeoutRef.current) clearTimeout(bubbleTimeoutRef.current);
-        bubbleTimeoutRef.current = setTimeout(() => setBubbleText(null), BUBBLE_VISIBLE_MS);
-      }, afterMs)
+        if (moveNearShopButton()) showBubble("I'm not saying buy it... but the button is right there.", true);
+      }, 85_000)
     );
 
+    function onVariantSelected(event: Event) {
+      const detail = (event as VariantEvent).detail ?? {};
+      if (detail.available === false) {
+        showBubble("That one is sold out. Tragic.");
+        return;
+      }
+      const label = detail.label?.trim();
+      showBubble(label ? `${label}? Yeah, that one works.` : "Yeah, that variation is better.");
+    }
+
+    const shopButton = document.querySelector<HTMLElement>('[data-mascot-target="shop-button"]');
+    function onShopClick() {
+      targetLockUntilRef.current = Date.now() + 5_000;
+      spriteRef.current?.classList.add(styles.celebrating);
+      showBubble("Okayyy. Go see what they're talking about.", true);
+      setTimeout(() => spriteRef.current?.classList.remove(styles.celebrating), 3_000);
+    }
+
+    window.addEventListener("street:variant-selected", onVariantSelected);
+    shopButton?.addEventListener("click", onShopClick);
     return () => {
-      dwellTimeoutsRef.current.forEach(clearTimeout);
+      reactionTimeoutsRef.current.forEach(clearTimeout);
+      window.removeEventListener("street:variant-selected", onVariantSelected);
+      shopButton?.removeEventListener("click", onShopClick);
     };
-  }, [pathname, hidden]);
+  }, [pathname, hidden, moveNearShopButton, showBubble]);
 
   if (hidden) return null;
 

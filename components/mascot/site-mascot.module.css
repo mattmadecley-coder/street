@@ -28,15 +28,26 @@
   background-position: 0 0;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  transform-origin: center bottom;
 }
 
-.sprite.walking {
-  animation: walk-cycle 0.42s steps(1) infinite;
-}
+.sprite.walking { animation: walk-cycle 0.42s steps(1) infinite; }
+.sprite.attention { animation: attention-hop 0.8s ease-in-out infinite; }
+.sprite.celebrating { animation: celebrate 0.42s ease-in-out infinite alternate; }
 
 @keyframes walk-cycle {
   0%, 49.9% { background-position: 0 0; }
   50%, 100% { background-position: 100% 0; }
+}
+
+@keyframes attention-hop {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -5px; }
+}
+
+@keyframes celebrate {
+  from { translate: 0 0; rotate: -5deg; }
+  to { translate: 0 -8px; rotate: 5deg; }
 }
 
 .bubble {
@@ -95,4 +106,9 @@
   .mover { width: 48px; height: 60px; }
   .sprite { width: 48px; height: 60px; }
   .bubble { bottom: 68px; font-size: 10.5px; max-width: 150px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mover { transition-duration: 0ms !important; }
+  .sprite.walking, .sprite.attention, .sprite.celebrating { animation: none; }
 }

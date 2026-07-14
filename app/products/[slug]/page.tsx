@@ -48,6 +48,16 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   return (
     <main>
       <Header />
+      <div
+        hidden
+        data-mascot-product
+        data-title={product.title}
+        data-brand={product.brandName}
+        data-price={product.price}
+        data-stock={product.stockStatus}
+        data-category={product.streetCategory ?? product.category}
+        data-colors={product.colors.join("|")}
+      />
       <ProductVariantProvider>
         <div className="shell product-layout">
           <ProductGallery images={product.images} title={product.title} />
@@ -63,6 +73,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
             <Info label="Description" value={product.description || "See the brand website for complete product details and shipping information."} />
             <a
               className="cta"
+              data-mascot-target="shop-button"
               href={`/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}`}
               target="_blank"
               rel="noreferrer"
