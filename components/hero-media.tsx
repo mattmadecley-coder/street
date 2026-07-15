@@ -15,7 +15,7 @@ export function HeroMedia({ videoUrl, imageUrl, className }: { videoUrl?: string
           alt="Street hero"
           fill
           preload
-          quality={78}
+          quality={75}
           sizes="100vw"
           style={{ objectFit: "cover", objectPosition: "center" }}
         />
