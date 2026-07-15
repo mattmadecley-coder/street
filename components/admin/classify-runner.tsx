@@ -6,18 +6,16 @@ import styles from "@/app/admin/admin.module.css";
 import { classifyBatchAction } from "@/app/admin/brands/new/actions";
 
 /**
- * Runs classifyBatchAction repeatedly (client-side loop, no page reloads)
- * until this brand has no products left with classification_status=pending.
- * Each call is capped server-side (see CLASSIFICATION_BATCH_MAX in
- * lib/catalog-store.ts) to stay well inside a function timeout, so a brand
- * with a large catalog just takes a few rounds instead of one long call.
+ * Runs the retrying classifier repeatedly until this brand has no products
+ * left pending or errored. AI failures receive a broad low-confidence fallback
+ * and remain visible in the admin review queue instead of blocking progress.
  */
 export function ClassifyRunner({ brandSlug, pendingCount }: { brandSlug: string; pendingCount: number }) {
   const router = useRouter();
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(0);
   const [remaining, setRemaining] = useState(pendingCount);
-  const [errors, setErrors] = useState(0);
+  const [fallbacks, setFallbacks] = useState(0);
 
   async function run() {
     setRunning(true);
@@ -27,8 +25,9 @@ export function ClassifyRunner({ brandSlug, pendingCount }: { brandSlug: string;
         const result = await classifyBatchAction(brandSlug);
         found = result.found;
         setDone((prev) => prev + result.results.length);
-        setErrors((prev) => prev + result.results.filter((item) => item.status === "error").length);
+        setFallbacks((prev) => prev + result.fallbackCount);
         setRemaining((prev) => Math.max(0, prev - result.results.length));
+        if (result.found < result.limit) break;
       }
     } finally {
       setRunning(false);
@@ -45,7 +44,11 @@ export function ClassifyRunner({ brandSlug, pendingCount }: { brandSlug: string;
       <button type="button" className={styles.button} onClick={run} disabled={running || remaining === 0}>
         {running ? `Classifying… (${done} done)` : remaining === 0 ? "Done classifying" : `Resume classification (${remaining} left)`}
       </button>
-      {done > 0 ? <p className={styles.rowMeta} style={{ marginTop: 8 }}>{done} processed{errors ? `, ${errors} failed (see /admin/products)` : ""}.</p> : null}
+      {done > 0 ? (
+        <p className={styles.rowMeta} style={{ marginTop: 8 }}>
+          {done} processed{fallbacks ? `, ${fallbacks} assigned a broad category for review` : ""}.
+        </p>
+      ) : null}
     </div>
   );
 }
