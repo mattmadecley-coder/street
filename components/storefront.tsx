@@ -6,6 +6,14 @@ import { CategoryMenu } from "@/components/category-menu";
 import { MobileMoreMenu } from "@/components/mobile-more-menu";
 import { getActiveCategorySummary } from "@/lib/catalog-store";
 
+const RECENT_PRODUCT_MS = 24 * 60 * 60_000;
+
+export function isRecentlyAdded(createdAt?: string): boolean {
+  if (!createdAt) return false;
+  const timestamp = new Date(createdAt).getTime();
+  return Number.isFinite(timestamp) && Date.now() - timestamp >= 0 && Date.now() - timestamp <= RECENT_PRODUCT_MS;
+}
+
 export async function Header() {
   const categorySummary = await getActiveCategorySummary();
   return (
@@ -47,6 +55,7 @@ export function Footer() {
 export function ProductCard({ product, searchQuery }: { product: StreetProduct; searchQuery?: string }) {
   const secondImage = product.images.length > 1 ? product.images[1] : null;
   const href = searchQuery ? `/products/${product.slug}?sq=${encodeURIComponent(searchQuery)}` : `/products/${product.slug}`;
+  const recentlyAdded = isRecentlyAdded(product.createdAt);
 
   return (
     <Link href={href}>
@@ -79,7 +88,10 @@ export function ProductCard({ product, searchQuery }: { product: StreetProduct; 
         ) : (
           <div style={{ height: "100%", width: "100%", background: "linear-gradient(135deg, #d7d4cc, #a7a49e)" }} />
         )}
-        {product.stockStatus === "sold_out" ? <span className="badge">Sold out</span> : null}
+        {recentlyAdded ? (
+          <span className="badge" style={{ background: "#f4f3ee", color: "#101010", border: "1px solid #101010" }}>Just added</span>
+        ) : null}
+        {product.stockStatus === "sold_out" ? <span className="badge" style={{ top: recentlyAdded ? 42 : 8 }}>Sold out</span> : null}
         {product.variantCount > 1 ? <span className="badge badge-variants">{product.variantCount} options</span> : null}
       </div>
       <p className="brand">{product.brandName}</p>

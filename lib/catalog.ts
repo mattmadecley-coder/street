@@ -43,6 +43,10 @@ export type StreetProduct = {
   category: string;
   tags: string[];
   lastSyncedAt: string;
+  // Permanent database insertion time. Unlike lastSyncedAt, this does not
+  // change on later catalog refreshes, so it can power a truthful "Just added"
+  // badge rather than labeling every freshly synced item as new.
+  createdAt?: string;
   // Street taxonomy (lib/street-taxonomy.ts) assigned during classification.
   // Undefined for products that haven't been classified yet (e.g. the live
   // source-import fallback path below never sets these).
