@@ -17,12 +17,13 @@ export function ProductCardMedia({
   const [loadAlternate, setLoadAlternate] = useState(false);
 
   if (!primaryImage) {
-    return <div className="card-image-fallback" aria-hidden="true" />;
+    return <div aria-hidden="true" style={{ position: "absolute", inset: 8, background: "#ebe9e3" }} />;
   }
 
   return (
     <div
       className="card-media-layer"
+      style={{ position: "absolute", inset: 8 }}
       onPointerEnter={() => setLoadAlternate(true)}
       onFocusCapture={() => setLoadAlternate(true)}
     >
