@@ -5,6 +5,7 @@ import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { SortSelect } from "@/components/admin/sort-select";
 import { ClassifyRunner } from "@/components/admin/classify-runner";
 import { getBrandDirectory, getBrandSyncStatuses, getBrandClassificationProgress, type StreetBrandProfile, type BrandSyncStatus } from "@/lib/catalog-store";
+import { getRecentCatalogDiagnostics, type BrandSyncDiagnostic } from "@/lib/recent-catalog-diagnostics";
 import { updateBrand, syncBrandNow } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,15 @@ function timeAgo(iso: string | null): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function formatDuration(ms: number | null): string {
+  if (ms === null) return "Still running";
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
+  return remaining ? `${minutes}m ${remaining}s` : `${minutes}m`;
 }
 
 function ageMs(iso: string | null | undefined): number | null {
@@ -89,7 +99,29 @@ function sortBrands(brands: StreetBrandProfile[], syncStatuses: Map<string, Bran
   return list.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function BrandRow({ brand, status, pending, progress }: { brand: StreetBrandProfile; status: BrandSyncStatus | undefined; pending: number; progress: Progress }) {
+function Metric({ label, value, note }: { label: string; value: string | number; note?: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <p style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-.04em" }}>{value}</p>
+      <p className={styles.rowMeta} style={{ margin: "3px 0 0" }}>{label}{note ? ` · ${note}` : ""}</p>
+    </div>
+  );
+}
+
+function SyncDiagnostics({ diagnostic, pending }: { diagnostic: BrandSyncDiagnostic; pending: number }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(125px, 1fr))", gap: 14, marginBottom: 18, padding: 16, border: "1px solid rgba(16,16,16,.14)", background: "rgba(255,255,255,.38)" }}>
+      <Metric label="new products" value={diagnostic.newProducts} />
+      <Metric label="existing refreshed" value={diagnostic.existingProducts} />
+      <Metric label="total in latest feed" value={diagnostic.totalProducts} />
+      <Metric label="sync duration" value={formatDuration(diagnostic.durationMs)} />
+      <Metric label="waiting to classify" value={pending} />
+      <Metric label="latest sync" value={timeAgo(diagnostic.completedAt ?? diagnostic.startedAt)} note={diagnostic.status} />
+    </div>
+  );
+}
+
+function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: StreetBrandProfile; status: BrandSyncStatus | undefined; pending: number; progress: Progress; diagnostic?: BrandSyncDiagnostic }) {
   return (
     <details className={styles.row}>
       <summary className={styles.rowSummary}>
@@ -98,6 +130,7 @@ function BrandRow({ brand, status, pending, progress }: { brand: StreetBrandProf
           <strong>{brand.name}</strong>
           {brand.featured ? <span className={styles.pill}>Featured</span> : null}
           {!brand.catalogEnabled ? <span className={styles.pill}>Not in daily sync</span> : null}
+          {diagnostic?.newProducts ? <span className={styles.pill}>+{diagnostic.newProducts} new</span> : null}
           {progress.state === "failed" ? <span className={styles.pill}>Import interrupted</span> : null}
           {progress.state === "waiting" ? <span className={styles.pill}>{progress.pending} waiting to classify</span> : null}
         </span>
@@ -110,6 +143,7 @@ function BrandRow({ brand, status, pending, progress }: { brand: StreetBrandProf
             {progress.done} of {progress.total} products are classified. The remaining {progress.pending} are waiting, not actively processing.
           </p>
         ) : null}
+        {diagnostic ? <SyncDiagnostics diagnostic={diagnostic} pending={pending} /> : null}
         <div className={styles.actions} style={{ marginBottom: 16 }}>
           <form action={syncBrandNow}>
             <input type="hidden" name="slug" value={brand.slug} />
@@ -153,20 +187,26 @@ function BrandRow({ brand, status, pending, progress }: { brand: StreetBrandProf
 export default async function AdminBrandsPage({ searchParams }: { searchParams: Promise<{ saved?: string; synced?: string; syncError?: string; justAdded?: string; classifying?: string; sort?: string }> }) {
   const { saved, synced, syncError, justAdded, classifying, sort: sortParam } = await searchParams;
   const sort: SortKey = SORT_OPTIONS.some((option) => option.value === sortParam) ? (sortParam as SortKey) : "name";
-  const [brands, syncStatuses, pendingByBrand] = await Promise.all([getBrandDirectory(), getBrandSyncStatuses(), getBrandClassificationProgress()]);
+  const [brands, syncStatuses, pendingByBrand, diagnostics] = await Promise.all([
+    getBrandDirectory(),
+    getBrandSyncStatuses(),
+    getBrandClassificationProgress(),
+    getRecentCatalogDiagnostics(),
+  ]);
 
   const classificationStartedSlugs = new Set([justAdded, classifying].filter((slug): slug is string => Boolean(slug)));
   const withProgress = brands.map((brand) => {
     const status = syncStatuses.get(brand.slug);
     const pending = pendingByBrand.get(brand.slug) ?? 0;
     const progress = progressFor(brand, status, pending, classificationStartedSlugs.has(brand.slug));
-    return { brand, status, pending, progress };
+    const diagnostic = diagnostics.byBrand.get(brand.slug);
+    return { brand, status, pending, progress, diagnostic };
   });
 
   const inProgress = withProgress.filter((item) => item.progress.state === "importing" || item.progress.state === "classifying");
   // If a brand doesn't already appear via its sync status (e.g. the
   // background import hasn't started yet), still surface it right after
-  // the wizard hands off, so "Recently added" never looks empty.
+  // the wizard hands off.
   if (justAdded && !inProgress.some((item) => item.brand.slug === justAdded)) {
     const match = withProgress.find((item) => item.brand.slug === justAdded);
     if (match && match.progress.state !== "waiting" && match.progress.state !== "failed") {
@@ -186,7 +226,13 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
   const allSorted = sortBrands(brands, syncStatuses, sort).map((brand) => {
     const status = syncStatuses.get(brand.slug);
     const pending = pendingByBrand.get(brand.slug) ?? 0;
-    return { brand, status, pending, progress: progressFor(brand, status, pending, classificationStartedSlugs.has(brand.slug)) };
+    return {
+      brand,
+      status,
+      pending,
+      progress: progressFor(brand, status, pending, classificationStartedSlugs.has(brand.slug)),
+      diagnostic: diagnostics.byBrand.get(brand.slug),
+    };
   });
 
   return (
@@ -196,7 +242,7 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
       <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
           <h1 className={styles.title}>Brands</h1>
-          <p className={styles.subtitle}>Fix a logo, correct a store link, feature a brand, or check when it last refreshed. {brands.length} brands total.</p>
+          <p className={styles.subtitle}>Fix a logo, correct a store link, feature a brand, or inspect exactly what changed during its latest catalog refresh. {brands.length} brands total.</p>
         </div>
         <Link href="/admin/brands/new" className={styles.button}>+ Add new brand</Link>
       </div>
@@ -204,9 +250,16 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
       {saved ? <p className={styles.notice}>Saved {saved}.</p> : null}
       {synced ? <p className={syncError ? styles.noticeError : styles.notice}>{syncError ? `Sync failed for ${synced}: ${syncError}` : `Synced ${synced}. Classification will continue in the background.`}</p> : null}
 
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 16, margin: "18px 0 34px", padding: 20, border: "1px solid #101010" }}>
+        <Metric label="products added in the last 24 hours" value={diagnostics.addedLast24Hours} />
+        <Metric label="brands with something new" value={diagnostics.brandsWithNewProducts} />
+        <Metric label="most recent catalog activity" value={timeAgo(diagnostics.latestSyncAt)} />
+        <Metric label="products currently waiting for classification" value={[...pendingByBrand.values()].reduce((sum, count) => sum + count, 0)} />
+      </div>
+
       {inProgress.length ? (
         <div className={styles.section} style={{ marginTop: 0 }}>
-          <div className={styles.sectionHead}><h2>Recently added</h2></div>
+          <div className={styles.sectionHead}><h2>Imports in progress</h2></div>
           <div className={styles.rowList}>
             {inProgress.map(({ brand, progress }) => (
               <div key={brand.slug} className={styles.row}>
@@ -235,8 +288,8 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
         <div className={styles.section} style={{ marginTop: inProgress.length ? 34 : 0 }}>
           <div className={styles.sectionHead}><h2>Recently finished</h2></div>
           <div className={styles.rowList}>
-            {recentlyFinished.map(({ brand, status, pending, progress }) => (
-              <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} />
+            {recentlyFinished.map(({ brand, status, pending, progress, diagnostic }) => (
+              <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} />
             ))}
           </div>
         </div>
@@ -246,8 +299,8 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
         <div className={styles.sectionHead}><h2>All brands</h2></div>
         <SortSelect defaultValue={sort} />
         <div className={styles.rowList}>
-          {allSorted.map(({ brand, status, pending, progress }) => (
-            <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} />
+          {allSorted.map(({ brand, status, pending, progress, diagnostic }) => (
+            <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} />
           ))}
         </div>
       </div>
