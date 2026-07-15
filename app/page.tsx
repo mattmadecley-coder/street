@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { after } from "next/server";
 import styles from "./home.module.css";
 import { Header, Footer, ProductCard } from "@/components/storefront";
+import { HeroMedia } from "@/components/hero-media";
 import { getCatalogPage, getDiverseProductShelf } from "@/lib/catalog-page";
 import { getSiteSettings } from "@/lib/site-settings";
 import { getBrandDirectory, getHomepageCategoryShowcase } from "@/lib/catalog-store";
@@ -41,7 +42,7 @@ export default async function HomePage() {
   });
 
   const heroVideoUrl = settings.hero_video_url || undefined;
-  const heroImageUrl = settings.hero_image_url || "/hero-placeholder.svg";
+  const heroImageUrl = settings.hero_image_url || undefined;
   const spotlightBrands = brands.filter((brand) => brand.featured && brand.productCount > 0).slice(0, 8);
   const brandGrid = (spotlightBrands.length ? spotlightBrands : brands.filter((brand) => brand.productCount > 0)).slice(0, 8);
 
@@ -50,17 +51,11 @@ export default async function HomePage() {
       <Header />
       <div className="shell">
         <section className={`hero ${styles.heroVideo}`}>
-          {heroVideoUrl ? (
-            <video className={styles.heroMedia} autoPlay muted loop playsInline preload="metadata" poster="/hero-placeholder.svg">
-              <source src={heroVideoUrl} type="video/mp4" />
-            </video>
-          ) : (
-            <img className={styles.heroMedia} src={heroImageUrl} alt="Street hero" />
-          )}
+          <HeroMedia videoUrl={heroVideoUrl} imageUrl={heroImageUrl} className={styles.heroMedia} />
           {featuredBrand ? (
             <Link href={`/catalog?brand=${featuredBrand.slug}`} className={styles.brandSpotlight} aria-label={`Check out ${featuredBrand.name} collections`}>
               <span className={styles.brandSpotlightLabel}>{settings.featured_brand_cta_label || "Check out their collections"}</span>
-              {featuredBrand.logoUrl ? <img src={featuredBrand.logoUrl} alt={featuredBrand.name} className={styles.brandSpotlightLogo} /> : <strong>{featuredBrand.name}</strong>}
+              {featuredBrand.logoUrl ? <img src={featuredBrand.logoUrl} alt={featuredBrand.name} className={styles.brandSpotlightLogo} loading="eager" decoding="async" /> : <strong>{featuredBrand.name}</strong>}
             </Link>
           ) : null}
         </section>
@@ -74,7 +69,7 @@ export default async function HomePage() {
             <div className={styles.categoryGrid}>
               {categoryShowcase.map((item) => (
                 <Link key={`${item.group}-${item.category}`} href={`/catalog?group=${encodeURIComponent(item.group)}&category=${encodeURIComponent(item.category)}`} className={styles.categoryTile}>
-                  {item.imageUrl ? <img src={item.imageUrl} alt={item.category} /> : <div className={styles.categoryTileFallback} />}
+                  {item.imageUrl ? <img src={item.imageUrl} alt={item.category} loading="lazy" decoding="async" /> : <div className={styles.categoryTileFallback} />}
                   <span className={styles.categoryTileLabel}>
                     <strong>{item.category}</strong>
                     <em>{item.count} piece{item.count === 1 ? "" : "s"}</em>
@@ -134,7 +129,7 @@ export default async function HomePage() {
             <div className={styles.brandGrid}>
               {brandGrid.map((brand) => (
                 <Link key={brand.slug} href={`/catalog?brand=${brand.slug}`} className={styles.brandGridCard}>
-                  {brand.logoUrl ? <img src={brand.logoUrl} alt={brand.name} /> : <strong>{brand.name}</strong>}
+                  {brand.logoUrl ? <img src={brand.logoUrl} alt={brand.name} loading="lazy" decoding="async" /> : <strong>{brand.name}</strong>}
                   <span>{brand.productCount} pieces</span>
                 </Link>
               ))}
