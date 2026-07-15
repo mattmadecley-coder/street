@@ -33,7 +33,7 @@ export function ProductCardMedia({
         fill
         preload={priority}
         loading={priority ? undefined : "lazy"}
-        quality={72}
+        quality={75}
         sizes="(max-width: 840px) 50vw, (max-width: 1280px) 33vw, 25vw"
         className="card-image-primary"
         style={{ objectFit: "contain" }}
@@ -46,7 +46,7 @@ export function ProductCardMedia({
           fill
           loading="lazy"
           fetchPriority="low"
-          quality={68}
+          quality={75}
           sizes="(max-width: 840px) 50vw, (max-width: 1280px) 33vw, 25vw"
           className="card-image-secondary"
           style={{ objectFit: "contain" }}
