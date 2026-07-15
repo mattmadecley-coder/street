@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
-import { Header, Footer } from "@/components/storefront";
+import { Header, Footer, isRecentlyAdded } from "@/components/storefront";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductVariantProvider } from "@/components/product-variant-context";
 import { VariantPicker } from "@/components/variant-picker";
@@ -44,6 +44,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   });
 
   const sourceMessage = source === "database" ? "Saved in Street's catalog and refreshed by the scheduled importer." : source === "live" ? "Live source import — this product will be stored after the first database sync." : "The source is unavailable right now. Confirm details on the brand website.";
+  const recentlyAdded = isRecentlyAdded(product.createdAt);
 
   return (
     <main>
@@ -65,7 +66,10 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
             <p className="brand">{product.brandName}</p>
             <h1>{product.title}</h1>
             <p className="price" style={{ fontSize: 18, marginBottom: 14 }}>${product.price.toFixed(2)}</p>
-            <span className="status">{product.stockStatus === "in_stock" ? "In stock" : "Sold out"}{product.isPreorder ? " · Pre-order" : ""}</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span className="status">{product.stockStatus === "in_stock" ? "In stock" : "Sold out"}{product.isPreorder ? " · Pre-order" : ""}</span>
+              {recentlyAdded ? <span className="status" style={{ background: "#101010", color: "#fff" }}>Just added</span> : null}
+            </div>
             <Info label="Product images" value={`${product.images.length || 0} official photo${product.images.length === 1 ? "" : "s"} imported`} />
             {product.colors.length ? <Info label="Color" value={product.colors.join(", ")} /> : null}
             <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "Size choices were not supplied by the source catalog."} />
