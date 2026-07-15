@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import styles from "./product-gallery.module.css";
 import { useProductVariantFocus } from "@/components/product-variant-context";
+import { MEDIA_BLUR_DATA_URL } from "@/lib/media-placeholders";
 
 /**
  * Desktop keeps the original layout: every photo stacked vertically, all
@@ -21,12 +22,6 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
   const galleryImages = images.length ? images : [""];
   const { focusImage } = useProductVariantFocus();
 
-  // When a shopper picks a variant with an associated photo (VariantPicker,
-  // via the shared context in product-variant-context.tsx), jump the
-  // gallery to that photo if it's one of this product's images.
-  // scrollIntoView (rather than manually computing horizontal/vertical
-  // offsets) works for both layouts unchanged: the mobile scroll-snap
-  // carousel and the desktop vertical stack.
   useEffect(() => {
     if (!focusImage) return;
     const index = galleryImages.indexOf(focusImage);
@@ -69,9 +64,13 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
                 src={image}
                 alt={`${title} — image ${index + 1} of ${galleryImages.length}`}
                 fill
-                priority={index === 0}
+                preload={index === 0}
+                fetchPriority={index === 0 ? "high" : "low"}
                 loading={index === 0 ? undefined : "lazy"}
+                quality={index === 0 ? 80 : 75}
                 sizes="(max-width: 840px) 100vw, 60vw"
+                placeholder="blur"
+                blurDataURL={MEDIA_BLUR_DATA_URL}
                 style={{ objectFit: "contain" }}
               />
             ) : (

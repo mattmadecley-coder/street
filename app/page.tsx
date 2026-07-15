@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { after } from "next/server";
@@ -9,6 +10,7 @@ import { getSiteSettings } from "@/lib/site-settings";
 import { getBrandDirectory, getHomepageCategoryShowcase } from "@/lib/catalog-store";
 import { getActiveCollectionsForHomepage } from "@/lib/collections-store";
 import { logSiteEvent } from "@/lib/analytics";
+import { MEDIA_BLUR_DATA_URL } from "@/lib/media-placeholders";
 
 // This route is dynamic (it reads request headers for traffic-source
 // logging) but the underlying Supabase reads are still cached — see
@@ -26,17 +28,11 @@ export default async function HomePage() {
     getActiveCollectionsForHomepage(),
   ]);
 
-  // Only ever pick a brand that actually has products to show — otherwise
-  // the hero spotlight and "Featured brand" section could link to an empty
-  // filtered catalog (e.g. a brand still importing, or one whose source
-  // Street can't scrape yet).
   const brandsWithStock = brands.filter((brand) => brand.productCount > 0);
   const featuredBrand = brandsWithStock.find((brand) => brand.slug === settings.featured_brand_slug) ?? brandsWithStock.find((brand) => brand.featured) ?? brandsWithStock[0];
   const featuredPage = featuredBrand ? await getCatalogPage({ brand: featuredBrand.slug, availability: "in_stock" }) : null;
   const featured = featuredPage?.products.slice(0, 8) ?? [];
 
-  // Homepage traffic sources (README's "where is our traffic coming from"):
-  // logged after the response is sent so it never adds latency.
   after(async () => {
     await logSiteEvent({ eventType: "page_view", path: "/", referrer: requestHeaders.get("referer") });
   });
@@ -55,7 +51,9 @@ export default async function HomePage() {
           {featuredBrand ? (
             <Link href={`/catalog?brand=${featuredBrand.slug}`} className={styles.brandSpotlight} aria-label={`Check out ${featuredBrand.name} collections`}>
               <span className={styles.brandSpotlightLabel}>{settings.featured_brand_cta_label || "Check out their collections"}</span>
-              {featuredBrand.logoUrl ? <img src={featuredBrand.logoUrl} alt={featuredBrand.name} className={styles.brandSpotlightLogo} loading="eager" decoding="async" /> : <strong>{featuredBrand.name}</strong>}
+              {featuredBrand.logoUrl ? (
+                <Image src={featuredBrand.logoUrl} alt={featuredBrand.name} width={300} height={76} sizes="(max-width: 840px) 150px, 118px" quality={75} className={styles.brandSpotlightLogo} />
+              ) : <strong>{featuredBrand.name}</strong>}
             </Link>
           ) : null}
         </section>
@@ -69,7 +67,19 @@ export default async function HomePage() {
             <div className={styles.categoryGrid}>
               {categoryShowcase.map((item) => (
                 <Link key={`${item.group}-${item.category}`} href={`/catalog?group=${encodeURIComponent(item.group)}&category=${encodeURIComponent(item.category)}`} className={styles.categoryTile}>
-                  {item.imageUrl ? <img src={item.imageUrl} alt={item.category} loading="lazy" decoding="async" /> : <div className={styles.categoryTileFallback} />}
+                  {item.imageUrl ? (
+                    <Image
+                      src={item.imageUrl}
+                      alt={item.category}
+                      fill
+                      loading="lazy"
+                      fetchPriority="low"
+                      quality={72}
+                      sizes="(max-width: 840px) 50vw, 25vw"
+                      placeholder="blur"
+                      blurDataURL={MEDIA_BLUR_DATA_URL}
+                    />
+                  ) : <div className={styles.categoryTileFallback} />}
                   <span className={styles.categoryTileLabel}>
                     <strong>{item.category}</strong>
                     <em>{item.count} piece{item.count === 1 ? "" : "s"}</em>
@@ -129,7 +139,7 @@ export default async function HomePage() {
             <div className={styles.brandGrid}>
               {brandGrid.map((brand) => (
                 <Link key={brand.slug} href={`/catalog?brand=${brand.slug}`} className={styles.brandGridCard}>
-                  {brand.logoUrl ? <img src={brand.logoUrl} alt={brand.name} loading="lazy" decoding="async" /> : <strong>{brand.name}</strong>}
+                  {brand.logoUrl ? <Image src={brand.logoUrl} alt={brand.name} width={320} height={80} sizes="(max-width: 840px) 42vw, 20vw" quality={70} loading="lazy" /> : <strong>{brand.name}</strong>}
                   <span>{brand.productCount} pieces</span>
                 </Link>
               ))}

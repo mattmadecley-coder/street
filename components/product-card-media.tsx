@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { MEDIA_BLUR_DATA_URL } from "@/lib/media-placeholders";
 
 export function ProductCardMedia({
   primaryImage,
@@ -32,9 +33,12 @@ export function ProductCardMedia({
         alt={title}
         fill
         preload={priority}
+        fetchPriority={priority ? "high" : "auto"}
         loading={priority ? undefined : "lazy"}
         quality={75}
         sizes="(max-width: 840px) 50vw, (max-width: 1280px) 33vw, 25vw"
+        placeholder="blur"
+        blurDataURL={MEDIA_BLUR_DATA_URL}
         className="card-image-primary"
         style={{ objectFit: "contain" }}
       />
@@ -46,8 +50,10 @@ export function ProductCardMedia({
           fill
           loading="lazy"
           fetchPriority="low"
-          quality={75}
+          quality={70}
           sizes="(max-width: 840px) 50vw, (max-width: 1280px) 33vw, 25vw"
+          placeholder="blur"
+          blurDataURL={MEDIA_BLUR_DATA_URL}
           className="card-image-secondary"
           style={{ objectFit: "contain" }}
         />
