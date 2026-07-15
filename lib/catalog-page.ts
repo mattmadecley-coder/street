@@ -25,6 +25,7 @@ type ProductRow = {
   sizes: string[];
   primary_image_url: string | null;
   last_synced_at: string;
+  created_at: string;
   brands: BrandRow;
   product_images: ImageRow[] | null;
   product_variants: VariantRow[] | null;
@@ -87,6 +88,7 @@ function toStreetProduct(row: ProductRow): StreetProduct {
     category: row.category,
     tags: row.tags ?? [],
     lastSyncedAt: row.last_synced_at,
+    createdAt: row.created_at,
     streetGroup: row.street_group ?? undefined,
     streetCategory: row.street_category ?? undefined,
     streetType: row.street_type ?? undefined,
