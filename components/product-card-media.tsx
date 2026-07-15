@@ -31,9 +31,8 @@ export function ProductCardMedia({
         src={primaryImage}
         alt={title}
         fill
-        priority={priority}
-        loading={priority ? "eager" : "lazy"}
-        fetchPriority={priority ? "high" : "auto"}
+        preload={priority}
+        loading={priority ? undefined : "lazy"}
         quality={72}
         sizes="(max-width: 840px) 50vw, (max-width: 1280px) 33vw, 25vw"
         className="card-image-primary"
