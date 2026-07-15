@@ -1,9 +1,9 @@
 import Link from "next/link";
-import Image from "next/image";
 import type { StreetProduct } from "@/lib/catalog";
 import { SearchToggle } from "@/components/search-overlay";
 import { CategoryMenu } from "@/components/category-menu";
 import { MobileMoreMenu } from "@/components/mobile-more-menu";
+import { ProductCardMedia } from "@/components/product-card-media";
 import { getActiveCategorySummary } from "@/lib/catalog-store";
 
 const RECENT_PRODUCT_MS = 24 * 60 * 60_000;
@@ -52,7 +52,7 @@ export function Footer() {
  * link so the product page can log a "search_click" analytics event tying
  * the query to the item the shopper actually opened.
  */
-export function ProductCard({ product, searchQuery }: { product: StreetProduct; searchQuery?: string }) {
+export function ProductCard({ product, searchQuery, priority = false }: { product: StreetProduct; searchQuery?: string; priority?: boolean }) {
   const secondImage = product.images.length > 1 ? product.images[1] : null;
   const href = searchQuery ? `/products/${product.slug}?sq=${encodeURIComponent(searchQuery)}` : `/products/${product.slug}`;
   const recentlyAdded = isRecentlyAdded(product.createdAt);
@@ -60,34 +60,12 @@ export function ProductCard({ product, searchQuery }: { product: StreetProduct; 
   return (
     <Link href={href}>
       <div className="card-image">
-        {product.primaryImage ? (
-          <>
-            <Image
-              src={product.primaryImage}
-              alt={product.title}
-              fill
-              loading="lazy"
-              sizes="(max-width: 840px) 50vw, 25vw"
-              className="card-image-primary"
-              style={{ objectFit: "contain" }}
-            />
-            {/* Hover reveals the second catalog photo (often the back of a jacket, etc). Pure CSS — see .card-image:hover in globals.css. */}
-            {secondImage ? (
-              <Image
-                src={secondImage}
-                alt=""
-                aria-hidden
-                fill
-                loading="lazy"
-                sizes="(max-width: 840px) 50vw, 25vw"
-                className="card-image-secondary"
-                style={{ objectFit: "contain" }}
-              />
-            ) : null}
-          </>
-        ) : (
-          <div style={{ height: "100%", width: "100%", background: "linear-gradient(135deg, #d7d4cc, #a7a49e)" }} />
-        )}
+        <ProductCardMedia
+          primaryImage={product.primaryImage}
+          secondImage={secondImage}
+          title={product.title}
+          priority={priority}
+        />
         {recentlyAdded ? (
           <span className="badge" style={{ background: "#f4f3ee", color: "#101010", border: "1px solid #101010" }}>Just added</span>
         ) : null}
