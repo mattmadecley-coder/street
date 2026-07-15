@@ -2,6 +2,17 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
+    // Next's image optimizer now negotiates AVIF first and WebP as the broadly
+    // compatible fallback. The browser still receives JPEG/PNG when needed.
+    formats: ["image/avif", "image/webp"],
+    // Keep the generated srcset focused on sizes Street actually uses rather
+    // than producing oversized variants for small product cards.
+    deviceSizes: [360, 480, 640, 750, 828, 1080, 1200, 1440, 1600, 1920],
+    imageSizes: [32, 48, 64, 96, 128, 192, 256, 320],
+    qualities: [60, 70, 75, 80, 85],
+    // Product URLs are stable between catalog syncs, so optimized variants can
+    // stay at the edge for a day instead of being regenerated repeatedly.
+    minimumCacheTTL: 86_400,
     // Product photos come from whatever domain each brand's own store (or
     // its CDN) happens to use — that list changes every time a brand is
     // added through /admin/brands/new, and admin-added brands aren't known
