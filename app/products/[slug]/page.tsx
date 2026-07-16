@@ -5,11 +5,10 @@ import { Header, Footer, isRecentlyAdded } from "@/components/storefront";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductVariantProvider } from "@/components/product-variant-context";
 import { VariantPicker } from "@/components/variant-picker";
+import { ProductPurchaseActions } from "@/components/product-purchase-actions";
 import { getProduct } from "@/lib/catalog";
 import { logSiteEvent } from "@/lib/analytics";
 
-// ISR: rendered HTML for each product slug is cached and revalidated hourly
-// at most, with the cron sync invalidating it immediately via revalidateTag.
 export const revalidate = 3600;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -18,12 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!product) return {};
   const title = `${product.title} — ${product.brandName}`;
   const description = product.description || `${product.title} by ${product.brandName}, available now on Street.`;
-  return {
-    title,
-    description,
-    openGraph: { title, description, images: product.primaryImage ? [{ url: product.primaryImage }] : undefined },
-    twitter: { card: "summary_large_image", title, description, images: product.primaryImage ? [product.primaryImage] : undefined },
-  };
+  return { title, description, openGraph: { title, description, images: product.primaryImage ? [{ url: product.primaryImage }] : undefined }, twitter: { card: "summary_large_image", title, description, images: product.primaryImage ? [product.primaryImage] : undefined } };
 }
 
 export default async function ProductPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ sq?: string }> }) {
@@ -32,14 +26,8 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const { product, source } = await getProduct(slug);
   if (!product) notFound();
 
-  // Analytics, scheduled after the response is sent so it never adds latency
-  // to the product page itself (see lib/analytics.ts). `sq` is set by
-  // ProductCard when this page was reached from a search result — it ties
-  // the search query to the item the shopper actually opened.
   after(async () => {
-    if (sq?.trim()) {
-      await logSiteEvent({ eventType: "search_click", query: sq.trim(), productId: product.id, brandSlug: product.brandSlug, path: `/products/${slug}` });
-    }
+    if (sq?.trim()) await logSiteEvent({ eventType: "search_click", query: sq.trim(), productId: product.id, brandSlug: product.brandSlug, path: `/products/${slug}` });
     await logSiteEvent({ eventType: "product_view", productId: product.id, brandSlug: product.brandSlug, streetGroup: product.streetGroup, streetCategory: product.streetCategory, price: product.price, path: `/products/${slug}` });
   });
 
@@ -49,16 +37,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   return (
     <main>
       <Header />
-      <div
-        hidden
-        data-mascot-product
-        data-title={product.title}
-        data-brand={product.brandName}
-        data-price={product.price}
-        data-stock={product.stockStatus}
-        data-category={product.streetCategory ?? product.category}
-        data-colors={product.colors.join("|")}
-      />
+      <div hidden data-mascot-product data-title={product.title} data-brand={product.brandName} data-price={product.price} data-stock={product.stockStatus} data-category={product.streetCategory ?? product.category} data-colors={product.colors.join("|")} />
       <ProductVariantProvider>
         <div className="shell product-layout">
           <ProductGallery images={product.images} title={product.title} />
@@ -75,15 +54,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
             <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "Size choices were not supplied by the source catalog."} />
             <VariantPicker variants={product.variants ?? []} />
             <Info label="Description" value={product.description || "See the brand website for complete product details and shipping information."} />
-            <a
-              className="cta"
-              data-mascot-target="shop-button"
-              href={`/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <span>Shop at {product.brandName}</span><span>↗</span>
-            </a>
+            <ProductPurchaseActions product={{ id: product.id, slug: product.slug, title: product.title, brandName: product.brandName, brandSlug: product.brandSlug, price: product.price, primaryImage: product.primaryImage, sourceUrl: product.sourceUrl, stockStatus: product.stockStatus, variantCount: product.variantCount }} />
             <p className="results" style={{ lineHeight: 1.45 }}>{sourceMessage}</p>
             <div className="tags">{product.tags.slice(0, 12).map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
           </aside>
