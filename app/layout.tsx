@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./commerce.css";
+import "./mobile.css";
 import { SiteMascot } from "@/components/mascot/site-mascot";
 import { CartProvider } from "@/components/cart-context";
 
