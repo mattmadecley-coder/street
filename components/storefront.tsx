@@ -5,6 +5,7 @@ import { CategoryMenu } from "@/components/category-menu";
 import { MobileMoreMenu } from "@/components/mobile-more-menu";
 import { ProductCardMedia } from "@/components/product-card-media";
 import { getActiveCategorySummary } from "@/lib/catalog-store";
+import { isProductRecentlyAdded } from "@/lib/recent-products";
 
 const RECENT_PRODUCT_MS = 24 * 60 * 60_000;
 
@@ -52,10 +53,10 @@ export function Footer() {
  * link so the product page can log a "search_click" analytics event tying
  * the query to the item the shopper actually opened.
  */
-export function ProductCard({ product, searchQuery, priority = false }: { product: StreetProduct; searchQuery?: string; priority?: boolean }) {
+export async function ProductCard({ product, searchQuery, priority = false }: { product: StreetProduct; searchQuery?: string; priority?: boolean }) {
   const secondImage = product.images.length > 1 ? product.images[1] : null;
   const href = searchQuery ? `/products/${product.slug}?sq=${encodeURIComponent(searchQuery)}` : `/products/${product.slug}`;
-  const recentlyAdded = isRecentlyAdded(product.createdAt);
+  const recentlyAdded = product.createdAt ? isRecentlyAdded(product.createdAt) : await isProductRecentlyAdded(product.id);
 
   return (
     <Link href={href}>
