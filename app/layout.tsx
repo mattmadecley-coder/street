@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./commerce.css";
 import { SiteMascot } from "@/components/mascot/site-mascot";
+import { CartProvider } from "@/components/cart-context";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const title = "Street — Discover independent streetwear";
@@ -10,25 +12,18 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: { default: title, template: "%s · Street" },
   description,
-  openGraph: {
-    type: "website",
-    siteName: "Street",
-    title,
-    description,
-  },
-  twitter: {
-    card: "summary_large_image",
-    title,
-    description,
-  },
+  openGraph: { type: "website", siteName: "Street", title, description },
+  twitter: { card: "summary_large_image", title, description },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body>
-        {children}
-        <SiteMascot />
+        <CartProvider>
+          {children}
+          <SiteMascot />
+        </CartProvider>
       </body>
     </html>
   );
