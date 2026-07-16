@@ -3,7 +3,7 @@
 .brandSpotlight { position: absolute; right: 14px; bottom: 14px; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; width: 156px; min-height: 76px; padding: 10px 9px; color: #101010; text-align: center; background: rgba(255,255,255,.96); }
 .brandSpotlightLabel { display: block; width: 100%; font-size: 7px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; line-height: 1.2; }
 .brandSpotlightLogo { display: block; width: 118px; height: 30px; object-fit: contain; object-position: center; }
-@media (max-width: 840px) { .heroVideo { min-height: 80svh; } .brandSpotlight { right: 10px; bottom: 10px; width: 190px; min-height: 84px; padding: 10px; gap: 7px; } .brandSpotlightLabel { font-size: 9px; } .brandSpotlightLogo { width: 150px; height: 38px; } }
+@media (max-width: 840px) { .heroVideo { min-height: 64svh; } .brandSpotlight { left: 10px; right: 10px; bottom: 10px; width: auto; min-height: 60px; padding: 8px 12px; flex-direction: row; justify-content: space-between; gap: 12px; } .brandSpotlightLabel { width: auto; max-width: 120px; text-align: left; font-size: 8px; } .brandSpotlightLogo { width: 132px; height: 34px; } }
 
 .brandGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 22px; }
 .brandGridCard { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 120px; padding: 18px; border: 1px solid rgba(16,16,16,.16); background: #fff; text-align: center; }
@@ -21,4 +21,4 @@
 .categoryTileLabel { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px 14px; color: #fff; background: linear-gradient(to top, rgba(16,16,16,.82), rgba(16,16,16,0)); }
 .categoryTileLabel strong { font-size: 15px; letter-spacing: -.03em; }
 .categoryTileLabel em { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .82; }
-@media (max-width: 840px) { .categoryGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 840px) { .categoryGrid { grid-template-columns: repeat(2, 1fr); } .categoryTileLabel{padding:10px}.categoryTileLabel strong{font-size:14px} }
