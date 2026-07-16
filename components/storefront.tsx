@@ -2,9 +2,9 @@ import Link from "next/link";
 import type { StreetProduct } from "@/lib/catalog";
 import { SearchToggle } from "@/components/search-overlay";
 import { CategoryMenu } from "@/components/category-menu";
-import { MobileMoreMenu } from "@/components/mobile-more-menu";
 import { ProductCardMedia } from "@/components/product-card-media";
 import { CartNavLink } from "@/components/cart-nav-link";
+import { MobileNavigation } from "@/components/mobile-navigation";
 import { getActiveCategorySummary } from "@/lib/catalog-store";
 import { isProductRecentlyAdded } from "@/lib/recent-products";
 
@@ -20,15 +20,18 @@ export async function Header() {
   return (
     <header className="header">
       <Link href="/" className="wordmark" aria-label="Street home">STREET</Link>
-      <nav className="nav">
+      <nav className="nav desktop-nav">
         <Link href="/catalog">Shop all</Link>
         <CategoryMenu summary={categorySummary} />
-        <Link href="/catalog?sort=newest" className="nav-hide-mobile">New in</Link>
-        <Link href="/brands" className="nav-hide-mobile">Brands</Link>
+        <Link href="/catalog?sort=newest">New in</Link>
+        <Link href="/brands">Brands</Link>
         <CartNavLink />
-        <MobileMoreMenu />
       </nav>
-      <SearchToggle />
+      <div className="header-actions">
+        <div className="mobile-cart-link"><CartNavLink /></div>
+        <SearchToggle />
+        <MobileNavigation />
+      </div>
     </header>
   );
 }
@@ -52,11 +55,11 @@ export async function ProductCard({ product, searchQuery, priority = false }: { 
   const href = searchQuery ? `/products/${product.slug}?sq=${encodeURIComponent(searchQuery)}` : `/products/${product.slug}`;
   const recentlyAdded = product.createdAt ? isRecentlyAdded(product.createdAt) : await isProductRecentlyAdded(product.id);
   return (
-    <Link href={href}>
+    <Link href={href} className="product-card">
       <div className="card-image">
         <ProductCardMedia primaryImage={product.primaryImage} secondImage={secondImage} title={product.title} priority={priority} />
-        {recentlyAdded ? <span className="badge" style={{ background: "#f4f3ee", color: "#101010", border: "1px solid #101010" }}>Just added</span> : null}
-        {product.stockStatus === "sold_out" ? <span className="badge" style={{ top: recentlyAdded ? 42 : 8 }}>Sold out</span> : null}
+        {recentlyAdded ? <span className="badge badge-recent">Just added</span> : null}
+        {product.stockStatus === "sold_out" ? <span className="badge badge-stock" style={{ top: recentlyAdded ? 42 : 8 }}>Sold out</span> : null}
         {product.variantCount > 1 ? <span className="badge badge-variants">{product.variantCount} options</span> : null}
       </div>
       <p className="brand">{product.brandName}</p><p className="name">{product.title}</p><p className="price">${product.price.toFixed(2)}</p>
