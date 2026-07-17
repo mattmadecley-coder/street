@@ -31,11 +31,11 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
     await logSiteEvent({ eventType: "product_view", productId: product.id, brandSlug: product.brandSlug, streetGroup: product.streetGroup, streetCategory: product.streetCategory, price: product.price, path: `/products/${slug}` });
   });
 
-  const sourceMessage = source === "database" ? "Saved in Street's catalog and refreshed by the scheduled importer." : source === "live" ? "Live source import — this product will be stored after the first database sync." : "The source is unavailable right now. Confirm details on the brand website.";
+  const sourceMessage = source === "database" ? "Catalog details are refreshed from the brand." : source === "live" ? "Live details from the brand catalog." : "Confirm final details on the brand website.";
   const recentlyAdded = isRecentlyAdded(product.createdAt);
 
   return (
-    <main>
+    <main className="product-page">
       <Header />
       <div hidden data-mascot-product data-title={product.title} data-brand={product.brandName} data-price={product.price} data-stock={product.stockStatus} data-category={product.streetCategory ?? product.category} data-colors={product.colors.join("|")} />
       <ProductVariantProvider>
@@ -49,22 +49,14 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
               <span className="status">{product.stockStatus === "in_stock" ? "In stock" : "Sold out"}{product.isPreorder ? " · Pre-order" : ""}</span>
               {recentlyAdded ? <span className="status" style={{ background: "#101010", color: "#fff" }}>Just added</span> : null}
             </div>
-            <Info label="Product images" value={`${product.images.length || 0} official photo${product.images.length === 1 ? "" : "s"} imported`} />
-            {product.colors.length ? <Info label="Color" value={product.colors.join(", ")} /> : null}
-            <Info label="Available sizes" value={product.sizes.length ? product.sizes.join(" · ") : "Size choices were not supplied by the source catalog."} />
             <VariantPicker variants={product.variants ?? []} />
-            <Info label="Description" value={product.description || "See the brand website for complete product details and shipping information."} />
+            <div className="product-description"><p className="brand">Description</p><p>{product.description || "See the brand website for complete product details and shipping information."}</p></div>
             <ProductPurchaseActions product={{ id: product.id, slug: product.slug, title: product.title, brandName: product.brandName, brandSlug: product.brandSlug, price: product.price, primaryImage: product.primaryImage, sourceUrl: product.sourceUrl, stockStatus: product.stockStatus, variantCount: product.variantCount }} />
-            <p className="results" style={{ lineHeight: 1.45 }}>{sourceMessage}</p>
-            <div className="tags">{product.tags.slice(0, 12).map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
+            <p className="results product-source-note">{sourceMessage}</p>
           </aside>
         </div>
       </ProductVariantProvider>
       <Footer />
     </main>
   );
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return <div className="info-block"><p className="brand" style={{ marginTop: 0 }}>{label}</p><p>{value}</p></div>;
 }
