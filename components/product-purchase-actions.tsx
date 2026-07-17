@@ -25,6 +25,7 @@ export function ProductPurchaseActions({ product }: { product: {
   function addToCart() {
     if (requiresVariant && !selectedVariant) {
       window.dispatchEvent(new CustomEvent("street:cart-needs-variant"));
+      document.getElementById("product-option-select")?.focus();
       return;
     }
     if (selectedUnavailable || product.stockStatus === "sold_out") return;
@@ -41,25 +42,20 @@ export function ProductPurchaseActions({ product }: { product: {
       variantLabel: selectedVariant?.label,
     });
     setAdded(true);
-    window.setTimeout(() => setAdded(false), 1800);
+    window.setTimeout(() => setAdded(false), 2600);
   }
 
   return (
-    <div className="purchase-actions">
-      <button type="button" className="cta cta-secondary" onClick={addToCart} disabled={product.stockStatus === "sold_out" || Boolean(selectedUnavailable)}>
-        <span>{added ? "Added to cart" : "Add to cart"}</span><span>{added ? "✓" : "+"}</span>
-      </button>
-      <a
-        className="cta"
-        data-mascot-target="shop-button"
-        href={`/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}`}
-        target="_blank"
-        rel="noreferrer"
-      >
-        <span>Buy now</span><span>↗</span>
-      </a>
-      {requiresVariant && !selectedVariant ? <p className="purchase-note">Choose an available variation before adding this item to your cart.</p> : null}
-      <p className="purchase-note">Street saves your cart here, but checkout still happens on each brand’s website.</p>
-    </div>
+    <>
+      <div className="purchase-actions">
+        <button type="button" className="cta cta-secondary" onClick={addToCart} disabled={product.stockStatus === "sold_out" || Boolean(selectedUnavailable)}>
+          <span>{added ? "Added to cart" : "Add to cart"}</span><span>{added ? "✓" : "+"}</span>
+        </button>
+        <a className="cta" data-mascot-target="shop-button" href={`/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}`} target="_blank" rel="noreferrer">
+          <span>Buy now</span><span>↗</span>
+        </a>
+      </div>
+      {added ? <div className="cart-toast" role="status" aria-live="polite"><strong>Added to cart</strong><span>{product.title}{selectedVariant?.label ? ` · ${selectedVariant.label}` : ""}</span><a href="/cart">View cart</a></div> : null}
+    </>
   );
 }
