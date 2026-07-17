@@ -24,7 +24,7 @@
     ],
     "paths": {
       "@/lib/source-import": [
-        "./lib/source-import-wrapper.ts"
+        "./lib/source-import-tested.ts"
       ],
       "@/*": [
         "./*"
