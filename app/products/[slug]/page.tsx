@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { Header, Footer, isRecentlyAdded } from "@/components/storefront";
@@ -42,7 +43,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
         <div className="shell product-layout">
           <ProductGallery images={product.images} title={product.title} />
           <aside className="product-info">
-            <p className="brand">{product.brandName}</p>
+            <p className="brand"><Link href={`/brands/${product.brandSlug}`}>{product.brandName}</Link></p>
             <h1>{product.title}</h1>
             <p className="price" style={{ fontSize: 18, marginBottom: 14 }}>${product.price.toFixed(2)}</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
