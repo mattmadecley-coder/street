@@ -1,7 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { headers } from "next/headers";
-import { after } from "next/server";
 import styles from "./home.module.css";
 import { Header, Footer, ProductCard } from "@/components/storefront";
 import { HeroMedia } from "@/components/hero-media";
@@ -9,22 +7,24 @@ import { getCatalogPage, getDiverseProductShelf } from "@/lib/catalog-page";
 import { getSiteSettings } from "@/lib/site-settings";
 import { getBrandDirectory, getHomepageCategoryShowcase } from "@/lib/catalog-store";
 import { getActiveCollectionsForHomepage } from "@/lib/collections-store";
-import { logSiteEvent } from "@/lib/analytics";
 import { MEDIA_BLUR_DATA_URL } from "@/lib/media-placeholders";
 
-// This route is dynamic (it reads request headers for traffic-source
-// logging) but the underlying Supabase reads are still cached — see
-// lib/supabase-rest.ts — so it stays cheap.
-export const dynamic = "force-dynamic";
+// The homepage is catalog content, not request-specific content. Cache the fully
+// rendered route at the edge so normal visits do not repeat thousands of
+// Supabase row reads and product transformations. Catalog fetches are also tag-
+// invalidated after imports, while this hourly fallback keeps settings fresh.
+export const revalidate = 3600;
 
 export default async function HomePage() {
-  const [settings, brands, requestHeaders, categoryShowcase, newIn, under50, collections] = await Promise.all([
+  const [settings, brands, categoryShowcase, newIn, under50, collections] = await Promise.all([
     getSiteSettings(),
     getBrandDirectory(),
-    headers(),
     getHomepageCategoryShowcase(8),
-    getDiverseProductShelf({ sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2 }),
-    getDiverseProductShelf({ max: 50, sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2 }),
+    // One 50-product pool is enough to build a diverse ten-item shelf for the
+    // current catalog. The previous four-page pool caused up to eight paged,
+    // joined Supabase requests across these two shelves on every regeneration.
+    getDiverseProductShelf({ sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2, poolPages: 1 }),
+    getDiverseProductShelf({ max: 50, sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2, poolPages: 1 }),
     getActiveCollectionsForHomepage(),
   ]);
 
@@ -32,10 +32,6 @@ export default async function HomePage() {
   const featuredBrand = brandsWithStock.find((brand) => brand.slug === settings.featured_brand_slug) ?? brandsWithStock.find((brand) => brand.featured) ?? brandsWithStock[0];
   const featuredPage = featuredBrand ? await getCatalogPage({ brand: featuredBrand.slug, availability: "in_stock" }) : null;
   const featured = featuredPage?.products.slice(0, 8) ?? [];
-
-  after(async () => {
-    await logSiteEvent({ eventType: "page_view", path: "/", referrer: requestHeaders.get("referer") });
-  });
 
   const heroVideoUrl = settings.hero_video_url || undefined;
   const heroImageUrl = settings.hero_image_url || undefined;
