@@ -5,6 +5,10 @@
       "schedule": "0 5 * * *"
     },
     {
+      "path": "/api/cron/storefront-health",
+      "schedule": "30 6 * * *"
+    },
+    {
       "path": "/api/cron/classify",
       "schedule": "0 7 * * *"
     }
