@@ -30,7 +30,7 @@ export async function Header() {
       <div className="header-actions">
         <div className="mobile-cart-link"><CartNavLink /></div>
         <SearchToggle />
-        <MobileNavigation />
+        <MobileNavigation categorySummary={categorySummary} />
       </div>
     </header>
   );
@@ -42,8 +42,8 @@ export function Footer() {
       <div className="footer-columns">
         <div><Link href="/" className="footer-wordmark">STREET</Link><p className="footer-note">Discover independent labels in one place. Purchases currently finish on each brand’s own website.</p></div>
         <div><p className="footer-heading">Shop</p><Link href="/catalog">Shop all</Link><Link href="/catalog?sort=newest">New in</Link><Link href="/brands">Brands</Link><Link href="/cart">Cart</Link></div>
-        <div><p className="footer-heading">Street</p><Link href="/brands/apply">Want your brand featured?</Link><Link href="/privacy">Privacy &amp; terms</Link><a href="mailto:hello@street.com">Contact</a></div>
-        <div><p className="footer-heading">For brands</p><p className="footer-note">Think your label is moving the culture forward? Apply for catalog consideration and future direct-checkout opportunities.</p><Link href="/brands/apply" className="footer-apply">Apply to Street →</Link></div>
+        <div><p className="footer-heading">Street</p><Link href="/brands/apply">Get your brand discovered</Link><Link href="/privacy">Privacy &amp; terms</Link><a href="mailto:hello@street.com">Contact</a></div>
+        <div><p className="footer-heading">For brands</p><p className="footer-note">Put your products in front of shoppers actively looking for independent streetwear—and turn discovery into sales.</p><Link href="/brands/apply" className="footer-apply">Grow with Street →</Link></div>
       </div>
       <div className="footer-bottom">© {new Date().getFullYear()} Street. Street is independent and is not affiliated with the brands listed.</div>
     </footer>
