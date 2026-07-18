@@ -50,19 +50,30 @@ export function Footer() {
   );
 }
 
-export async function ProductCard({ product, searchQuery, priority = false }: { product: StreetProduct; searchQuery?: string; priority?: boolean }) {
+export async function ProductCard({ product, searchQuery, priority = false, position, sourceComponent }: { product: StreetProduct; searchQuery?: string; priority?: boolean; position?: number; sourceComponent?: string }) {
   const secondImage = product.images.length > 1 ? product.images[1] : null;
   const href = searchQuery ? `/products/${product.slug}?sq=${encodeURIComponent(searchQuery)}` : `/products/${product.slug}`;
   const recentlyAdded = product.createdAt ? isRecentlyAdded(product.createdAt) : await isProductRecentlyAdded(product.id);
+  const component = sourceComponent ?? (searchQuery ? "search_results" : "product_grid");
+  const analyticsMetadata = JSON.stringify({ productSlug: product.slug, productTitle: product.title });
   return (
     <Link
       href={href}
       className="product-card"
       data-analytics-event="product_click"
-      data-analytics-component={searchQuery ? "search_results" : "product_grid"}
+      data-analytics-component={component}
+      data-analytics-position={position}
       data-analytics-product={product.id}
       data-analytics-brand={product.brandSlug}
       data-analytics-query={searchQuery}
+      data-analytics-metadata={analyticsMetadata}
+      data-product-impression
+      data-product-id={product.id}
+      data-product-slug={product.slug}
+      data-product-title={product.title}
+      data-brand-slug={product.brandSlug}
+      data-source-component={component}
+      data-position={position}
     >
       <div className="card-image">
         <ProductCardMedia primaryImage={product.primaryImage} secondImage={secondImage} title={product.title} priority={priority} />
