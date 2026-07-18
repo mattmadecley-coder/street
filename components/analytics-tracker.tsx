@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 const VISITOR_KEY = "street-visitor-v1";
 const SESSION_KEY = "street-session-v1";
 const ATTRIBUTION_KEY = "street-attribution-v1";
+const DISABLED_KEY = "street-analytics-disabled";
 const SESSION_TIMEOUT_MS = 30 * 60_000;
 
 type SessionState = { id: string; startedAt: number; lastActivityAt: number; sequence: number; landingPath: string };
@@ -26,6 +27,14 @@ function cookie(name: string, value: string) {
 
 function readJson<T>(key: string): T | null {
   try { return JSON.parse(localStorage.getItem(key) ?? "null") as T | null; } catch { return null; }
+}
+
+function trackingDisabled() {
+  if (typeof window === "undefined") return true;
+  if (localStorage.getItem(DISABLED_KEY) === "true") return true;
+  if (location.hostname.endsWith(".vercel.app") || location.hostname === "localhost" || location.hostname === "127.0.0.1") return true;
+  const ua = navigator.userAgent.toLowerCase();
+  return navigator.webdriver || /bot|crawler|spider|headless|lighthouse|pagespeed/.test(ua);
 }
 
 function deviceType() {
@@ -55,7 +64,7 @@ function operatingSystem() {
 }
 
 export async function trackStreetEvent(eventType: string, details: Record<string, unknown> = {}) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || trackingDisabled()) return;
   const now = Date.now();
   let visitorId = localStorage.getItem(VISITOR_KEY);
   if (!visitorId) {
@@ -124,7 +133,7 @@ export function AnalyticsTracker() {
 
   useEffect(() => {
     const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
-    if (current === lastPath.current || pathname.startsWith("/admin")) return;
+    if (current === lastPath.current || pathname.startsWith("/admin") || trackingDisabled()) return;
     lastPath.current = current;
     void trackStreetEvent("page_view");
 
@@ -144,6 +153,7 @@ export function AnalyticsTracker() {
   }, [pathname, searchParams]);
 
   useEffect(() => {
+    if (trackingDisabled()) return;
     const handleClick = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-analytics-event]") : null;
       if (!target) return;
@@ -160,6 +170,50 @@ export function AnalyticsTracker() {
     };
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
+  }, []);
+
+  useEffect(() => {
+    if (trackingDisabled()) return;
+
+    const handleWindowError = (event: ErrorEvent) => {
+      void trackStreetEvent("javascript_error", { sourceComponent: "window", metadata: { message: event.message.slice(0, 500), filename: event.filename, line: event.lineno, column: event.colno } });
+    };
+    const handleUnhandled = (event: PromiseRejectionEvent) => {
+      const reason = event.reason instanceof Error ? event.reason.message : String(event.reason ?? "Unknown rejection");
+      void trackStreetEvent("unhandled_rejection", { sourceComponent: "window", metadata: { reason: reason.slice(0, 500) } });
+    };
+    const handleResourceError = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLImageElement) {
+        void trackStreetEvent("broken_image", { sourceComponent: "image", metadata: { src: target.currentSrc || target.src, alt: target.alt } });
+      }
+    };
+    const reportPerformance = () => {
+      const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+      if (!navigation) return;
+      void trackStreetEvent("page_performance", {
+        sourceComponent: "navigation",
+        metadata: {
+          domContentLoadedMs: Math.round(navigation.domContentLoadedEventEnd),
+          loadMs: Math.round(navigation.loadEventEnd),
+          responseMs: Math.round(navigation.responseEnd - navigation.requestStart),
+          transferSize: navigation.transferSize,
+        },
+      });
+    };
+
+    window.addEventListener("error", handleWindowError);
+    window.addEventListener("unhandledrejection", handleUnhandled);
+    document.addEventListener("error", handleResourceError, true);
+    if (document.readyState === "complete") window.setTimeout(reportPerformance, 0);
+    else window.addEventListener("load", reportPerformance, { once: true });
+
+    return () => {
+      window.removeEventListener("error", handleWindowError);
+      window.removeEventListener("unhandledrejection", handleUnhandled);
+      document.removeEventListener("error", handleResourceError, true);
+      window.removeEventListener("load", reportPerformance);
+    };
   }, []);
 
   return null;
