@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logOutboundClick, resolveOutboundDestination } from "@/lib/outbound-clicks";
 
+function referrerPath(referrer: string | null) {
+  if (!referrer) return null;
+  try { return new URL(referrer).pathname; } catch { return null; }
+}
+
 export async function GET(request: NextRequest) {
   const to = request.nextUrl.searchParams.get("to");
   const brand = request.nextUrl.searchParams.get("brand");
@@ -20,6 +25,7 @@ export async function GET(request: NextRequest) {
     attribution = JSON.parse(decodeURIComponent(request.cookies.get("street_attribution")?.value ?? "{}"));
   } catch {}
 
+  const referrer = request.headers.get("referer");
   await logOutboundClick({
     brandSlug: brand,
     productSlug: product,
@@ -27,10 +33,10 @@ export async function GET(request: NextRequest) {
     anonymousUserId: request.cookies.get("street_visitor_id")?.value ?? null,
     sessionId: request.cookies.get("street_session_id")?.value ?? null,
     sourceComponent,
-    sourcePath: request.headers.get("referer") ? new URL(request.headers.get("referer") as string).pathname : null,
+    sourcePath: referrerPath(referrer),
     searchQuery,
     position,
-    referrer: request.headers.get("referer"),
+    referrer,
     utmSource: attribution.utmSource ?? null,
     utmMedium: attribution.utmMedium ?? null,
     utmCampaign: attribution.utmCampaign ?? null,
