@@ -6,6 +6,7 @@ import { ProductGallery } from "@/components/product-gallery";
 import { ProductVariantProvider } from "@/components/product-variant-context";
 import { ProductDetailPanel } from "@/components/product-detail-panel";
 import { getCatalog, getProduct } from "@/lib/catalog";
+import "./product-page.css";
 
 export const revalidate = 3600;
 
@@ -27,7 +28,6 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const sourceMessage = source === "database" ? "Catalog details are refreshed directly from the brand." : source === "live" ? "Live details from the brand catalog." : "Confirm final details on the brand website.";
   const recentlyAdded = isRecentlyAdded(product.createdAt);
   const related = catalog.products.filter((item) => item.slug !== product.slug && (item.brandSlug === product.brandSlug || item.streetCategory === product.streetCategory || item.category === product.category)).sort((a, b) => Number(b.brandSlug === product.brandSlug) - Number(a.brandSlug === product.brandSlug)).slice(0, 8);
-  const productUrl = `/products/${product.slug}`;
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
