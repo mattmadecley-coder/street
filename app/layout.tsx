@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import "./commerce.css";
 import "./mobile.css";
 import { SiteMascot } from "@/components/mascot/site-mascot";
 import { CartProvider } from "@/components/cart-context";
+import { AnalyticsTracker } from "@/components/analytics-tracker";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const title = "Street — Discover independent streetwear";
@@ -24,6 +26,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <CartProvider>
           {children}
           <SiteMascot />
+          <Suspense fallback={null}><AnalyticsTracker /></Suspense>
         </CartProvider>
       </body>
     </html>
