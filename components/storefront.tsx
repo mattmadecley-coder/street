@@ -55,7 +55,15 @@ export async function ProductCard({ product, searchQuery, priority = false }: { 
   const href = searchQuery ? `/products/${product.slug}?sq=${encodeURIComponent(searchQuery)}` : `/products/${product.slug}`;
   const recentlyAdded = product.createdAt ? isRecentlyAdded(product.createdAt) : await isProductRecentlyAdded(product.id);
   return (
-    <Link href={href} className="product-card">
+    <Link
+      href={href}
+      className="product-card"
+      data-analytics-event="product_click"
+      data-analytics-component={searchQuery ? "search_results" : "product_grid"}
+      data-analytics-product={product.id}
+      data-analytics-brand={product.brandSlug}
+      data-analytics-query={searchQuery}
+    >
       <div className="card-image">
         <ProductCardMedia primaryImage={product.primaryImage} secondImage={secondImage} title={product.title} priority={priority} />
         {recentlyAdded ? <span className="badge badge-recent">Just added</span> : null}

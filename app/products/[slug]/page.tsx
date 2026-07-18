@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { after } from "next/server";
 import { Header, Footer, isRecentlyAdded } from "@/components/storefront";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductVariantProvider } from "@/components/product-variant-context";
 import { VariantPicker } from "@/components/variant-picker";
 import { ProductPurchaseActions } from "@/components/product-purchase-actions";
 import { getProduct } from "@/lib/catalog";
-import { logSiteEvent } from "@/lib/analytics";
 
 export const revalidate = 3600;
 
@@ -27,18 +25,29 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const { product, source } = await getProduct(slug);
   if (!product) notFound();
 
-  after(async () => {
-    if (sq?.trim()) await logSiteEvent({ eventType: "search_click", query: sq.trim(), productId: product.id, brandSlug: product.brandSlug, path: `/products/${slug}` });
-    await logSiteEvent({ eventType: "product_view", productId: product.id, brandSlug: product.brandSlug, streetGroup: product.streetGroup, streetCategory: product.streetCategory, price: product.price, path: `/products/${slug}` });
-  });
-
   const sourceMessage = source === "database" ? "Catalog details are refreshed from the brand." : source === "live" ? "Live details from the brand catalog." : "Confirm final details on the brand website.";
   const recentlyAdded = isRecentlyAdded(product.createdAt);
 
   return (
     <main className="product-page">
       <Header />
-      <div hidden data-mascot-product data-title={product.title} data-brand={product.brandName} data-price={product.price} data-stock={product.stockStatus} data-category={product.streetCategory ?? product.category} data-colors={product.colors.join("|")} />
+      <div
+        hidden
+        data-mascot-product
+        data-analytics-product-view
+        data-product-id={product.id}
+        data-product-slug={product.slug}
+        data-brand-slug={product.brandSlug}
+        data-search-query={sq?.trim() || undefined}
+        data-street-group={product.streetGroup ?? undefined}
+        data-street-category={product.streetCategory ?? undefined}
+        data-title={product.title}
+        data-brand={product.brandName}
+        data-price={product.price}
+        data-stock={product.stockStatus}
+        data-category={product.streetCategory ?? product.category}
+        data-colors={product.colors.join("|")}
+      />
       <ProductVariantProvider>
         <div className="shell product-layout">
           <ProductGallery images={product.images} title={product.title} />
