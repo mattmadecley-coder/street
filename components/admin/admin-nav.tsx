@@ -9,7 +9,14 @@ const LINKS = [
   { href: "/admin/products", label: "Products" },
   { href: "/admin/collections", label: "Collections" },
   { href: "/admin/analytics", label: "Analytics" },
+  { href: "/admin/analytics/comparison", label: "Compare" },
+  { href: "/admin/analytics/alerts", label: "Alerts" },
 ];
+
+function isActive(active: string, href: string) {
+  if (href === "/admin/analytics") return active === href;
+  return active === href || active.startsWith(`${href}/`);
+}
 
 export function AdminNav({ active }: { active: string }) {
   return (
@@ -18,7 +25,7 @@ export function AdminNav({ active }: { active: string }) {
         <span className={styles.brand}>STREET ADMIN</span>
         <nav className={styles.nav} style={{ marginTop: 10 }}>
           {LINKS.map((link) => (
-            <Link key={link.href} href={link.href} data-active={active === link.href ? "true" : undefined}>{link.label}</Link>
+            <Link key={link.href} href={link.href} data-active={isActive(active, link.href) ? "true" : undefined}>{link.label}</Link>
           ))}
         </nav>
       </div>
