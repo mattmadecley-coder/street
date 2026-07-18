@@ -4,6 +4,7 @@ import styles from "@/app/admin/admin.module.css";
 const LINKS = [
   { href: "/admin/analytics", label: "Overview" },
   { href: "/admin/analytics/comparison", label: "Comparisons" },
+  { href: "/admin/analytics/growth", label: "Growth" },
   { href: "/admin/analytics/alerts", label: "Alerts" },
 ];
 
