@@ -1,5 +1,6 @@
 import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { AnalyticsControls } from "@/components/admin/analytics-controls";
 import { getRecentSiteEvents, getRecentOutboundClicks, type SiteEventRow, type OutboundClickRow } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,11 @@ function unique(values: Array<string | null>) {
 function metadataString(event: SiteEventRow, key: string) {
   const value = event.metadata?.[key];
   return typeof value === "string" ? value : null;
+}
+
+function metadataNumber(event: SiteEventRow, key: string) {
+  const value = event.metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function productSlug(event: SiteEventRow) {
@@ -87,7 +93,7 @@ function productPerformance(events: SiteEventRow[], outboundClicks: OutboundClic
     row.outbound += 1;
     rows.set(click.product_slug, row);
   }
-  return [...rows.entries()].map(([slug, row]) => ({ slug, ...row })).sort((a, b) => b.impressions - a.impressions || b.views - a.views).slice(0, 20);
+  return [...rows.entries()].map(([slug, row]) => ({ slug, ...row })).sort((a, b) => b.impressions - a.impressions || b.views - a.views).slice(0, 30);
 }
 
 function brandPerformance(events: SiteEventRow[], outboundClicks: OutboundClickRow[]) {
@@ -107,7 +113,7 @@ function brandPerformance(events: SiteEventRow[], outboundClicks: OutboundClickR
     if (click.session_id) row.sessions.add(click.session_id);
     rows.set(click.brand_slug, row);
   }
-  return [...rows.entries()].map(([brand, row]) => ({ brand, ...row, uniqueSessions: row.sessions.size })).sort((a, b) => b.outbound - a.outbound || b.views - a.views).slice(0, 20);
+  return [...rows.entries()].map(([brand, row]) => ({ brand, ...row, uniqueSessions: row.sessions.size })).sort((a, b) => b.outbound - a.outbound || b.views - a.views).slice(0, 30);
 }
 
 function filterDemand(events: SiteEventRow[]) {
@@ -123,11 +129,67 @@ function filterDemand(events: SiteEventRow[]) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20);
 }
 
+function retentionSummary(events: SiteEventRow[]) {
+  const visitors = new Map<string, { sessions: Set<string>; days: Set<string>; first: string; last: string }>();
+  for (const event of [...events].reverse()) {
+    if (!event.anonymous_user_id) continue;
+    const day = event.created_at.slice(0, 10);
+    const row = visitors.get(event.anonymous_user_id) ?? { sessions: new Set<string>(), days: new Set<string>(), first: day, last: day };
+    if (event.session_id) row.sessions.add(event.session_id);
+    row.days.add(day);
+    if (day < row.first) row.first = day;
+    if (day > row.last) row.last = day;
+    visitors.set(event.anonymous_user_id, row);
+  }
+  let returning = 0;
+  let day1 = 0;
+  let day7 = 0;
+  let day30 = 0;
+  const cohorts = new Map<string, { visitors: number; returned: number }>();
+  for (const row of visitors.values()) {
+    const elapsed = Math.floor((new Date(row.last).getTime() - new Date(row.first).getTime()) / 86400000);
+    const didReturn = row.sessions.size > 1 || row.days.size > 1;
+    if (didReturn) returning += 1;
+    if (elapsed >= 1) day1 += 1;
+    if (elapsed >= 7) day7 += 1;
+    if (elapsed >= 30) day30 += 1;
+    const cohort = cohorts.get(row.first) ?? { visitors: 0, returned: 0 };
+    cohort.visitors += 1;
+    if (didReturn) cohort.returned += 1;
+    cohorts.set(row.first, cohort);
+  }
+  return {
+    total: visitors.size,
+    returning,
+    day1,
+    day7,
+    day30,
+    cohorts: [...cohorts.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 14),
+  };
+}
+
+function searchOpportunities(events: SiteEventRow[]) {
+  const rows = new Map<string, { searches: number; totalResults: number; zero: number }>();
+  for (const event of events) {
+    if (event.event_type !== "search" || !event.query) continue;
+    const query = event.query.toLowerCase().trim();
+    const row = rows.get(query) ?? { searches: 0, totalResults: 0, zero: 0 };
+    row.searches += 1;
+    row.totalResults += event.results_count ?? 0;
+    if (event.results_count === 0) row.zero += 1;
+    rows.set(query, row);
+  }
+  return [...rows.entries()].map(([query, row]) => ({ query, ...row, averageResults: row.searches ? row.totalResults / row.searches : 0 })).filter((row) => row.zero > 0 || row.averageResults <= 5).sort((a, b) => b.searches - a.searches || a.averageResults - b.averageResults).slice(0, 20);
+}
+
 export default async function AdminAnalyticsPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
   const params = await searchParams;
   const days = [1, 7, 30, 90].includes(Number(params.days)) ? Number(params.days) : 30;
-  const since = new Date(Date.now() - days * 86400000).toISOString();
-  const [events, outboundClicks] = await Promise.all([getRecentSiteEvents(20000, since), getRecentOutboundClicks(20000, since)]);
+  const since = new Date(Date.now() - Math.max(days, 90) * 86400000).toISOString();
+  const [allEvents, allOutboundClicks] = await Promise.all([getRecentSiteEvents(50000, since), getRecentOutboundClicks(50000, since)]);
+  const rangeStart = new Date(Date.now() - days * 86400000).toISOString();
+  const events = allEvents.filter((event) => event.created_at >= rangeStart);
+  const outboundClicks = allOutboundClicks.filter((click) => click.created_at >= rangeStart);
 
   const sessions = unique(events.map((event) => event.session_id));
   const visitors = unique(events.map((event) => event.anonymous_user_id));
@@ -139,10 +201,7 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
   const productViewSessions = sessionsWith(events, (event) => event.event_type === "product_view");
   const searchSessions = sessionsWith(events, (event) => event.event_type === "search");
   const outboundSessions = new Set(outboundClicks.map((click) => click.session_id).filter(Boolean)).size;
-  const engagedSessions = new Set([
-    ...events.filter((event) => ["search", "filter_applied", "product_view"].includes(event.event_type)).map((event) => event.session_id).filter(Boolean),
-    ...outboundClicks.map((click) => click.session_id).filter(Boolean),
-  ]).size;
+  const engagedSessions = new Set([...events.filter((event) => ["search", "filter_applied", "product_view"].includes(event.event_type)).map((event) => event.session_id).filter(Boolean), ...outboundClicks.map((click) => click.session_id).filter(Boolean)]).size;
 
   const topSources = topCounts(events.filter((event) => event.event_type === "page_view").map(sourceLabel), 12);
   const topSearches = topCounts(searches.map((event) => event.query?.toLowerCase().trim()), 12);
@@ -155,29 +214,44 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
   const filters = filterDemand(events);
   const products = productPerformance(events, outboundClicks);
   const brands = brandPerformance(events, outboundClicks);
+  const retention = retentionSummary(allEvents);
+  const searchGaps = searchOpportunities(events);
+  const weakDiscovery = products.filter((row) => row.impressions >= 10 && row.clicks / row.impressions < 0.05).slice(0, 15);
+  const weakConversion = products.filter((row) => row.views >= 3 && row.outbound === 0).sort((a, b) => b.views - a.views).slice(0, 15);
+  const technicalEvents = events.filter((event) => ["javascript_error", "unhandled_rejection", "broken_image"].includes(event.event_type));
+  const performanceEvents = events.filter((event) => event.event_type === "page_performance");
+  const averageLoad = performanceEvents.length ? Math.round(performanceEvents.reduce((sum, event) => sum + (metadataNumber(event, "loadMs") ?? 0), 0) / performanceEvents.length) : 0;
+  const slowPages = performanceEvents.filter((event) => (metadataNumber(event, "loadMs") ?? 0) >= 3000).length;
   const trend = dailyTrend(events, outboundClicks, Math.min(days, 30));
   const maxTrend = Math.max(1, ...trend.map(([, row]) => row.sessions.size));
 
   return <div className={styles.shell}>
     <AdminNav active="/admin/analytics" />
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 16, flexWrap: "wrap" }}>
-      <div><h1 className={styles.title}>Analytics</h1><p className={styles.subtitle}>Discovery, engagement, search demand, merchandising performance, and traffic sent to brands.</p></div>
+      <div><h1 className={styles.title}>Analytics</h1><p className={styles.subtitle}>Discovery, retention, inventory demand, technical health, and traffic sent to brands.</p></div>
       <form><label className={styles.rowMeta}>Date range <select name="days" defaultValue={String(days)} style={{ marginLeft: 8, padding: "8px 10px" }}><option value="1">Today</option><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option></select></label><button className={styles.buttonSecondary} style={{ marginLeft: 8, height: 34 }} type="submit">Apply</button></form>
     </div>
+    <div style={{ marginTop: 14 }}><AnalyticsControls days={days} /></div>
 
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12, margin: "24px 0" }}>
       <Metric label="unique visitors" value={visitors.toLocaleString()} />
       <Metric label="sessions" value={sessions.toLocaleString()} />
       <Metric label="engaged sessions" value={engagedSessions.toLocaleString()} note={percent(engagedSessions, sessions)} />
+      <Metric label="returning visitors" value={retention.returning.toLocaleString()} note={percent(retention.returning, retention.total)} />
       <Metric label="product impressions" value={impressions.toLocaleString()} />
       <Metric label="product CTR" value={percent(productClicks, impressions)} />
-      <Metric label="product views" value={productViews.toLocaleString()} />
       <Metric label="outbound clicks" value={outboundClicks.length.toLocaleString()} note={`${percent(outboundSessions, sessions)} of sessions`} />
     </div>
+
+    <div className={styles.section}><div className={styles.sectionHead}><h2>Retention</h2></div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}><Metric label="returning visitors" value={retention.returning} note={percent(retention.returning, retention.total)} /><Metric label="returned after 1+ day" value={retention.day1} note={percent(retention.day1, retention.total)} /><Metric label="returned after 7+ days" value={retention.day7} note={percent(retention.day7, retention.total)} /><Metric label="returned after 30+ days" value={retention.day30} note={percent(retention.day30, retention.total)} /></div>{retention.cohorts.length ? <table className={styles.table} style={{ marginTop: 16 }}><thead><tr><th>First visit</th><th>Visitors</th><th>Returned</th><th>Return rate</th></tr></thead><tbody>{retention.cohorts.map(([date, row]) => <tr key={date}><td>{date}</td><td>{row.visitors}</td><td>{row.returned}</td><td>{percent(row.returned, row.visitors)}</td></tr>)}</tbody></table> : null}</div>
 
     <div className={styles.section}><div className={styles.sectionHead}><h2>Discovery → brand funnel</h2></div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}><Metric label="sessions" value={sessions} /><Metric label="searched" value={searchSessions} note={percent(searchSessions, sessions)} /><Metric label="saw products" value={impressions} /><Metric label="clicked a product" value={productClicks} note={percent(productClicks, impressions)} /><Metric label="viewed a product" value={productViewSessions} note={percent(productViewSessions, sessions)} /><Metric label="clicked to a brand" value={outboundSessions} note={percent(outboundSessions, sessions)} /></div></div>
 
     <div className={styles.section}><div className={styles.sectionHead}><h2>Daily sessions</h2></div><div style={{ display: "flex", alignItems: "end", gap: 5, minHeight: 150, overflowX: "auto", paddingTop: 12 }}>{trend.map(([date, row]) => <div key={date} title={`${date}: ${row.sessions.size} sessions, ${row.productViews} product views, ${row.outbound} outbound clicks`} style={{ minWidth: 18, flex: 1, maxWidth: 42, display: "flex", flexDirection: "column", justifyContent: "end", gap: 4 }}><div style={{ height: Math.max(2, (row.sessions.size / maxTrend) * 120), background: "#101010" }} /><span style={{ fontSize: 8, writingMode: "vertical-rl", color: "rgba(16,16,16,.55)" }}>{date.slice(5)}</span></div>)}</div></div>
+
+    <div className={styles.section}><div className={styles.sectionHead}><h2>Inventory opportunities</h2></div><div style={{ overflowX: "auto" }}><table className={styles.table}><thead><tr><th>Search</th><th>Searches</th><th>Zero results</th><th>Average results</th><th>Opportunity</th></tr></thead><tbody>{searchGaps.map((row) => <tr key={row.query}><td>{row.query}</td><td>{row.searches}</td><td>{row.zero}</td><td>{row.averageResults.toFixed(1)}</td><td>{row.zero ? "Missing inventory" : "Low selection"}</td></tr>)}</tbody></table></div></div>
+
+    <div className={styles.section}><div className={styles.sectionHead}><h2>Merchandising alerts</h2></div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 16 }}><div><h3>Seen but rarely clicked</h3>{weakDiscovery.length ? <table className={styles.table}><thead><tr><th>Product</th><th>Impressions</th><th>CTR</th></tr></thead><tbody>{weakDiscovery.map((row) => <tr key={row.slug}><td>{row.title}</td><td>{row.impressions}</td><td>{percent(row.clicks, row.impressions)}</td></tr>)}</tbody></table> : <p className={styles.rowMeta}>No high-impression weak-click products yet.</p>}</div><div><h3>Viewed but no brand click</h3>{weakConversion.length ? <table className={styles.table}><thead><tr><th>Product</th><th>Views</th><th>Outbound</th></tr></thead><tbody>{weakConversion.map((row) => <tr key={row.slug}><td>{row.title}</td><td>{row.views}</td><td>{row.outbound}</td></tr>)}</tbody></table> : <p className={styles.rowMeta}>No conversion alerts yet.</p>}</div></div></div>
 
     <div className={styles.section}><div className={styles.sectionHead}><h2>Product performance</h2></div>{products.length ? <div style={{ overflowX: "auto" }}><table className={styles.table}><thead><tr><th>Product</th><th>Brand</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Views</th><th>Outbound</th><th>View → outbound</th></tr></thead><tbody>{products.map((row) => <tr key={row.slug}><td>{row.title}</td><td>{row.brand}</td><td>{row.impressions}</td><td>{row.clicks}</td><td>{percent(row.clicks, row.impressions)}</td><td>{row.views}</td><td>{row.outbound}</td><td>{percent(row.outbound, row.views)}</td></tr>)}</tbody></table></div> : <p className={styles.rowMeta}>Product scorecards begin filling after impression tracking is deployed.</p>}</div>
 
@@ -194,6 +268,8 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
       <CountTable title="Outbound clicks by brand" rows={topBrands} first="Brand" second="Clicks" />
       <CountTable title="Component performance" rows={topComponents} first="Component" second="Interactions" />
     </div>
+
+    <div className={styles.section}><div className={styles.sectionHead}><h2>Technical health</h2></div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}><Metric label="JS/resource errors" value={technicalEvents.length} /><Metric label="average page load" value={averageLoad ? `${averageLoad} ms` : "—"} /><Metric label="slow page loads" value={slowPages} note="3 seconds or more" /><Metric label="performance samples" value={performanceEvents.length} /></div>{technicalEvents.length ? <table className={styles.table}><thead><tr><th>Type</th><th>Page</th><th>Component</th><th>When</th></tr></thead><tbody>{technicalEvents.slice(0, 20).map((event, index) => <tr key={`${event.created_at}-${index}`}><td>{event.event_type}</td><td>{event.path}</td><td>{event.source_component}</td><td>{new Date(event.created_at).toLocaleString()}</td></tr>)}</tbody></table> : <p className={styles.rowMeta}>No browser or broken-image errors recorded in this range.</p>}</div>
 
     <div className={styles.section}><div className={styles.sectionHead}><h2>Tracking health</h2></div><table className={styles.table}><tbody><tr><td>Latest event</td><td>{events[0] ? new Date(events[0].created_at).toLocaleString() : "No events"}</td></tr><tr><td>Events in range</td><td>{events.length.toLocaleString()}</td></tr><tr><td>Events missing session ID</td><td>{events.filter((event) => !event.session_id).length.toLocaleString()}</td></tr><tr><td>Zero-result search rate</td><td>{percent(zeroResultSearches, searches.length)}</td></tr><tr><td>Impression → product click rate</td><td>{percent(productClicks, impressions)}</td></tr><tr><td>Product view → outbound rate</td><td>{percent(outboundClicks.length, productViews)}</td></tr></tbody></table></div>
   </div>;
