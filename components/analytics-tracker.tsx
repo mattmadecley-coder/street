@@ -122,13 +122,28 @@ export function AnalyticsTracker() {
     if (current === lastPath.current || pathname.startsWith("/admin")) return;
     lastPath.current = current;
     void trackStreetEvent("page_view");
+
+    const product = document.querySelector<HTMLElement>("[data-analytics-product-view]");
+    if (product) {
+      const details = {
+        productId: product.dataset.productId,
+        brandSlug: product.dataset.brandSlug,
+        streetGroup: product.dataset.streetGroup,
+        streetCategory: product.dataset.streetCategory,
+        price: product.dataset.price ? Number(product.dataset.price) : undefined,
+        sourceComponent: "product_page",
+      };
+      void trackStreetEvent("product_view", details);
+      if (product.dataset.searchQuery) void trackStreetEvent("search_click", { ...details, query: product.dataset.searchQuery, sourceComponent: "search_results" });
+    }
   }, [pathname, searchParams]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-analytics-event]") : null;
       if (!target) return;
-      const metadata = target.dataset.analyticsMetadata ? JSON.parse(target.dataset.analyticsMetadata) : {};
+      let metadata: Record<string, unknown> = {};
+      try { metadata = target.dataset.analyticsMetadata ? JSON.parse(target.dataset.analyticsMetadata) : {}; } catch {}
       void trackStreetEvent(target.dataset.analyticsEvent ?? "click", {
         sourceComponent: target.dataset.analyticsComponent,
         position: target.dataset.analyticsPosition ? Number(target.dataset.analyticsPosition) : undefined,
