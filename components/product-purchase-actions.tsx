@@ -43,30 +43,18 @@ export function ProductPurchaseActions({ product }: { product: {
       variantId: selectedVariant?.externalId,
       variantLabel: selectedVariant?.label,
     });
-    void trackStreetEvent("add_to_cart", {
-      productId: product.id,
-      brandSlug: product.brandSlug,
-      price: selectedVariant?.price ?? product.price,
-      sourceComponent: "product_page",
-      metadata: { variantId: selectedVariant?.externalId ?? null, variantLabel: selectedVariant?.label ?? null },
-    });
+    void trackStreetEvent("add_to_cart", { productId: product.id, brandSlug: product.brandSlug, price: selectedVariant?.price ?? product.price, sourceComponent: "product_page", metadata: { variantId: selectedVariant?.externalId ?? null, variantLabel: selectedVariant?.label ?? null } });
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2600);
   }
 
   const outboundHref = `/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}&source=product_page`;
 
-  return (
-    <>
-      <div className="purchase-actions">
-        <button type="button" className="cta cta-secondary" onClick={addToCart} disabled={product.stockStatus === "sold_out" || Boolean(selectedUnavailable)}>
-          <span>{added ? "Added to cart" : "Add to cart"}</span><span>{added ? "✓" : "+"}</span>
-        </button>
-        <a className="cta" data-mascot-target="shop-button" data-analytics-event="outbound_click_intent" data-analytics-component="product_page" data-analytics-product={product.id} data-analytics-brand={product.brandSlug} href={outboundHref} target="_blank" rel="noreferrer">
-          <span>Buy now</span><span>↗</span>
-        </a>
-      </div>
-      {added ? <div className="cart-toast" role="status" aria-live="polite"><strong>Added to cart</strong><span>{product.title}{selectedVariant?.label ? ` · ${selectedVariant.label}` : ""}</span><a href="/cart">View cart</a></div> : null}
-    </>
-  );
+  return <>
+    <div className="purchase-actions">
+      <a className="cta" data-mascot-target="shop-button" data-analytics-event="outbound_click_intent" data-analytics-component="product_page" data-analytics-product={product.id} data-analytics-brand={product.brandSlug} href={outboundHref} target="_blank" rel="noreferrer" aria-label={`Shop ${product.title} on ${product.brandName}`}><span>Shop on {product.brandName}</span><span>↗</span></a>
+      <button type="button" className="cta cta-secondary" onClick={addToCart} disabled={product.stockStatus === "sold_out" || Boolean(selectedUnavailable)}><span>{added ? "Saved to Street bag" : "Save to Street bag"}</span><span>{added ? "✓" : "+"}</span></button>
+    </div>
+    {added ? <div className="cart-toast" role="status" aria-live="polite"><strong>Saved to Street bag</strong><span>{product.title}{selectedVariant?.label ? ` · ${selectedVariant.label}` : ""}</span><a href="/cart">View bag</a></div> : null}
+  </>;
 }
