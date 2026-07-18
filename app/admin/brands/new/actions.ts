@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createBrandDraft, findBrandByDomain, syncSingleBrand, setBrandCatalogEnabled, getBrandBySlug } from "@/lib/catalog-store";
 import { recoverQueuedClassifications } from "@/lib/classification-recovery";
+import { triggerClassificationDrain } from "@/lib/classification-trigger";
 import { findBrandLogo } from "@/lib/brand-logo-finder";
 import { uploadSiteAsset } from "@/lib/supabase-storage";
 import { supabaseRest, CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
@@ -101,7 +102,7 @@ export async function skipLogo(formData: FormData) {
   redirect(`/admin/brands/new?step=import&slug=${encodeURIComponent(slug)}`);
 }
 
-/** Import the catalog, then classify concurrently with retries and broad fallback. */
+/** Import the catalog, then immediately drain that brand's classification queue. */
 export async function runImport(formData: FormData) {
   const slug = String(formData.get("slug") ?? "");
   const brand = await getBrandBySlug(slug);
@@ -117,6 +118,12 @@ export async function runImport(formData: FormData) {
     if (!result.ok) return;
     revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
 
+    // Preferred path: hand classification to the dedicated drain endpoint.
+    // It chains fresh invocations until this brand has no pending/error items.
+    const triggered = await triggerClassificationDrain(slug);
+    if (triggered) return;
+
+    // Local-development fallback when no public site origin is configured.
     const deadline = Date.now() + 42_000;
     while (Date.now() < deadline) {
       const batch = await recoverQueuedClassifications(25, slug);
