@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useCart } from "@/components/cart-context";
 import { useProductVariantFocus } from "@/components/product-variant-context";
+import { trackStreetEvent } from "@/components/analytics-tracker";
 
 export function ProductPurchaseActions({ product }: { product: {
   id: string;
@@ -24,6 +25,7 @@ export function ProductPurchaseActions({ product }: { product: {
 
   function addToCart() {
     if (requiresVariant && !selectedVariant) {
+      void trackStreetEvent("add_to_cart_blocked", { productId: product.id, brandSlug: product.brandSlug, sourceComponent: "product_page", metadata: { reason: "variant_required" } });
       window.dispatchEvent(new CustomEvent("street:cart-needs-variant"));
       document.getElementById("product-option-select")?.focus();
       return;
@@ -41,9 +43,18 @@ export function ProductPurchaseActions({ product }: { product: {
       variantId: selectedVariant?.externalId,
       variantLabel: selectedVariant?.label,
     });
+    void trackStreetEvent("add_to_cart", {
+      productId: product.id,
+      brandSlug: product.brandSlug,
+      price: selectedVariant?.price ?? product.price,
+      sourceComponent: "product_page",
+      metadata: { variantId: selectedVariant?.externalId ?? null, variantLabel: selectedVariant?.label ?? null },
+    });
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2600);
   }
+
+  const outboundHref = `/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}&source=product_page`;
 
   return (
     <>
@@ -51,7 +62,7 @@ export function ProductPurchaseActions({ product }: { product: {
         <button type="button" className="cta cta-secondary" onClick={addToCart} disabled={product.stockStatus === "sold_out" || Boolean(selectedUnavailable)}>
           <span>{added ? "Added to cart" : "Add to cart"}</span><span>{added ? "✓" : "+"}</span>
         </button>
-        <a className="cta" data-mascot-target="shop-button" href={`/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}`} target="_blank" rel="noreferrer">
+        <a className="cta" data-mascot-target="shop-button" data-analytics-event="outbound_click_intent" data-analytics-component="product_page" data-analytics-product={product.id} data-analytics-brand={product.brandSlug} href={outboundHref} target="_blank" rel="noreferrer">
           <span>Buy now</span><span>↗</span>
         </a>
       </div>
