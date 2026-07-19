@@ -20,16 +20,16 @@ export async function Header() {
   return (
     <header className="header">
       <Link href="/" className="wordmark" aria-label="Street home">STREET</Link>
-      <nav className="nav desktop-nav">
+      <nav className="nav desktop-nav" aria-label="Primary navigation">
         <Link href="/catalog">Shop all</Link>
         <CategoryMenu summary={categorySummary} />
         <Link href="/catalog?sort=newest">New in</Link>
         <Link href="/brands">Brands</Link>
-        <CartNavLink />
       </nav>
       <div className="header-actions">
         <div className="mobile-cart-link"><CartNavLink /></div>
         <SearchToggle />
+        <div className="desktop-cart-link"><CartNavLink /></div>
         <MobileNavigation categorySummary={categorySummary} />
       </div>
     </header>
