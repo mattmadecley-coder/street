@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import "./commerce.css";
 import "./mobile.css";
+import "./catalog-polish.css";
 import { SiteMascot } from "@/components/mascot/site-mascot";
 import { CartProvider } from "@/components/cart-context";
 import { AnalyticsTracker } from "@/components/analytics-tracker";
@@ -16,8 +17,14 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: { default: title, template: "%s · Street" },
   description,
-  openGraph: { type: "website", siteName: "Street", title, description },
-  twitter: { card: "summary_large_image", title, description },
+  openGraph: {
+    type: "website",
+    siteName: "Street",
+    title,
+    description,
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Street — independent streetwear discovery" }],
+  },
+  twitter: { card: "summary_large_image", title, description, images: ["/opengraph-image"] },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
