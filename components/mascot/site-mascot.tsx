@@ -8,7 +8,15 @@ type ActivePopup = Required<Pick<CharacterPopupRequest, "message" | "position" |
 type VariantEvent = CustomEvent<{ label?: string; available?: boolean }>;
 
 const DEFAULT_IMAGE = "/public/images/ChatGPT%20Image%20Jul%2018%2C%202026%2C%2008_45_48%20PM.png";
-const AUTO_MESSAGES = ["You’ve got good taste.", "This one would look good on you.", "Still thinking about it?"];
+const AUTO_MESSAGES = [
+  "You’ve got good taste.",
+  "This one would look good on you.",
+  "Still thinking about it?",
+  "Don’t forget to pick your size.",
+];
+
+// Temporary preview cadence. Reduce this before merging once the motion and sizing are approved.
+const TEST_AUTO_DELAYS = [2_500, 11_000, 20_000];
 
 export function SiteMascot() {
   const pathname = usePathname();
@@ -43,7 +51,7 @@ export function SiteMascot() {
         setActive(null);
         const queued = queue.current.shift();
         if (queued) window.setTimeout(() => display(queued), 180);
-      }, 450);
+      }, 560);
     }, next.duration);
   }, [hidden]);
 
@@ -63,16 +71,27 @@ export function SiteMascot() {
     if (clearTimer.current) clearTimeout(clearTimer.current);
     if (hidden || !pathname?.startsWith("/products/")) return;
 
-    const sessionKey = `street:character-auto:${pathname}`;
-    const autoTimer = sessionStorage.getItem(sessionKey) === "1" ? null : setTimeout(() => {
-      sessionStorage.setItem(sessionKey, "1");
-      display({ position: "cart", message: AUTO_MESSAGES[Math.floor(Math.random() * AUTO_MESSAGES.length)], duration: 4500 });
-    }, 7500);
+    const testTimers = TEST_AUTO_DELAYS.map((delay, index) => window.setTimeout(() => {
+      display({
+        position: "cart",
+        message: AUTO_MESSAGES[index % AUTO_MESSAGES.length],
+        duration: 3600,
+      });
+    }, delay));
 
     function onVariant(event: Event) {
       const detail = (event as VariantEvent).detail ?? {};
-      display({ position: "cart", message: detail.available === false ? "That option just sold out." : detail.label ? `${detail.label} works. Your size is still available.` : "Your size is still available.", duration: 4000 });
+      display({
+        position: "cart",
+        message: detail.available === false
+          ? "That option just sold out."
+          : detail.label
+            ? `${detail.label} works. Your size is still available.`
+            : "Your size is still available.",
+        duration: 4000,
+      });
     }
+
     function onAdded() {
       display({ position: "right", message: "Added to your StreetBag.", duration: 3600 });
     }
@@ -80,7 +99,7 @@ export function SiteMascot() {
     window.addEventListener("street:variant-selected", onVariant);
     window.addEventListener("street:cart-added", onAdded);
     return () => {
-      if (autoTimer) clearTimeout(autoTimer);
+      testTimers.forEach(window.clearTimeout);
       window.removeEventListener("street:variant-selected", onVariant);
       window.removeEventListener("street:cart-added", onAdded);
     };
