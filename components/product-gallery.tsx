@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import styles from "./product-gallery.module.css";
+import { CatalogImage } from "@/components/catalog-image";
 import { useProductVariantFocus } from "@/components/product-variant-context";
 import { MEDIA_BLUR_DATA_URL } from "@/lib/media-placeholders";
+
+function GalleryPlaceholder() {
+  return <div className={styles.placeholder}><span>Image unavailable</span></div>;
+}
 
 export function ProductGallery({ images, title }: { images: string[]; title: string }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -49,13 +53,13 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
   }
 
   return <section className={styles.gallery} aria-label={`${title} image gallery`}>
-    {galleryImages.length > 1 ? <div className={styles.thumbnails} aria-label="Product image thumbnails">{galleryImages.map((image, index) => <button key={`${image}-${index}`} type="button" className={index === active ? styles.thumbnailActive : styles.thumbnail} onClick={() => scrollToIndex(index)} aria-label={`View image ${index + 1}`}><span>{image ? <Image src={image} alt="" fill sizes="72px" style={{ objectFit: "contain" }} /> : null}</span></button>)}</div> : null}
+    {galleryImages.length > 1 ? <div className={styles.thumbnails} aria-label="Product image thumbnails">{galleryImages.map((image, index) => <button key={`${image}-${index}`} type="button" className={index === active ? styles.thumbnailActive : styles.thumbnail} onClick={() => scrollToIndex(index)} aria-label={`View image ${index + 1}`}><span>{image ? <CatalogImage src={image} widthHint={180} fallback={null} alt="" fill sizes="72px" style={{ objectFit: "contain" }} /> : null}</span></button>)}</div> : null}
     <div className={styles.track} ref={trackRef}>
       {galleryImages.map((image, index) => <div className={styles.slide} key={`${image}-${index}`} ref={(el) => { slideRefs.current[index] = el; }}>
-        {image ? <button type="button" className={styles.imageButton} onClick={() => { setActive(index); setFullscreen(true); }} aria-label={`Enlarge image ${index + 1} of ${galleryImages.length}`}><Image src={image} alt={`${title} — image ${index + 1} of ${galleryImages.length}`} fill preload={index === 0} fetchPriority={index === 0 ? "high" : "low"} loading={index === 0 ? undefined : "lazy"} quality={index === 0 ? 82 : 76} sizes="(max-width: 840px) 100vw, 58vw" placeholder="blur" blurDataURL={MEDIA_BLUR_DATA_URL} style={{ objectFit: "contain" }} /></button> : <div className={styles.placeholder} />}
+        {image ? <button type="button" className={styles.imageButton} onClick={() => { setActive(index); setFullscreen(true); }} aria-label={`Enlarge image ${index + 1} of ${galleryImages.length}`}><CatalogImage src={image} widthHint={1600} fallback={<GalleryPlaceholder />} alt={`${title} — image ${index + 1} of ${galleryImages.length}`} fill preload={index === 0} fetchPriority={index === 0 ? "high" : "low"} loading={index === 0 ? undefined : "lazy"} sizes="(max-width: 840px) 100vw, 58vw" placeholder="blur" blurDataURL={MEDIA_BLUR_DATA_URL} style={{ objectFit: "contain" }} /></button> : <GalleryPlaceholder />}
       </div>)}
     </div>
     <div className={styles.mobileProgress}><span>{active + 1} / {galleryImages.length}</span>{galleryImages.length > 1 ? <div className={styles.dots}>{galleryImages.map((_, index) => <button key={index} type="button" className={index === active ? styles.dotActive : styles.dot} aria-label={`Go to image ${index + 1}`} aria-current={index === active} onClick={() => scrollToIndex(index)} />)}</div> : null}</div>
-    {fullscreen ? <div className={styles.fullscreen} role="dialog" aria-modal="true" aria-label={`${title} enlarged image`}><button type="button" className={styles.fullscreenClose} onClick={() => setFullscreen(false)} aria-label="Close enlarged image">Close ×</button>{galleryImages[active] ? <Image src={galleryImages[active]} alt={`${title} — enlarged image ${active + 1}`} fill sizes="100vw" quality={90} style={{ objectFit: "contain" }} /> : null}<button type="button" className={styles.fullscreenPrev} onClick={() => setActive((active - 1 + galleryImages.length) % galleryImages.length)} aria-label="Previous image">←</button><button type="button" className={styles.fullscreenNext} onClick={() => setActive((active + 1) % galleryImages.length)} aria-label="Next image">→</button></div> : null}
+    {fullscreen ? <div className={styles.fullscreen} role="dialog" aria-modal="true" aria-label={`${title} enlarged image`}><button type="button" className={styles.fullscreenClose} onClick={() => setFullscreen(false)} aria-label="Close enlarged image">Close ×</button>{galleryImages[active] ? <CatalogImage src={galleryImages[active]} widthHint={2200} fallback={<GalleryPlaceholder />} alt={`${title} — enlarged image ${active + 1}`} fill sizes="100vw" style={{ objectFit: "contain" }} /> : null}<button type="button" className={styles.fullscreenPrev} onClick={() => setActive((active - 1 + galleryImages.length) % galleryImages.length)} aria-label="Previous image">←</button><button type="button" className={styles.fullscreenNext} onClick={() => setActive((active + 1) % galleryImages.length)} aria-label="Next image">→</button></div> : null}
   </section>;
 }

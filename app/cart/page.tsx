@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo } from "react";
+import { CatalogImage } from "@/components/catalog-image";
 import { useCart, type CartItem } from "@/components/cart-context";
 
 type BrandGroup = { brandName: string; brandSlug: string; items: CartItem[]; subtotal: number; checkoutUrl: string; transfersCart: boolean };
@@ -12,6 +12,10 @@ function brandCheckout(items: CartItem[]) {
   const variants = items.map((item) => ({ id: item.variantId?.match(/\d+$/)?.[0], quantity: item.quantity }));
   const transfersCart = variants.every((variant) => Boolean(variant.id));
   return { checkoutUrl: transfersCart ? `${origin}/cart/${variants.map((variant) => `${variant.id}:${variant.quantity}`).join(",")}` : origin, transfersCart };
+}
+
+function CartImageFallback() {
+  return <span aria-hidden="true" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "rgba(16,16,16,.42)", fontSize: 9, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase" }}>Image unavailable</span>;
 }
 
 export default function CartPage() {
@@ -38,7 +42,7 @@ export default function CartPage() {
                 <div className="cart-brand-head"><Link href={`/brands/${group.brandSlug}`}>{group.brandName}</Link><span>${group.subtotal.toFixed(2)}</span></div>
                 {group.items.map((item) => (
                   <article className="cart-item" key={item.key}>
-                    <Link href={`/products/${item.slug}`} className="cart-image">{item.image ? <Image src={item.image} alt={item.title} fill sizes="140px" style={{ objectFit: "contain" }} /> : null}</Link>
+                    <Link href={`/products/${item.slug}`} className="cart-image">{item.image ? <CatalogImage src={item.image} widthHint={320} fallback={<CartImageFallback />} alt={item.title} fill sizes="140px" style={{ objectFit: "contain" }} /> : <CartImageFallback />}</Link>
                     <div className="cart-copy"><p className="brand"><Link href={`/brands/${item.brandSlug}`}>{item.brandName}</Link></p><h2><Link href={`/products/${item.slug}`}>{item.title}</Link></h2>{item.variantLabel ? <p className="cart-variant">{item.variantLabel}</p> : null}<p>${item.price.toFixed(2)}</p><button type="button" className="text-button" onClick={() => removeItem(item.key)}>Remove</button></div>
                     <div className="cart-quantity"><button type="button" onClick={() => setQuantity(item.key, item.quantity - 1)} aria-label="Decrease quantity">−</button><span>{item.quantity}</span><button type="button" onClick={() => setQuantity(item.key, item.quantity + 1)} aria-label="Increase quantity">+</button></div>
                     <a className="cart-buy" href={`/api/out?to=${encodeURIComponent(item.sourceUrl)}&brand=${encodeURIComponent(item.brandSlug)}&product=${encodeURIComponent(item.slug)}`} target="_blank" rel="noreferrer">Buy now ↗</a>

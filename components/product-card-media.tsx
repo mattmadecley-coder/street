@@ -1,8 +1,30 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { CatalogImage } from "@/components/catalog-image";
 import { MEDIA_BLUR_DATA_URL } from "@/lib/media-placeholders";
+
+function UnavailableProductImage() {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "grid",
+        placeItems: "center",
+        background: "#ebe9e3",
+        color: "rgba(16,16,16,.46)",
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: ".1em",
+        textTransform: "uppercase",
+      }}
+    >
+      Image unavailable
+    </div>
+  );
+}
 
 export function ProductCardMedia({
   primaryImage,
@@ -58,14 +80,16 @@ export function ProductCardMedia({
       onPointerEnter={() => setLoadAlternate(true)}
       onFocusCapture={() => setLoadAlternate(true)}
     >
-      <Image
+      <CatalogImage
         src={primaryImage}
+        fallbackSrcs={secondImage ? [secondImage] : undefined}
+        widthHint={720}
+        fallback={<UnavailableProductImage />}
         alt={title}
         fill
         preload={priority}
         fetchPriority={priority ? "high" : "auto"}
         loading={priority ? undefined : "lazy"}
-        quality={75}
         sizes="(max-width: 840px) 50vw, (max-width: 1280px) 33vw, 25vw"
         placeholder="blur"
         blurDataURL={MEDIA_BLUR_DATA_URL}
@@ -74,14 +98,15 @@ export function ProductCardMedia({
         onLoad={() => setPrimaryLoaded(true)}
       />
       {secondImage && loadAlternate ? (
-        <Image
+        <CatalogImage
           src={secondImage}
+          widthHint={720}
+          fallback={null}
           alt=""
           aria-hidden
           fill
           loading="eager"
           fetchPriority="low"
-          quality={70}
           sizes="(max-width: 840px) 50vw, (max-width: 1280px) 33vw, 25vw"
           placeholder="blur"
           blurDataURL={MEDIA_BLUR_DATA_URL}
