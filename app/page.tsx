@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import styles from "./home.module.css";
 import { Header, Footer, ProductCard } from "@/components/storefront";
+import { CatalogImage } from "@/components/catalog-image";
 import { HeroMedia } from "@/components/hero-media";
 import { getCatalogPage } from "@/lib/catalog-page";
 import { getCategoryDiverseProductShelf } from "@/lib/homepage-product-shelves";
@@ -43,18 +43,18 @@ export default async function HomePage() {
       <div className="shell">
         <section className={`hero ${styles.heroVideo}`}>
           <HeroMedia videoUrl={heroVideoUrl} imageUrl={heroImageUrl} className={styles.heroMedia} />
-          {featuredBrand ? <Link href={`/brands/${featuredBrand.slug}`} className={styles.brandSpotlight} aria-label={`View ${featuredBrand.name}`}><span className={styles.brandSpotlightLabel}>{settings.featured_brand_cta_label || "Check out their collections"}</span>{featuredBrand.logoUrl ? <Image src={featuredBrand.logoUrl} alt={featuredBrand.name} width={300} height={76} sizes="(max-width: 840px) 150px, 118px" quality={75} className={styles.brandSpotlightLogo} /> : <strong>{featuredBrand.name}</strong>}</Link> : null}
+          {featuredBrand ? <Link href={`/brands/${featuredBrand.slug}`} className={styles.brandSpotlight} aria-label={`View ${featuredBrand.name}`}><span className={styles.brandSpotlightLabel}>{settings.featured_brand_cta_label || "Check out their collections"}</span>{featuredBrand.logoUrl ? <CatalogImage src={featuredBrand.logoUrl} widthHint={360} fallback={<strong>{featuredBrand.name}</strong>} alt={featuredBrand.name} width={300} height={76} sizes="(max-width: 840px) 150px, 118px" className={styles.brandSpotlightLogo} /> : <strong>{featuredBrand.name}</strong>}</Link> : null}
         </section>
         <Link href="/catalog" className="shop-all"><span>Shop all</span><span>→</span></Link>
 
         {featuredBrand && featured.length ? (
           <section className="section">
             <div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Featured brand</p><h2 className="section-title">{featuredBrand.name}</h2></div><span className="link-small">Swipe to explore →</span></div>
-            <div className={styles.featuredRail}>{featured.map((product) => <div className={styles.featuredRailItem} key={product.id}><ProductCard product={product} /></div>)}<Link href={`/brands/${featuredBrand.slug}`} className={styles.viewBrandCard}><span>Explore the full collection</span>{featuredBrand.logoUrl ? <Image src={featuredBrand.logoUrl} alt={featuredBrand.name} width={260} height={90} /> : <strong>{featuredBrand.name}</strong>}<em>View brand →</em></Link></div>
+            <div className={styles.featuredRail}>{featured.map((product) => <div className={styles.featuredRailItem} key={product.id}><ProductCard product={product} /></div>)}<Link href={`/brands/${featuredBrand.slug}`} className={styles.viewBrandCard}><span>Explore the full collection</span>{featuredBrand.logoUrl ? <CatalogImage src={featuredBrand.logoUrl} widthHint={360} fallback={<strong>{featuredBrand.name}</strong>} alt={featuredBrand.name} width={260} height={90} /> : <strong>{featuredBrand.name}</strong>}<em>View brand →</em></Link></div>
           </section>
         ) : null}
 
-        {categoryShowcase.length ? <section className="section"><div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Browse</p><h2 className="section-title">Shop by category</h2></div></div><div className={styles.categoryGrid}>{categoryShowcase.map((item) => <Link key={`${item.group}-${item.category}`} href={`/catalog?group=${encodeURIComponent(item.group)}&category=${encodeURIComponent(item.category)}`} className={styles.categoryTile}>{item.imageUrl ? <Image src={item.imageUrl} alt={item.category} fill loading="lazy" fetchPriority="low" quality={72} sizes="(max-width: 840px) 50vw, 25vw" placeholder="blur" blurDataURL={MEDIA_BLUR_DATA_URL} /> : <div className={styles.categoryTileFallback} />}<span className={styles.categoryTileLabel}><strong>{item.category}</strong><em>{item.count} piece{item.count === 1 ? "" : "s"}</em></span></Link>)}</div></section> : null}
+        {categoryShowcase.length ? <section className="section"><div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Browse</p><h2 className="section-title">Shop by category</h2></div></div><div className={styles.categoryGrid}>{categoryShowcase.map((item) => <Link key={`${item.group}-${item.category}`} href={`/catalog?group=${encodeURIComponent(item.group)}&category=${encodeURIComponent(item.category)}`} className={styles.categoryTile}>{item.imageUrl ? <CatalogImage src={item.imageUrl} widthHint={900} fallback={<div className={styles.categoryTileFallback} />} alt={item.category} fill loading="lazy" fetchPriority="low" sizes="(max-width: 840px) 50vw, 25vw" placeholder="blur" blurDataURL={MEDIA_BLUR_DATA_URL} /> : <div className={styles.categoryTileFallback} />}<span className={styles.categoryTileLabel}><strong>{item.category}</strong><em>{item.count} piece{item.count === 1 ? "" : "s"}</em></span></Link>)}</div></section> : null}
 
         {collections.map((collection) => <section className="section" key={collection.slug}><div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Collection</p><h2 className="section-title">{collection.title}</h2></div><Link href={`/collections/${collection.slug}`} className="link-small">View collection</Link></div><div className="grid">{collection.products.slice(0, 8).map((product) => <ProductCard key={product.id} product={product} />)}</div></section>)}
 
@@ -63,7 +63,7 @@ export default async function HomePage() {
 
         {marqueeBrands.length ? <section className="section"><div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Independent labels</p><h2 className="section-title">Featured brands</h2></div><Link href="/brands" className="link-small">All brands</Link></div><div className={styles.brandMarqueeViewport}><div className={styles.brandMarqueeTrack} style={marqueeStyle}>{repeatedMarqueeBrands.map((brand, index) => {
           const isClone = index >= marqueeBrands.length;
-          return <Link key={`${brand.slug}-${index}`} href={`/brands/${brand.slug}`} className={`${styles.brandMarqueeItem}${isClone ? ` ${styles.brandMarqueeClone}` : ""}`} aria-hidden={isClone || undefined} tabIndex={isClone ? -1 : undefined}>{brand.logoUrl ? <Image src={brand.logoUrl} alt={isClone ? "" : brand.name} width={260} height={80} sizes="160px" quality={72} loading="lazy" /> : <strong>{brand.name}</strong>}</Link>;
+          return <Link key={`${brand.slug}-${index}`} href={`/brands/${brand.slug}`} className={`${styles.brandMarqueeItem}${isClone ? ` ${styles.brandMarqueeClone}` : ""}`} aria-hidden={isClone || undefined} tabIndex={isClone ? -1 : undefined}>{brand.logoUrl ? <CatalogImage src={brand.logoUrl} widthHint={360} fallback={<strong>{brand.name}</strong>} alt={isClone ? "" : brand.name} width={260} height={80} sizes="160px" loading="lazy" /> : <strong>{brand.name}</strong>}</Link>;
         })}</div></div></section> : null}
       </div>
       <section className="dark-section"><div className="dark-section-inner"><p className="eyebrow">Why Street</p><div><h2>Search product names, colors, fits, and styles across independent labels.</h2><p style={{ maxWidth: 520, margin: "26px 0 0", fontSize: 15, lineHeight: 1.55, color: "rgba(244,243,238,.65)" }}>When you find something, Street sends you straight to the brand website to buy it.</p></div></div></section>
