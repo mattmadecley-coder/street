@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Header, Footer, ProductCard, isRecentlyAdded } from "@/components/storefront";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductVariantProvider } from "@/components/product-variant-context";
 import { ProductDetailPanel } from "@/components/product-detail-panel";
-import { getCatalog, getProduct } from "@/lib/catalog";
+import { getProduct, type StreetProduct } from "@/lib/catalog";
+import { getRelatedProducts } from "@/lib/product-recommendations";
 import "./product-page.css";
 
 export const revalidate = 3600;
@@ -19,15 +21,20 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return { title, description, alternates: { canonical: `/products/${product.slug}` }, openGraph: { title, description, type: "website", images: product.primaryImage ? [{ url: product.primaryImage }] : undefined }, twitter: { card: "summary_large_image", title, description, images: product.primaryImage ? [product.primaryImage] : undefined } };
 }
 
+async function RelatedProducts({ product }: { product: StreetProduct }) {
+  const related = await getRelatedProducts(product, 8);
+  if (!related.length) return null;
+  return <section className="shell product-recommendations" aria-labelledby="related-products"><div className="section-head"><div><p className="eyebrow">Keep discovering</p><h2 id="related-products" className="section-title">{related.some((item) => item.brandSlug === product.brandSlug) ? `More from ${product.brandName}` : "You may also like"}</h2></div><Link className="link-small" href={`/brands/${product.brandSlug}`}>View brand</Link></div><div className="grid">{related.map((item, index) => <ProductCard key={item.id} product={item} position={index + 1} sourceComponent="product_recommendations" />)}</div></section>;
+}
+
 export default async function ProductPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ sq?: string }> }) {
   const { slug } = await params;
   const { sq } = await searchParams;
-  const [{ product, source }, catalog] = await Promise.all([getProduct(slug), getCatalog()]);
+  const { product, source } = await getProduct(slug);
   if (!product) notFound();
 
   const sourceMessage = source === "database" ? "Catalog details are refreshed directly from the brand." : source === "live" ? "Live details from the brand catalog." : "Confirm final details on the brand website.";
   const recentlyAdded = isRecentlyAdded(product.createdAt);
-  const related = catalog.products.filter((item) => item.slug !== product.slug && (item.brandSlug === product.brandSlug || item.streetCategory === product.streetCategory || item.category === product.category)).sort((a, b) => Number(b.brandSlug === product.brandSlug) - Number(a.brandSlug === product.brandSlug)).slice(0, 8);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -62,7 +69,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
         </div>
       </div>
     </ProductVariantProvider>
-    {related.length ? <section className="shell product-recommendations" aria-labelledby="related-products"><div className="section-head"><div><p className="eyebrow">Keep discovering</p><h2 id="related-products" className="section-title">{related.some((item) => item.brandSlug === product.brandSlug) ? `More from ${product.brandName}` : "You may also like"}</h2></div><Link className="link-small" href={`/brands/${product.brandSlug}`}>View brand</Link></div><div className="grid">{related.map((item, index) => <ProductCard key={item.id} product={item} position={index + 1} sourceComponent="product_recommendations" />)}</div></section> : null}
+    <Suspense fallback={null}><RelatedProducts product={product} /></Suspense>
     <Footer />
   </main>;
 }

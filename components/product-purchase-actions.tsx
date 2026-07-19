@@ -52,9 +52,9 @@ export function ProductPurchaseActions({ product }: { product: {
 
   return <>
     <div className="purchase-actions">
-      <a className="cta" data-mascot-target="shop-button" data-analytics-event="outbound_click_intent" data-analytics-component="product_page" data-analytics-product={product.id} data-analytics-brand={product.brandSlug} href={outboundHref} target="_blank" rel="noreferrer" aria-label={`Shop ${product.title} on ${product.brandName}`}><span>Shop on {product.brandName}</span><span>↗</span></a>
-      <button type="button" className="cta cta-secondary" onClick={addToCart} disabled={product.stockStatus === "sold_out" || Boolean(selectedUnavailable)}><span>{added ? "Saved to Street bag" : "Save to Street bag"}</span><span>{added ? "✓" : "+"}</span></button>
+      <a className="cta" data-mascot-target="shop-button" data-analytics-event="outbound_click_intent" data-analytics-component="product_page" data-analytics-product={product.id} data-analytics-brand={product.brandSlug} href={outboundHref} target="_blank" rel="noreferrer" aria-label={`Buy ${product.title} now`}><span>Buy Now</span><span>↗</span></a>
+      <button type="button" className="cta cta-secondary" onClick={addToCart} disabled={product.stockStatus === "sold_out" || Boolean(selectedUnavailable)}><span>{added ? "Added to StreetBag" : "Add to StreetBag"}</span><span>{added ? "✓" : "+"}</span></button>
     </div>
-    {added ? <div className="cart-toast" role="status" aria-live="polite"><strong>Saved to Street bag</strong><span>{product.title}{selectedVariant?.label ? ` · ${selectedVariant.label}` : ""}</span><a href="/cart">View bag</a></div> : null}
+    {added ? <div className="cart-toast" role="status" aria-live="polite"><strong>Added to StreetBag</strong><span>{product.title}{selectedVariant?.label ? ` · ${selectedVariant.label}` : ""}</span><a href="/cart">View StreetBag</a></div> : null}
   </>;
 }

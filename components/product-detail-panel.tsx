@@ -39,7 +39,7 @@ export function ProductDetailPanel({ product, recentlyAdded, sourceMessage }: { 
     <div className="product-status-row"><span className={`status${available ? "" : " product-status-sold"}`}>{available ? "In stock" : "Sold out"}{product.isPreorder ? " · Pre-order" : ""}</span>{recentlyAdded ? <span className="status product-status-new">Just added</span> : null}</div>
     <VariantPicker variants={product.variants} colors={product.colors} sizes={product.sizes} />
     <ProductPurchaseActions product={product} />
-    <p className="product-checkout-note">Purchases are completed securely on {product.brandName}’s website.</p>
+    <p className="product-checkout-note">Purchases are currently completed securely on {product.brandName}’s website.</p>
     <div className="product-utility-actions"><button type="button" onClick={toggleSaved}>{saved ? "Saved ✓" : "Save item"}</button><button type="button" onClick={() => void share()}>Share</button></div>
     <div className="product-accordions">
       <details open><summary>Description</summary><p>{product.description || "See the brand website for complete product details."}</p></details>
@@ -47,6 +47,6 @@ export function ProductDetailPanel({ product, recentlyAdded, sourceMessage }: { 
       <details><summary>Shipping & returns</summary><p>Shipping, returns, taxes, and payment are handled directly by {product.brandName}. Confirm final terms before purchasing.</p></details>
       <details><summary>About the listing</summary><p>{sourceMessage} Last checked {new Date(product.lastSyncedAt).toLocaleDateString()}.</p></details>
     </div>
-    <div className="mobile-purchase-bar"><div><span>{selectedVariant?.label || product.brandName}</span><strong>${price.toFixed(2)}</strong></div><a href={`/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}&source=product_mobile_bar`} target="_blank" rel="noreferrer" aria-label={`Shop ${product.title} on ${product.brandName}`}>Shop on {product.brandName}</a></div>
+    <div className="mobile-purchase-bar"><div><span>{selectedVariant?.label || product.brandName}</span><strong>${price.toFixed(2)}</strong></div><a href={`/api/out?to=${encodeURIComponent(product.sourceUrl)}&brand=${encodeURIComponent(product.brandSlug)}&product=${encodeURIComponent(product.slug)}&source=product_mobile_bar`} target="_blank" rel="noreferrer" aria-label={`Buy ${product.title} now`}>Buy Now</a></div>
   </aside>;
 }
