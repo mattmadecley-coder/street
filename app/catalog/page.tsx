@@ -4,22 +4,27 @@ import { Header, Footer, ProductCard } from "@/components/storefront";
 import { CategorySidebar } from "@/components/category-sidebar";
 import { PriceRangeSlider } from "@/components/price-slider";
 import { getCatalog, type StreetProduct } from "@/lib/catalog";
-import { CATALOG_PAGE_SIZE, getCatalogPage } from "@/lib/catalog-page";
+import {
+  balanceProductsForRelevance,
+  CATALOG_PAGE_SIZE,
+  filterProductsForSearch,
+  getCatalogPage,
+  normalizeCatalogSort,
+} from "@/lib/catalog-page";
 import { getAllBrands } from "@/lib/catalog-store";
 import { logSiteEvent } from "@/lib/analytics";
 
-// This route reads `searchParams`, so Next always renders it per-request —
-// no explicit `dynamic`/`revalidate` override needed. The underlying Supabase
-// fetches are still cached (see lib/supabase-rest.ts), so repeat views of the
-// same filter combination reuse cached data instead of re-querying every time.
+// This route reads searchParams, so Next renders it per request. The underlying
+// Supabase reads remain cached by lib/supabase-rest.ts.
 
 export type Params = {
   q?: string;
   brand?: string;
-  // Street taxonomy filters (lib/street-taxonomy.ts): group -> category -> type.
+  // Street taxonomy filters: group -> category -> type -> detail.
   group?: string;
   category?: string;
   type?: string;
+  detail?: string;
   color?: string;
   size?: string;
   availability?: string;
@@ -29,10 +34,6 @@ export type Params = {
   page?: string;
 };
 
-// Raw scraped color values (products.colors) that shoppers can filter by.
-// Kept distinct from the AI-assigned STREET_COLORS facet in
-// lib/street-taxonomy.ts, since this list has to match what source-import.ts
-// actually detects from brand catalogs.
 const COLOR_SWATCHES: Record<string, string> = {
   black: "#101010",
   white: "#ffffff",
@@ -54,11 +55,6 @@ const COLOR_SWATCHES: Record<string, string> = {
 const colors = Object.keys(COLOR_SWATCHES);
 const LIGHT_SWATCHES = new Set(["white", "cream", "tan", "yellow"]);
 
-// Sizing is category-relative (a sneaker size means nothing on a t-shirt), so
-// the size filter only appears once a group/category narrows what "size"
-// should mean, and shows a set appropriate to that department. Product data
-// itself is still whatever free-form sizes the brand provided (products.sizes)
-// — this only controls which options are offered as quick filters.
 const BOTTOMS_WAIST_CATEGORIES = new Set(["Jeans", "Pants", "Shorts", "Sweatpants", "Trousers", "Joggers", "Skirts"]);
 function sizeOptionsForFilter(group?: string, category?: string): string[] | null {
   if (!group) return null;
@@ -71,8 +67,8 @@ function sizeOptionsForFilter(group?: string, category?: string): string[] | nul
 
 function numberOrUndefined(value: string | undefined) {
   if (!value?.trim()) return undefined;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function catalogHref(params: Params, page: number) {
@@ -85,19 +81,19 @@ function catalogHref(params: Params, page: number) {
   return query ? `/catalog?${query}` : "/catalog";
 }
 
-/** Toggle-style href for a single filter key: click to set it, click again (same value) to clear it. Always resets pagination. */
 function toggleHref(params: Params, key: "color" | "size", value: string) {
   const next: Params = { ...params, page: undefined, [key]: params[key] === value ? undefined : value };
-  const search = new URLSearchParams();
-  for (const [k, v] of Object.entries(next)) if (v) search.set(k, v);
-  const query = search.toString();
-  return query ? `/catalog?${query}` : "/catalog";
+  return catalogHref(next, 1);
 }
 
 function clearParamHref(params: Params, key: keyof Params) {
   return catalogHref({ ...params, [key]: undefined }, 1);
 }
 
+function CatalogHiddenFields({ params, exclude = [] }: { params: Params; exclude?: Array<keyof Params> }) {
+  const excluded = new Set<keyof Params>(["page", ...exclude]);
+  return <>{Object.entries(params).map(([key, value]) => value && !excluded.has(key as keyof Params) ? <input key={key} type="hidden" name={key} value={value} /> : null)}</>;
+}
 
 function ColorSwatches({ params }: { params: Params }) {
   return (
@@ -127,34 +123,41 @@ function SizeChips({ params }: { params: Params }) {
     <div className="filter-block">
       <p className="filter-block-label">{params.group === "Footwear" ? "Shoe size" : "Size"}</p>
       <div className="size-options">
-        {options.map((value) => (
-          <Link key={value} href={toggleHref(params, "size", value)} className={`size-chip${params.size === value ? " active" : ""}`}>{value}</Link>
-        ))}
+        {options.map((value) => <Link key={value} href={toggleHref(params, "size", value)} className={`size-chip${params.size === value ? " active" : ""}`}>{value}</Link>)}
       </div>
     </div>
   );
 }
 
+function newestTimestamp(product: StreetProduct) {
+  return new Date(product.createdAt ?? product.lastSyncedAt).getTime() || 0;
+}
+
 function fallbackFilter(products: StreetProduct[], params: Params) {
-  const query = (params.q ?? "").trim().toLowerCase();
   const min = numberOrUndefined(params.min) ?? 0;
   const max = numberOrUndefined(params.max) ?? Number.MAX_SAFE_INTEGER;
-  let filtered = products.filter((product) => {
-    const searchable = `${product.title} ${product.brandName} ${product.category} ${product.colors.join(" ")} ${product.sizes.join(" ")} ${product.tags.join(" ")}`.toLowerCase();
-    return (!query || searchable.includes(query))
-      && (!params.brand || product.brandSlug === params.brand)
-      && (!params.group || product.streetGroup === params.group)
-      && (!params.category || product.streetCategory === params.category)
-      && (!params.type || product.streetType === params.type)
-      && (!params.color || product.colors.some((color) => color.toLowerCase() === params.color?.toLowerCase()))
-      && (!params.size || product.sizes.includes(params.size))
-      && (params.availability === "all" || !params.availability || product.stockStatus === "in_stock")
-      && product.price >= min
-      && product.price <= max;
-  });
-  if (params.sort === "price-low") filtered = [...filtered].sort((a, b) => a.price - b.price);
-  if (params.sort === "price-high") filtered = [...filtered].sort((a, b) => b.price - a.price);
-  return filtered;
+  const query = params.q?.trim();
+  const sort = normalizeCatalogSort(params.sort);
+  let filtered = products.filter((product) => (
+    (!params.brand || product.brandSlug === params.brand)
+    && (!params.group || product.streetGroup === params.group)
+    && (!params.category || product.streetCategory === params.category)
+    && (!params.type || product.streetType === params.type)
+    && (!params.detail || product.streetDetail === params.detail)
+    && (!params.color || product.colors.some((color) => color.toLowerCase() === params.color?.toLowerCase()))
+    && (!params.size || product.sizes.includes(params.size))
+    && (params.availability === "all" || !params.availability || product.stockStatus === "in_stock")
+    && product.price >= min
+    && product.price <= max
+  ));
+
+  if (sort === "relevance") return balanceProductsForRelevance(filtered, query);
+  if (query) filtered = filterProductsForSearch(filtered, query);
+  if (sort === "price-low") return [...filtered].sort((a, b) => a.price - b.price || a.id.localeCompare(b.id));
+  if (sort === "price-high") return [...filtered].sort((a, b) => b.price - a.price || a.id.localeCompare(b.id));
+  // No analytics source exists in this emergency fallback, so Best sellers and
+  // Newest both use a deterministic newest-first order.
+  return [...filtered].sort((a, b) => newestTimestamp(b) - newestTimestamp(a) || a.id.localeCompare(b.id));
 }
 
 export default async function CatalogPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -167,6 +170,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     group: params.group,
     category: params.category,
     type: params.type,
+    detail: params.detail,
     color: params.color,
     size: params.size,
     availability: params.availability,
@@ -183,6 +187,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   if (databasePage) {
     products = databasePage.products;
     total = databasePage.total;
+    currentPage = databasePage.page;
     sourceLabel = "Saved Street catalog";
   } else {
     const catalog = await getCatalog();
@@ -193,8 +198,6 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     sourceLabel = catalog.source === "live" ? "Live source import — initial database sync pending" : "Source is temporarily unavailable; showing backup data.";
   }
 
-  // Analytics: log the search/browse after the response is sent, so tracking
-  // never adds latency to the page itself (see lib/analytics.ts).
   after(async () => {
     if (params.q?.trim()) {
       await logSiteEvent({ eventType: "search", query: params.q.trim(), resultsCount: total, path: "/catalog" });
@@ -207,13 +210,14 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const firstPiece = total ? (currentPage - 1) * CATALOG_PAGE_SIZE + 1 : 0;
   const lastPiece = Math.min(currentPage * CATALOG_PAGE_SIZE, total);
   const brandOptions = (await getAllBrands()).sort((a, b) => a.name.localeCompare(b.name));
+  const heading = params.detail || params.type || params.category || params.group || "Shop all";
 
   return (
     <main>
       <Header />
       <div className="shell">
         <div className="catalog-top">
-          <div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Street catalog</p><h1>Shop all</h1></div>
+          <div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Street catalog</p><h1>{heading}</h1></div>
           <p className="results">
             Showing {firstPiece}–{lastPiece} of {total.toLocaleString()} pieces<br />
             {params.q ? <>Results for &ldquo;{params.q}&rdquo; · <Link className="link-small" href={clearParamHref(params, "q")}>Clear search</Link></> : sourceLabel}
@@ -223,17 +227,17 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           <CategorySidebar params={params} />
           <div>
             <form className="filters" action="/catalog">
-              <input type="hidden" name="q" value={params.q ?? ""} />
               <select name="brand" defaultValue={params.brand ?? ""}><option value="">Brand</option>{brandOptions.map((brand) => <option value={brand.slug} key={brand.slug}>{brand.name}</option>)}</select>
               <select name="availability" defaultValue={params.availability ?? "in_stock"}><option value="in_stock">In stock</option><option value="all">Include sold out</option></select>
-              <select name="sort" defaultValue={params.sort ?? ""}><option value="">Newest</option><option value="price-low">Price: low</option><option value="price-high">Price: high</option></select>
+              <select name="sort" defaultValue={params.sort ?? ""}>
+                <option value="">Relevance</option>
+                <option value="best-sellers">Best sellers</option>
+                <option value="newest">Newest</option>
+                <option value="price-low">Price: low to high</option>
+                <option value="price-high">Price: high to low</option>
+              </select>
               <button type="submit">Apply</button>
-              {/* Preserve the sidebar's taxonomy selection when the top filter form is submitted. */}
-              <input type="hidden" name="group" value={params.group ?? ""} />
-              <input type="hidden" name="category" value={params.category ?? ""} />
-              <input type="hidden" name="type" value={params.type ?? ""} />
-              <input type="hidden" name="color" value={params.color ?? ""} />
-              <input type="hidden" name="size" value={params.size ?? ""} />
+              <CatalogHiddenFields params={params} exclude={["brand", "availability", "sort"]} />
             </form>
 
             <div className="filter-block">
@@ -244,9 +248,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                   <input name="min" type="number" min="0" defaultValue={params.min} placeholder="Min price" />
                   <input name="max" type="number" min="0" defaultValue={params.max} placeholder="Max price" />
                   <button type="submit">Price range</button>
-                  <input type="hidden" name="group" value={params.group ?? ""} />
-                  <input type="hidden" name="category" value={params.category ?? ""} />
-                  <input type="hidden" name="type" value={params.type ?? ""} />
+                  <CatalogHiddenFields params={params} exclude={["min", "max"]} />
                 </form>
               </noscript>
             </div>
@@ -255,7 +257,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
             <SizeChips params={params} />
 
             {products.length ? (
-              <div className="grid">{products.map((product) => <ProductCard key={product.id} product={product} searchQuery={params.q} />)}</div>
+              <div className="grid">{products.map((product, index) => <ProductCard key={product.id} product={product} searchQuery={params.q} position={(currentPage - 1) * CATALOG_PAGE_SIZE + index + 1} />)}</div>
             ) : (
               <div className="empty"><p>No pieces match those filters.</p><a className="link-small" href="/catalog">Reset filters</a></div>
             )}
