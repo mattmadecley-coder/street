@@ -1,9 +1,9 @@
 import type { StreetProduct } from "@/lib/catalog";
-import { hasSupabaseCatalog, supabaseRest, supabaseRestPage } from "@/lib/supabase-rest";
+import { hasSupabaseCatalog, supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 
 type BrandRow = { slug: string; name: string } | null;
 type ImageRow = { source_url: string; sort_order: number };
-// Listing queries (productPath, below) only select product_variants(id) -
+// Listing queries (productPath, below) only select product_variants(external_id) -
 // just enough to count options - to keep the catalog grid/homepage
 // shelves cheap. getStoredProduct selects the full row (title/price/
 // availability/options) since the product detail page shows each one.
@@ -98,13 +98,233 @@ function toStreetProduct(row: ProductRow): StreetProduct {
   };
 }
 
+const SEARCH_STOP_WORDS = new Set(["a", "an", "and", "for", "in", "of", "on", "or", "the", "to", "with"]);
+const SEARCH_EQUIVALENCE_GROUPS = [
+  ["jacket", "outerwear", "coat"],
+  ["pant", "bottom", "trouser", "jean"],
+  ["shoe", "footwear", "sneaker", "boot"],
+  ["tee", "tshirt", "shirt"],
+  ["hoodie", "sweatshirt", "pullover"],
+  ["black", "charcoal", "onyx", "jet black"],
+] as const;
+
+function normalizeSearchText(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\bt[\s-]?shirts?\b/g, "tshirt")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function singularizeSearchTerm(value: string) {
+  const term = normalizeSearchText(value);
+  const irregular: Record<string, string> = {
+    bottoms: "bottom",
+    boots: "boot",
+    coats: "coat",
+    hoodies: "hoodie",
+    jackets: "jacket",
+    jeans: "jean",
+    pants: "pant",
+    shirts: "shirt",
+    shoes: "shoe",
+    sneakers: "sneaker",
+    tees: "tee",
+    trousers: "trouser",
+  };
+  if (irregular[term]) return irregular[term];
+  if (term.endsWith("ies") && term.length > 4) return `${term.slice(0, -3)}y`;
+  if (/(ches|shes|xes|zes)$/.test(term)) return term.slice(0, -2);
+  if (term.endsWith("s") && !term.endsWith("ss") && term.length > 3) return term.slice(0, -1);
+  return term;
+}
+
+function pluralizeSearchTerm(term: string) {
+  if (!term || term.includes(" ")) return term;
+  if (term.endsWith("y") && !/[aeiou]y$/.test(term)) return `${term.slice(0, -1)}ies`;
+  if (/(s|x|z|ch|sh)$/.test(term)) return `${term}es`;
+  return `${term}s`;
+}
+
+function searchTermVariants(term: string) {
+  const canonical = singularizeSearchTerm(term);
+  const variants = new Set([normalizeSearchText(term), canonical, pluralizeSearchTerm(canonical)]);
+  const group = SEARCH_EQUIVALENCE_GROUPS.find((items) => items.some((item) => singularizeSearchTerm(item) === canonical));
+  for (const item of group ?? []) {
+    const normalized = normalizeSearchText(item);
+    const singular = singularizeSearchTerm(normalized);
+    variants.add(normalized);
+    variants.add(singular);
+    variants.add(pluralizeSearchTerm(singular));
+  }
+  return [...variants].filter(Boolean);
+}
+
+function meaningfulSearchTerms(query: string) {
+  const seen = new Set<string>();
+  return normalizeSearchText(query)
+    .split(" ")
+    .map(singularizeSearchTerm)
+    .filter((term) => term.length > 1 && !SEARCH_STOP_WORDS.has(term))
+    .filter((term) => {
+      if (seen.has(term)) return false;
+      seen.add(term);
+      return true;
+    })
+    .map((term) => ({ term, variants: searchTermVariants(term) }));
+}
+
+function matchStrength(text: string, variants: string[]) {
+  if (!text) return 0;
+  const padded = ` ${text} `;
+  let best = 0;
+  for (const variant of variants) {
+    if (!variant) continue;
+    if (text === variant) best = Math.max(best, 3);
+    else if (padded.includes(` ${variant} `)) best = Math.max(best, 2);
+    else if (text.includes(variant)) best = Math.max(best, 1);
+  }
+  return best;
+}
+
+type SearchableCatalogProduct = Pick<
+  StreetProduct,
+  "brandSlug" | "title" | "description" | "brandName" | "category" | "tags" | "colors" | "streetGroup" | "streetCategory" | "streetType" | "streetDetail"
+>;
+
+/**
+ * Search stays deterministic and database-backed: no model call occurs here.
+ * Every original query term is scored independently so full-term matches rank
+ * before products that only match one part of a multiword query.
+ */
+export function rankProductsForSearch<T extends SearchableCatalogProduct>(products: T[], query?: string): T[] {
+  const terms = meaningfulSearchTerms(query ?? "");
+  if (!terms.length) return products;
+
+  const ranked = products.map((product, index) => {
+    const fields: Array<[string, number]> = [
+      [normalizeSearchText(product.title), 12],
+      [normalizeSearchText(product.brandName), 10],
+      [normalizeSearchText(product.tags.join(" ")), 9],
+      [normalizeSearchText(product.colors.join(" ")), 9],
+      [normalizeSearchText(product.streetGroup), 8],
+      [normalizeSearchText(product.streetCategory), 9],
+      [normalizeSearchText(product.streetType), 9],
+      [normalizeSearchText(product.streetDetail), 8],
+      [normalizeSearchText(product.category), 6],
+      [normalizeSearchText(product.description), 4],
+    ];
+
+    let matchedTerms = 0;
+    let score = 0;
+    for (const term of terms) {
+      let termMatched = false;
+      let termScore = 0;
+      for (const [field, weight] of fields) {
+        const strength = matchStrength(field, term.variants);
+        if (!strength) continue;
+        termMatched = true;
+        termScore += weight * strength;
+      }
+      if (termMatched) {
+        matchedTerms += 1;
+        score += termScore;
+      }
+    }
+    return { product, index, matchedTerms, score };
+  });
+
+  return ranked
+    .filter((entry) => entry.matchedTerms > 0)
+    .sort((a, b) => b.matchedTerms - a.matchedTerms || b.score - a.score || a.index - b.index)
+    .map((entry) => entry.product);
+}
+
+/**
+ * Reorders only the products already assigned to a page. That keeps pagination
+ * stable while preventing one brand from occupying the entire first screen.
+ * The cap is strict near the top, then relaxes naturally farther down.
+ */
+export function diversifyProductsByBrand<T extends { brandSlug: string }>(
+  products: T[],
+  { firstPortion = 18, perBrandCap = 2 }: { firstPortion?: number; perBrandCap?: number } = {},
+): T[] {
+  if (products.length < 2) return products;
+
+  const remaining = products.map((product) => ({ product }));
+  const output: T[] = [];
+  const counts = new Map<string, number>();
+  const distinctBrands = new Set(products.map((product) => product.brandSlug || "__unbranded")).size;
+  const earlyLimit = Math.min(Math.max(0, firstPortion), products.length);
+  const effectiveCap = distinctBrands >= 4
+    ? Math.max(1, perBrandCap)
+    : distinctBrands >= 2
+      ? Math.max(perBrandCap, Math.ceil(earlyLimit / distinctBrands))
+      : earlyLimit;
+  let previousBrand = "";
+
+  while (remaining.length) {
+    const position = output.length;
+    const early = position < earlyLimit;
+
+    const findCandidate = (respectCap: boolean, avoidConsecutive: boolean) => remaining.findIndex(({ product }) => {
+      const brand = product.brandSlug || "__unbranded";
+      if (avoidConsecutive && brand === previousBrand) return false;
+      if (respectCap && (counts.get(brand) ?? 0) >= effectiveCap) return false;
+      return true;
+    });
+
+    let candidateIndex = findCandidate(early, true);
+    if (candidateIndex < 0) candidateIndex = findCandidate(false, true);
+    if (candidateIndex < 0) candidateIndex = findCandidate(early, false);
+    if (candidateIndex < 0) candidateIndex = 0;
+
+    const [{ product }] = remaining.splice(candidateIndex, 1);
+    const brand = product.brandSlug || "__unbranded";
+    output.push(product);
+    counts.set(brand, (counts.get(brand) ?? 0) + 1);
+    previousBrand = brand;
+  }
+
+  return output;
+}
+
 function arrayContains(value: string) {
   return `cs.{${value.replace(/[\\"]/g, "\\$&")}}`;
 }
 
+const LISTING_SELECT = [
+  "id",
+  "handle",
+  "title",
+  "description",
+  "source_url",
+  "price",
+  "compare_at_price",
+  "stock_status",
+  "is_preorder",
+  "category",
+  "tags",
+  "colors",
+  "sizes",
+  "primary_image_url",
+  "last_synced_at",
+  "created_at",
+  "street_group",
+  "street_category",
+  "street_type",
+  "street_detail",
+  "brands!inner(slug,name)",
+  "product_images(source_url,sort_order)",
+  "product_variants(external_id)",
+].join(",");
+
 function productPath(filters: CatalogPageFilters) {
   const params = new URLSearchParams();
-  params.set("select", "*,brands!inner(slug,name),product_images(source_url,sort_order),product_variants(external_id)");
+  params.set("select", LISTING_SELECT);
   params.set("is_active", "eq.true");
   params.set("is_hidden", "eq.false");
   params.set("order", filters.sort === "price-low" ? "price.asc,id.asc" : filters.sort === "price-high" ? "price.desc,id.desc" : "updated_at.desc,id.desc");
@@ -119,20 +339,35 @@ function productPath(filters: CatalogPageFilters) {
   if (typeof filters.min === "number" && Number.isFinite(filters.min) && filters.min > 0) params.set("price", `gte.${filters.min}`);
   if (typeof filters.max === "number" && Number.isFinite(filters.max) && filters.max > 0) params.set("price", `lte.${filters.max}`);
 
-  const query = filters.q?.trim().replace(/[%,()]/g, " ").replace(/\s+/g, " ");
-  if (query) params.set("or", `(title.ilike.*${query}*,description.ilike.*${query}*)`);
-
   return `products?${params.toString()}`;
 }
 
 export async function getCatalogPage(filters: CatalogPageFilters): Promise<CatalogPage | null> {
   if (!hasSupabaseCatalog()) return null;
-  const page = Math.max(1, Math.floor(filters.page ?? 1));
-  const from = (page - 1) * CATALOG_PAGE_SIZE;
+  const requestedPage = Math.max(1, Math.floor(filters.page ?? 1));
+  const query = filters.q?.trim();
 
   try {
-    const result = await supabaseRestPage<ProductRow>(productPath(filters), { from, to: from + CATALOG_PAGE_SIZE - 1 });
-    return { products: result.data.map(toStreetProduct), total: result.total, page, pageSize: CATALOG_PAGE_SIZE };
+    if (query) {
+      const rows = await supabaseRestAll<ProductRow[]>(productPath({ ...filters, q: undefined }));
+      const ranked = rankProductsForSearch(rows.map(toStreetProduct), query);
+      const total = ranked.length;
+      const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE)));
+      const from = (page - 1) * CATALOG_PAGE_SIZE;
+      const products = diversifyProductsByBrand(ranked.slice(from, from + CATALOG_PAGE_SIZE));
+      return { products, total, page, pageSize: CATALOG_PAGE_SIZE };
+    }
+
+    let page = requestedPage;
+    let from = (page - 1) * CATALOG_PAGE_SIZE;
+    let result = await supabaseRestPage<ProductRow>(productPath(filters), { from, to: from + CATALOG_PAGE_SIZE - 1 });
+    const lastPage = Math.max(1, Math.ceil(result.total / CATALOG_PAGE_SIZE));
+    if (result.total > 0 && page > lastPage) {
+      page = lastPage;
+      from = (page - 1) * CATALOG_PAGE_SIZE;
+      result = await supabaseRestPage<ProductRow>(productPath(filters), { from, to: from + CATALOG_PAGE_SIZE - 1 });
+    }
+    return { products: diversifyProductsByBrand(result.data.map(toStreetProduct)), total: result.total, page, pageSize: CATALOG_PAGE_SIZE };
   } catch (error) {
     console.error("Street paged catalog read failed", error);
     return null;

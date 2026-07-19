@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import styles from "./home.module.css";
 import { Header, Footer, ProductCard } from "@/components/storefront";
 import { HeroMedia } from "@/components/hero-media";
@@ -29,7 +30,12 @@ export default async function HomePage() {
   const heroVideoUrl = settings.hero_video_url || undefined;
   const heroImageUrl = settings.hero_image_url || undefined;
   const marqueeBrands = brandsWithStock;
-  const repeatedMarqueeBrands = [...marqueeBrands, ...marqueeBrands];
+  const marqueeCopies = Math.max(2, Math.ceil(12 / Math.max(1, marqueeBrands.length)));
+  const repeatedMarqueeBrands = Array.from({ length: marqueeCopies }, () => marqueeBrands).flat();
+  const marqueeStyle = {
+    "--brand-marquee-shift": `-${100 / marqueeCopies}%`,
+    "--brand-marquee-duration": `${Math.max(8, marqueeBrands.length * 3.2)}s`,
+  } as CSSProperties;
 
   return (
     <main>
@@ -55,7 +61,10 @@ export default async function HomePage() {
         {newIn.length ? <section className="section"><div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Just landed</p><h2 className="section-title">New in</h2></div><Link href="/catalog?sort=newest" className="link-small">See all new in</Link></div><div className="grid">{newIn.map((product) => <ProductCard key={product.id} product={product} />)}</div></section> : null}
         {under50.length ? <section className="section"><div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Budget friendly</p><h2 className="section-title">Under $50</h2></div><Link href="/catalog?max=50" className="link-small">See all under $50</Link></div><div className="grid">{under50.map((product) => <ProductCard key={product.id} product={product} />)}</div></section> : null}
 
-        {marqueeBrands.length ? <section className="section"><div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Independent labels</p><h2 className="section-title">Featured brands</h2></div><Link href="/brands" className="link-small">All brands</Link></div><div className={styles.brandMarqueeViewport}><div className={styles.brandMarqueeTrack}>{repeatedMarqueeBrands.map((brand, index) => <Link key={`${brand.slug}-${index}`} href={`/brands/${brand.slug}`} className={styles.brandMarqueeItem} aria-hidden={index >= marqueeBrands.length ? true : undefined} tabIndex={index >= marqueeBrands.length ? -1 : undefined}>{brand.logoUrl ? <Image src={brand.logoUrl} alt={index < marqueeBrands.length ? brand.name : ""} width={260} height={80} sizes="160px" quality={72} loading="lazy" /> : <strong>{brand.name}</strong>}</Link>)}</div></div></section> : null}
+        {marqueeBrands.length ? <section className="section"><div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Independent labels</p><h2 className="section-title">Featured brands</h2></div><Link href="/brands" className="link-small">All brands</Link></div><div className={styles.brandMarqueeViewport}><div className={styles.brandMarqueeTrack} style={marqueeStyle}>{repeatedMarqueeBrands.map((brand, index) => {
+          const isClone = index >= marqueeBrands.length;
+          return <Link key={`${brand.slug}-${index}`} href={`/brands/${brand.slug}`} className={`${styles.brandMarqueeItem}${isClone ? ` ${styles.brandMarqueeClone}` : ""}`} aria-hidden={isClone || undefined} tabIndex={isClone ? -1 : undefined}>{brand.logoUrl ? <Image src={brand.logoUrl} alt={isClone ? "" : brand.name} width={260} height={80} sizes="160px" quality={72} loading="lazy" /> : <strong>{brand.name}</strong>}</Link>;
+        })}</div></div></section> : null}
       </div>
       <section className="dark-section"><div className="dark-section-inner"><p className="eyebrow">Why Street</p><div><h2>Search product names, colors, fits, and styles across independent labels.</h2><p style={{ maxWidth: 520, margin: "26px 0 0", fontSize: 15, lineHeight: 1.55, color: "rgba(244,243,238,.65)" }}>When you find something, Street sends you straight to the brand website to buy it.</p></div></div></section>
       <Footer />
