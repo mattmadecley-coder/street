@@ -11,8 +11,6 @@ export { balanceProductsByBrand, balanceProductsForRelevance, filterProductsForS
 
 type BrandRow = { slug: string; name: string } | null;
 type ImageRow = { source_url: string; sort_order: number };
-// Listing queries only select product_variants(external_id), which is enough to
-// count options. Product detail reads fetch the full variant rows.
 type VariantRow = { external_id: string; title?: string | null; price?: string | number; compare_at_price?: string | number | null; available?: boolean; option1?: string | null; option2?: string | null; option3?: string | null; image_url?: string | null };
 type ProductRow = {
   id: string;
@@ -39,6 +37,35 @@ type ProductRow = {
   street_category: string | null;
   street_type: string | null;
   street_detail: string | null;
+};
+
+type CandidateRow = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  category?: string | null;
+  tags?: string[] | null;
+  colors?: string[] | null;
+  street_group?: string | null;
+  street_category?: string | null;
+  street_type?: string | null;
+  street_detail?: string | null;
+  brands: BrandRow;
+};
+
+type CatalogCandidate = {
+  id: string;
+  brandSlug: string;
+  brandName: string;
+  title: string;
+  description: string;
+  category: string;
+  tags: string[];
+  colors: string[];
+  streetGroup?: string;
+  streetCategory?: string;
+  streetType?: string;
+  streetDetail?: string;
 };
 
 type PopularityRow = { product_id: string; popularity_score: string | number };
@@ -109,41 +136,37 @@ function toStreetProduct(row: ProductRow): StreetProduct {
   };
 }
 
+function toCatalogCandidate(row: CandidateRow): CatalogCandidate {
+  return {
+    id: row.id,
+    brandSlug: row.brands?.slug ?? "brand",
+    brandName: row.brands?.name ?? "Unknown brand",
+    title: row.title ?? "",
+    description: row.description ?? "",
+    category: row.category ?? "",
+    tags: row.tags ?? [],
+    colors: row.colors ?? [],
+    streetGroup: row.street_group ?? undefined,
+    streetCategory: row.street_category ?? undefined,
+    streetType: row.street_type ?? undefined,
+    streetDetail: row.street_detail ?? undefined,
+  };
+}
+
 function arrayContains(value: string) {
   return `cs.{${value.replace(/[\\"]/g, "\\$&")}}`;
 }
 
 const LISTING_SELECT = [
-  "id",
-  "handle",
-  "title",
-  "description",
-  "source_url",
-  "price",
-  "compare_at_price",
-  "stock_status",
-  "is_preorder",
-  "category",
-  "tags",
-  "colors",
-  "sizes",
-  "primary_image_url",
-  "last_synced_at",
-  "created_at",
-  "updated_at",
-  "street_group",
-  "street_category",
-  "street_type",
-  "street_detail",
-  "brands!inner(slug,name)",
-  "product_images(source_url,sort_order)",
-  "product_variants(external_id)",
+  "id", "handle", "title", "description", "source_url", "price", "compare_at_price", "stock_status", "is_preorder", "category", "tags", "colors", "sizes", "primary_image_url", "last_synced_at", "created_at", "updated_at", "street_group", "street_category", "street_type", "street_detail", "brands!inner(slug,name)", "product_images(source_url,sort_order)", "product_variants(external_id)",
 ].join(",");
+const BALANCE_SELECT = "id,brands!inner(slug,name)";
+const SEARCH_SELECT = "id,title,description,category,tags,colors,street_group,street_category,street_type,street_detail,brands!inner(slug,name)";
 
-function productPath(filters: CatalogPageFilters) {
+function productPath(filters: CatalogPageFilters, select = LISTING_SELECT) {
   const params = new URLSearchParams();
   const sort = normalizeCatalogSort(filters.sort);
-  params.set("select", LISTING_SELECT);
+  params.set("select", select);
   params.set("is_active", "eq.true");
   params.set("is_hidden", "eq.false");
   params.set("order", sort === "price-low" ? "price.asc,id.asc" : sort === "price-high" ? "price.desc,id.desc" : "updated_at.desc,id.desc");
@@ -162,26 +185,38 @@ function productPath(filters: CatalogPageFilters) {
   return `products?${params.toString()}`;
 }
 
+function selectedProductsPath(ids: string[]) {
+  const params = new URLSearchParams();
+  params.set("select", LISTING_SELECT);
+  params.set("is_active", "eq.true");
+  params.set("is_hidden", "eq.false");
+  params.set("id", `in.(${ids.join(",")})`);
+  return `products?${params.toString()}`;
+}
+
 async function getProductPopularityScores() {
   try {
     const rows = await supabaseRestAll<PopularityRow[]>("catalog_product_popularity?select=product_id,popularity_score");
     return new Map(rows.map((row) => [row.product_id, number(row.popularity_score)]));
   } catch (error) {
-    // Keep the catalog usable if application code reaches a deployment before
-    // the companion popularity view migration is available.
     console.error("Street product popularity read failed", error);
     return new Map<string, number>();
   }
 }
 
-function paginateProducts(products: StreetProduct[], requestedPage: number): CatalogPage {
-  const total = products.length;
+async function hydrateCandidatePage(candidates: CatalogCandidate[], requestedPage: number): Promise<CatalogPage> {
+  const total = candidates.length;
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE)));
   const from = (page - 1) * CATALOG_PAGE_SIZE;
-  return { products: products.slice(from, from + CATALOG_PAGE_SIZE), total, page, pageSize: CATALOG_PAGE_SIZE };
+  const pageIds = candidates.slice(from, from + CATALOG_PAGE_SIZE).map((candidate) => candidate.id);
+  if (!pageIds.length) return { products: [], total, page, pageSize: CATALOG_PAGE_SIZE };
+
+  const rows = await supabaseRest<ProductRow[]>(selectedProductsPath(pageIds));
+  const byId = new Map(rows.map((row) => [row.id, toStreetProduct(row)]));
+  return { products: pageIds.flatMap((id) => byId.get(id) ? [byId.get(id)!] : []), total, page, pageSize: CATALOG_PAGE_SIZE };
 }
 
-function sortByPopularity(products: StreetProduct[], scores: Map<string, number>) {
+function sortByPopularity<T extends { id: string }>(products: T[], scores: Map<string, number>) {
   const baseIndex = new Map(products.map((product, index) => [product.id, index]));
   return [...products].sort((a, b) => {
     const scoreDifference = (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0);
@@ -198,25 +233,26 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
   const sort = normalizeCatalogSort(filters.sort);
 
   try {
-    // Relevance and Best sellers need the complete filtered inventory before
-    // pagination. Search also needs the complete matching set so explicit
-    // price/newest sorts can filter by text without losing their primary order.
+    // Rank the complete filtered result set using lightweight rows, paginate the
+    // resulting ID order, then hydrate only the requested page's cards. This is
+    // global balancing without loading every product image/variant before slice.
     if (query || sort === "relevance" || sort === "best-sellers") {
-      const rows = await supabaseRestAll<ProductRow[]>(productPath({ ...filters, q: undefined, sort }));
-      const products = rows.map(toStreetProduct);
+      const select = query ? SEARCH_SELECT : BALANCE_SELECT;
+      const rows = await supabaseRestAll<CandidateRow[]>(productPath({ ...filters, q: undefined, sort }, select));
+      const candidates = rows.map(toCatalogCandidate);
 
       if (sort === "relevance") {
-        return paginateProducts(query ? balanceProductsForRelevance(products, query) : balanceProductsByBrand(products), requestedPage);
+        return hydrateCandidatePage(query ? balanceProductsForRelevance(candidates, query) : balanceProductsByBrand(candidates), requestedPage);
       }
 
-      const matchingProducts = query ? filterProductsForSearch(products, query) : products;
+      const matchingProducts = query ? filterProductsForSearch(candidates, query) : candidates;
       if (sort === "best-sellers") {
-        return paginateProducts(sortByPopularity(matchingProducts, await getProductPopularityScores()), requestedPage);
+        return hydrateCandidatePage(sortByPopularity(matchingProducts, await getProductPopularityScores()), requestedPage);
       }
 
       // Explicit Newest/price sorts keep productPath's database ordering. Search
       // only removes nonmatches; it does not reorder the requested sort.
-      return paginateProducts(matchingProducts, requestedPage);
+      return hydrateCandidatePage(matchingProducts, requestedPage);
     }
 
     let page = requestedPage;
@@ -235,11 +271,9 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
   }
 }
 
-/** Fetch every product matching the given filters, using stable catalog pages. */
 export async function getAllCatalogProducts(filters: Omit<CatalogPageFilters, "page">): Promise<{ products: StreetProduct[]; total: number } | null> {
   const first = await getCatalogPage({ ...filters, page: 1 });
   if (!first) return null;
-
   const products = [...first.products];
   let page = 2;
   while (products.length < first.total) {
@@ -251,7 +285,6 @@ export async function getAllCatalogProducts(filters: Omit<CatalogPageFilters, "p
   return { products, total: first.total };
 }
 
-/** Build small homepage shelves with explicit per-brand caps. */
 export async function getDiverseProductShelf(
   filters: Omit<CatalogPageFilters, "page">,
   { limit = 10, perBrandCap = 2, poolPages = 4 }: { limit?: number; perBrandCap?: number; poolPages?: number } = {}
@@ -284,7 +317,6 @@ export async function getDiverseProductShelf(
   return picked;
 }
 
-/** Look up a single product by its brandSlug--handle slug. */
 export async function getStoredProduct(slug: string): Promise<StreetProduct | null> {
   if (!hasSupabaseCatalog()) return null;
   const separator = slug.indexOf("--");
