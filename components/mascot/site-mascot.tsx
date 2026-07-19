@@ -7,7 +7,7 @@ import { CharacterPopup, CHARACTER_POPUP_EVENT, type CharacterPopupRequest } fro
 type ActivePopup = Required<Pick<CharacterPopupRequest, "message" | "position" | "duration" | "characterImage">> & { id: number; visible: boolean };
 type VariantEvent = CustomEvent<{ label?: string; available?: boolean }>;
 
-const DEFAULT_IMAGE = "/images/street-character.png";
+const DEFAULT_IMAGE = "/public/images/ChatGPT%20Image%20Jul%2018%2C%202026%2C%2008_45_48%20PM.png";
 const AUTO_MESSAGES = ["You’ve got good taste.", "This one would look good on you.", "Still thinking about it?"];
 
 export function SiteMascot() {
