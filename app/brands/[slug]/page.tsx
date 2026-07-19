@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Header, Footer, ProductCard } from "@/components/storefront";
+import { CatalogImage } from "@/components/catalog-image";
 import { CATALOG_PAGE_SIZE, getCatalogPage } from "@/lib/catalog-page";
 import { getBrandDirectory } from "@/lib/catalog-store";
 import styles from "./brand.module.css";
@@ -46,7 +46,7 @@ export default async function BrandPage({ params, searchParams }: { params: Prom
       <div className="shell">
         <section className={styles.hero}>
           <div className={styles.identity}>
-            <div className={styles.logo}>{brand.logoUrl ? <Image src={brand.logoUrl} alt={brand.name} width={420} height={140} sizes="(max-width: 840px) 70vw, 360px" /> : <strong>{brand.name}</strong>}</div>
+            <div className={styles.logo}>{brand.logoUrl ? <CatalogImage src={brand.logoUrl} widthHint={720} fallback={<strong>{brand.name}</strong>} alt={brand.name} width={420} height={140} sizes="(max-width: 840px) 70vw, 360px" /> : <strong>{brand.name}</strong>}</div>
             <div><p className="eyebrow">Independent brand on Street</p><h1>{brand.name}</h1><p>{total.toLocaleString()} piece{total === 1 ? "" : "s"} available to discover.</p></div>
           </div>
           <div className={styles.links}>
