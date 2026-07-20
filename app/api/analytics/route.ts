@@ -5,13 +5,28 @@ import { logSiteEvent } from "@/lib/analytics";
 const text = (value: unknown, max = 500) => typeof value === "string" ? value.trim().slice(0, max) || undefined : undefined;
 const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
+function hasImpossibleDeviceSignature(body: Record<string, unknown>) {
+  const width = number(body.screenWidth) ?? 0;
+  const device = (text(body.deviceType, 40) ?? "").toLowerCase();
+  const browser = (text(body.browser, 80) ?? "").toLowerCase();
+  const operatingSystem = (text(body.operatingSystem, 80) ?? "").toLowerCase();
+
+  if ((operatingSystem === "ios" || operatingSystem === "android") && width > 1024) return true;
+  if (device === "mobile" && width > 900) return true;
+  if (browser === "safari" && operatingSystem === "ios" && device === "desktop") return true;
+  return false;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const identity = trackingIdentityForRequest(request);
     if (!identity) return NextResponse.json({ ok: true, ignored: true }, { status: 202 });
 
-    const body = await request.json();
+    const body = await request.json() as Record<string, unknown>;
     if (!payloadMatchesTrackingIdentity(identity, body.anonymousUserId, body.sessionId)) {
+      return NextResponse.json({ ok: true, ignored: true }, { status: 202 });
+    }
+    if (hasImpossibleDeviceSignature(body)) {
       return NextResponse.json({ ok: true, ignored: true }, { status: 202 });
     }
 
@@ -47,7 +62,7 @@ export async function POST(request: NextRequest) {
       utmCampaign: text(body.utmCampaign, 240),
       utmContent: text(body.utmContent, 240),
       utmTerm: text(body.utmTerm, 240),
-      metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : {},
+      metadata: body.metadata && typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : {},
     });
     return NextResponse.json({ ok: true }, { status: 202 });
   } catch (error) {
