@@ -47,17 +47,18 @@ type OpenRouterResponse = {
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 };
 
-// Text-only, on a cheap OpenRouter model (DeepSeek by default) — no product
-// photos are sent. This trades some accuracy on vague/generic listings for a
-// large drop in per-classification cost: this used to send every product
-// image ("high" detail, multiple photos per item) to a vision model, which
-// is by far the most expensive part of a vision API call. Since merchant
-// title/tags/category are the only signal now, classification leans harder
-// on the taxonomy description and explicit "don't just trust the merchant's
-// bucket" guidance below; confidence is set to "low" more readily than the
-// old vision-based prompt did, so ambiguous items surface in /admin/products
-// for a manual check instead of silently guessing.
-const model = () => process.env.STREET_CLASSIFIER_MODEL ?? "deepseek/deepseek-chat";
+// Text-only, on inexpensive OpenRouter models — no product photos are sent.
+// The first model remains configurable, while the fallback keeps the queue
+// moving when one provider/model is rate-limited or temporarily unavailable.
+function classifierModels() {
+  const primary = process.env.STREET_CLASSIFIER_MODEL?.trim() || "deepseek/deepseek-chat";
+  const configuredFallbacks = (process.env.STREET_CLASSIFIER_FALLBACK_MODELS ?? "google/gemini-2.5-flash-lite")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return [...new Set([primary, ...configuredFallbacks])];
+}
+
 const groups = Object.keys(STREET_TAXONOMY);
 
 // "none" sentinel instead of a `["string","null"]` nullable-union type: some
@@ -158,7 +159,7 @@ export async function classifyProductWithAI(product: ProductToClassify): Promise
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("AI classification is not configured. Add OPENROUTER_API_KEY in Vercel before running the classifier.");
 
-  const classifierModel = model();
+  const models = classifierModels();
   const productContext = JSON.stringify({
     title: product.title,
     description: product.description.slice(0, 2000),
@@ -175,12 +176,12 @@ export async function classifyProductWithAI(product: ProductToClassify): Promise
       "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://street-beryl.vercel.app",
       "X-OpenRouter-Title": "Street catalog classifier",
     },
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(20_000),
     body: JSON.stringify({
-      model: classifierModel,
+      models,
       temperature: 0,
       max_tokens: 500,
-      provider: { sort: "price" },
+      provider: { sort: "throughput", allow_fallbacks: true, require_parameters: true },
       messages: [
         {
           role: "system",
@@ -233,7 +234,7 @@ Respond with ONLY a single raw JSON object — no markdown code fences, no comme
   }
   return {
     classification: validateClassification(parsed),
-    model: payload.model ?? classifierModel,
+    model: payload.model ?? models[0],
     usage: { promptTokens: payload.usage?.prompt_tokens, completionTokens: payload.usage?.completion_tokens },
   };
 }
