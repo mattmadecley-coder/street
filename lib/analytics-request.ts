@@ -17,6 +17,8 @@ function isNonProductionHost(hostname: string) {
  */
 export function trackingIdentityForRequest(request: NextRequest): TrackingIdentity | null {
   if (isNonProductionHost(request.nextUrl.hostname)) return null;
+  if (request.cookies.get("street_analytics_excluded")?.value === "true") return null;
+  if (request.headers.get("x-street-analytics-test") === "1") return null;
 
   const userAgent = request.headers.get("user-agent")?.trim() ?? "";
   if (!userAgent || AUTOMATED_USER_AGENT.test(userAgent)) return null;
