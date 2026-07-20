@@ -7,6 +7,8 @@ type RestOptions = {
   range?: { from: number; to: number };
   /** Bypass the shared catalog cache for reads that must see the latest write (e.g. sync bookkeeping). */
   noStore?: boolean;
+  /** Override the normal one-hour catalog cache for time-sensitive reads. */
+  revalidateSeconds?: number;
 };
 
 /**
@@ -57,10 +59,13 @@ export async function supabaseRest<T>(path: string, options: RestOptions = {}): 
   if (!config) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
 
   const method = options.method ?? "GET";
+  const revalidateSeconds = Number.isFinite(options.revalidateSeconds)
+    ? Math.max(0, Number(options.revalidateSeconds))
+    : CATALOG_REVALIDATE_SECONDS;
   // Only idempotent reads are safe to cache. Writes (and reads explicitly
   // marked noStore, e.g. read-before-upsert checks) always hit Supabase live.
   const cacheInit: Partial<RequestInit> = method === "GET" && !options.noStore
-    ? { next: { revalidate: CATALOG_REVALIDATE_SECONDS, tags: [CATALOG_CACHE_TAG] } }
+    ? { next: { revalidate: revalidateSeconds, tags: [CATALOG_CACHE_TAG] } }
     : { cache: "no-store" };
 
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
@@ -76,14 +81,17 @@ export async function supabaseRest<T>(path: string, options: RestOptions = {}): 
   return data as T;
 }
 
-export async function supabaseRestPage<T>(path: string, range: { from: number; to: number }, restOptions: { noStore?: boolean } = {}): Promise<{ data: T[]; total: number }> {
+export async function supabaseRestPage<T>(path: string, range: { from: number; to: number }, restOptions: { noStore?: boolean; revalidateSeconds?: number } = {}): Promise<{ data: T[]; total: number }> {
   const config = getConfig();
   if (!config) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
 
   const options: RestOptions = { range };
+  const revalidateSeconds = Number.isFinite(restOptions.revalidateSeconds)
+    ? Math.max(0, Number(restOptions.revalidateSeconds))
+    : CATALOG_REVALIDATE_SECONDS;
   const cacheInit: Partial<RequestInit> = restOptions.noStore
     ? { cache: "no-store" }
-    : { next: { revalidate: CATALOG_REVALIDATE_SECONDS, tags: [CATALOG_CACHE_TAG] } };
+    : { next: { revalidate: revalidateSeconds, tags: [CATALOG_CACHE_TAG] } };
 
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
     headers: headers(config, options, true),
