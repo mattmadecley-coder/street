@@ -9,24 +9,8 @@ alter table public.classification_worker_state
   add column if not exists trigger_url text,
   add column if not exists trigger_token text;
 
-create or replace function public.authorize_classification_worker(p_token text)
-returns boolean
-language sql
-security invoker
-set search_path = public
-as $$
-  select coalesce(
-    length(p_token) >= 32
-    and trigger_token is not null
-    and extensions.crypt(p_token, extensions.crypt(trigger_token, extensions.gen_salt('bf'))) = extensions.crypt(trigger_token, extensions.crypt(trigger_token, extensions.gen_salt('bf'))),
-    false
-  )
-  from public.classification_worker_state
-  where id = 1;
-$$;
-
--- Use digest comparison rather than returning or exposing the stored trigger
--- token. The table itself remains private to service_role/postgres.
+-- The route validates a private database token without returning or exposing
+-- it. The state table remains inaccessible to anon/authenticated clients.
 create or replace function public.authorize_classification_worker(p_token text)
 returns boolean
 language sql
