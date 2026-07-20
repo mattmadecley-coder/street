@@ -1,11 +1,11 @@
 "use server";
 
-import { after } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseRest, CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
 import { uploadSiteAsset } from "@/lib/supabase-storage";
-import { getBrandBySlug, syncSingleBrand, classifyPendingProducts } from "@/lib/catalog-store";
+import { getBrandBySlug, syncSingleBrand } from "@/lib/catalog-store";
+import { triggerClassificationDrain } from "@/lib/classification-trigger";
 
 export async function updateBrand(formData: FormData) {
   const slug = String(formData.get("slug") ?? "").trim();
@@ -36,12 +36,9 @@ export async function updateBrand(formData: FormData) {
 }
 
 /**
- * Manually re-syncs one brand's products right now, instead of waiting for
- * the next daily cron run. Import happens inline (so the admin sees the
- * result immediately), then classification of whatever just came in is
- * handed off to a background task. The Brands page only presents that task
- * as active for a short window; anything left pending is clearly labeled as
- * waiting and is also picked up by the classification recovery cron.
+ * Re-sync one brand, then hand all queued products to the same global worker
+ * used by onboarding and cron. The trigger returns immediately; bounded worker
+ * invocations continue until the oldest-first queue is empty.
  */
 export async function syncBrandNow(formData: FormData) {
   const slug = String(formData.get("slug") ?? "").trim();
@@ -52,16 +49,9 @@ export async function syncBrandNow(formData: FormData) {
   const result = await syncSingleBrand(brand);
   if (result.ok) {
     revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
-
-    after(async () => {
-      const deadline = Date.now() + 40_000;
-      while (Date.now() < deadline) {
-        const batch = await classifyPendingProducts(20, slug);
-        if (!batch.results.length) break;
-        revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
-      }
-    });
+    await triggerClassificationDrain().catch((error) => console.error("Unable to start Street classification drain", error));
   }
+
   revalidatePath("/admin/brands");
   redirect(`/admin/brands?synced=${encodeURIComponent(slug)}${result.ok ? `&classifying=${encodeURIComponent(slug)}` : `&syncError=${encodeURIComponent(result.error ?? "Sync failed")}`}`);
 }

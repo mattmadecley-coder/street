@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { classifyProductWithAI, type ProductClassification } from "@/lib/ai-product-classifier";
 import {
   ALL_STREET_CATEGORIES,
@@ -10,8 +11,14 @@ import {
 } from "@/lib/street-taxonomy";
 import { hasSupabaseCatalog, supabaseRest } from "@/lib/supabase-rest";
 
-const CLASSIFICATION_CONCURRENCY = 6;
-const AI_ATTEMPTS = 2;
+// One worker invocation must always finish comfortably inside Vercel's 60-second
+// runtime. OpenRouter performs model/provider failover inside each request, so a
+// single application-level attempt is enough and prevents one batch from
+// consuming the entire function lifetime.
+const CLASSIFICATION_CONCURRENCY = 4;
+const CLASSIFICATION_BATCH_MAX = 8;
+const AI_ATTEMPTS = 1;
+const WORKER_LEASE_SECONDS = 55;
 
 export type RecoveryClassificationResult = {
   id: string;
@@ -128,12 +135,15 @@ async function classifyOne(product: QueuedProduct): Promise<RecoveryClassificati
       return { id: product.id, title: product.title, status, group: classification.group, category: classification.category, usedFallback: false };
     } catch (error) {
       lastError = error instanceof Error ? error.message : "AI classification failed";
-      if (attempt < AI_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
 
+  // Model/provider fallback is already attempted by OpenRouter. If every model
+  // is unavailable or the listing is malformed, finish the queue item with a
+  // conservative low-confidence category so one bad product cannot block all
+  // later products. It remains visible in the admin review queue.
   const fallback = broadFallback(product);
-  await saveClassification(product.id, fallback, "needs_review", "street/broad-fallback-v1", `AI failed after ${AI_ATTEMPTS} attempts: ${lastError}`);
+  await saveClassification(product.id, fallback, "needs_review", "street/broad-fallback-v2", `AI models failed: ${lastError}`);
   return { id: product.id, title: product.title, status: "needs_review", group: fallback.group, category: fallback.category, usedFallback: true };
 }
 
@@ -151,7 +161,7 @@ async function saveClassification(id: string, classification: ProductClassificat
       classification_status: status,
       classification_confidence: classification.confidence,
       classification_model: model,
-      classification_version: 3,
+      classification_version: 4,
       classified_at: new Date().toISOString(),
       classification_error: note,
     },
@@ -172,9 +182,9 @@ async function mapConcurrent<T, R>(items: T[], limit: number, callback: (item: T
   return results;
 }
 
-export async function recoverQueuedClassifications(requestedLimit = 25, brandSlug?: string) {
+export async function recoverQueuedClassifications(requestedLimit = CLASSIFICATION_BATCH_MAX, brandSlug?: string) {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured.");
-  const limit = Math.max(1, Math.min(50, Math.floor(requestedLimit)));
+  const limit = Math.max(1, Math.min(CLASSIFICATION_BATCH_MAX, Math.floor(requestedLimit)));
   const params = new URLSearchParams();
   params.set("select", brandSlug ? "id,title,description,category,tags,colors,brands!inner(slug)" : "id,title,description,category,tags,colors");
   params.set("or", "(classification_status.eq.pending,classification_status.eq.error)");
@@ -186,4 +196,39 @@ export async function recoverQueuedClassifications(requestedLimit = 25, brandSlu
   const queued = await supabaseRest<QueuedProduct[]>(`products?${params.toString()}`, { noStore: true });
   const results = await mapConcurrent(queued, CLASSIFICATION_CONCURRENCY, classifyOne);
   return { limit, found: queued.length, results, fallbackCount: results.filter((result) => result.usedFallback).length };
+}
+
+/**
+ * Claims the singleton database lease, runs one bounded batch, and releases the
+ * lease. Every caller — cron, chained worker, or admin retry — uses this entry
+ * point so overlapping imports cannot classify the same products twice.
+ */
+export async function runClassificationWorkerBatch(requestedLimit = CLASSIFICATION_BATCH_MAX, brandSlug?: string) {
+  if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured.");
+  const owner = randomUUID();
+  const acquired = await supabaseRest<boolean>("rpc/claim_classification_worker", {
+    method: "POST",
+    body: { p_owner: owner, p_lease_seconds: WORKER_LEASE_SECONDS },
+  });
+
+  if (!acquired) {
+    return { limit: Math.min(requestedLimit, CLASSIFICATION_BATCH_MAX), found: 0, results: [] as RecoveryClassificationResult[], fallbackCount: 0, busy: true };
+  }
+
+  let processed = 0;
+  let failure: string | null = null;
+  try {
+    const run = await recoverQueuedClassifications(requestedLimit, brandSlug);
+    processed = run.results.length;
+    return { ...run, busy: false };
+  } catch (error) {
+    failure = error instanceof Error ? error.message : "Classification worker failed";
+    throw error;
+  } finally {
+    await supabaseRest("rpc/finish_classification_worker", {
+      method: "POST",
+      body: { p_owner: owner, p_processed: processed, p_error: failure },
+      prefer: "return=minimal",
+    }).catch((error) => console.error("Unable to release Street classification worker lease", error));
+  }
 }

@@ -4,7 +4,7 @@ import { after } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createBrandDraft, findBrandByDomain, syncSingleBrand, setBrandCatalogEnabled, getBrandBySlug } from "@/lib/catalog-store";
-import { recoverQueuedClassifications } from "@/lib/classification-recovery";
+import { runClassificationWorkerBatch } from "@/lib/classification-recovery";
 import { triggerClassificationDrain } from "@/lib/classification-trigger";
 import { findBrandLogo } from "@/lib/brand-logo-finder";
 import { uploadSiteAsset } from "@/lib/supabase-storage";
@@ -102,7 +102,7 @@ export async function skipLogo(formData: FormData) {
   redirect(`/admin/brands/new?step=import&slug=${encodeURIComponent(slug)}`);
 }
 
-/** Import the catalog, then immediately drain that brand's classification queue. */
+/** Import the catalog, then start the single global classification drain. */
 export async function runImport(formData: FormData) {
   const slug = String(formData.get("slug") ?? "");
   const brand = await getBrandBySlug(slug);
@@ -118,16 +118,16 @@ export async function runImport(formData: FormData) {
     if (!result.ok) return;
     revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
 
-    // Preferred path: hand classification to the dedicated drain endpoint.
-    // It chains fresh invocations until this brand has no pending/error items.
-    const triggered = await triggerClassificationDrain(slug);
+    // Drain the global oldest-first queue, not only the newly added brand. This
+    // keeps earlier products moving even when brands are added back-to-back.
+    const triggered = await triggerClassificationDrain();
     if (triggered) return;
 
-    // Local-development fallback when no public site origin is configured.
+    // Local-development fallback when no public deployment origin exists.
     const deadline = Date.now() + 42_000;
     while (Date.now() < deadline) {
-      const batch = await recoverQueuedClassifications(25, slug);
-      if (!batch.results.length) break;
+      const batch = await runClassificationWorkerBatch(8, slug);
+      if (batch.busy || !batch.results.length) break;
       revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
       if (batch.found < batch.limit) break;
     }
@@ -137,9 +137,9 @@ export async function runImport(formData: FormData) {
   redirect(`/admin/brands?justAdded=${encodeURIComponent(slug)}`);
 }
 
-/** Called repeatedly from the admin runner until this brand has no pending/error products left. */
+/** Manual admin batches use the same singleton lease as the automatic worker. */
 export async function classifyBatchAction(brandSlug: string) {
-  const result = await recoverQueuedClassifications(25, brandSlug);
+  const result = await runClassificationWorkerBatch(8, brandSlug);
   if (result.results.length) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
   return result;
 }
