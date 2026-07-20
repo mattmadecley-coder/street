@@ -3,14 +3,26 @@ import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { runClassificationWorkerBatch } from "@/lib/classification-recovery";
 import { triggerClassificationDrain } from "@/lib/classification-trigger";
-import { CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
+import { CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS, supabaseRest } from "@/lib/supabase-rest";
 
 export const maxDuration = 60;
 const WORKER_BATCH_SIZE = 8;
 
-function isAuthorized(request: NextRequest) {
+async function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  return !secret || request.headers.get("authorization") === `Bearer ${secret}`;
+  if (!secret || request.headers.get("authorization") === `Bearer ${secret}`) return true;
+
+  const watchdogToken = request.headers.get("x-street-worker-token")?.trim();
+  if (!watchdogToken) return false;
+  try {
+    return await supabaseRest<boolean>("rpc/authorize_classification_worker", {
+      method: "POST",
+      body: { p_token: watchdogToken },
+    });
+  } catch (error) {
+    console.error("Street classification watchdog authorization failed", error);
+    return false;
+  }
 }
 
 async function drainOneBatch(brandSlug?: string) {
@@ -46,8 +58,8 @@ async function drainOneBatch(brandSlug?: string) {
   }
 }
 
-function enqueueDrain(request: NextRequest) {
-  if (!isAuthorized(request)) {
+async function enqueueDrain(request: NextRequest) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
