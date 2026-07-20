@@ -8,7 +8,7 @@ const DEFAULTS: Record<SiteSettingKey, string> = {
   hero_image_url: "",
   hero_video_url: "",
   featured_brand_slug: "seventy-four-uniform",
-  featured_brand_cta_label: "Check out their collections",
+  featured_brand_cta_label: "Shop this brand",
 };
 
 /** Reads every site_settings row in one request. Falls back to defaults (and never throws) so a Supabase hiccup never takes the homepage down. */
