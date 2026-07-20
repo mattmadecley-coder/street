@@ -1,7 +1,10 @@
 -- The pre-launch site was crawled through every product page. Those requests did
 -- not execute Street's browser tracker, so they have no visitor/session identity.
--- Remove that unusable traffic and make the identity requirement enforceable at
--- the database boundary as well as in the application routes.
+-- Lock both tables so a crawler cannot insert another anonymous row between the
+-- cleanup and constraint validation.
+
+lock table public.outbound_clicks in share row exclusive mode;
+lock table public.site_events in share row exclusive mode;
 
 delete from public.outbound_clicks
 where coalesce(btrim(anonymous_user_id), '') = ''
