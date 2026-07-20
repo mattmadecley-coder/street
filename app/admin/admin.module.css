@@ -19,10 +19,11 @@
 .section { margin-top: 34px; }
 .sectionHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(16,16,16,.16); margin-bottom: 16px; }
 .sectionHead h2 { margin: 0; font-size: 18px; }
+.sectionHead p { margin: 5px 0 0; }
 .form { display: flex; flex-direction: column; gap: 10px; max-width: 560px; }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgba(16,16,16,.6); }
-.field input[type="text"], .field input[type="url"], .field input[type="number"], .field select, .field textarea { height: 40px; border: 1px solid rgba(16,16,16,.25); padding: 0 10px; font-size: 13px; background: #fff; }
+.field input[type="text"], .field input[type="url"], .field input[type="number"], .field input[type="datetime-local"], .field select, .field textarea { height: 40px; border: 1px solid rgba(16,16,16,.25); padding: 0 10px; font-size: 13px; background: #fff; }
 .field textarea { height: auto; padding: 8px 10px; min-height: 70px; }
 .field input[type="file"] { height: 40px; box-sizing: border-box; border: 1px solid rgba(16,16,16,.25); background: #fff; padding: 9px 10px; font-size: 12px; display: flex; align-items: center; }
 .checkboxField { display: flex; align-items: center; gap: 8px; font-size: 12px; }
@@ -40,8 +41,9 @@
 .rowMeta { font-size: 11px; color: rgba(16,16,16,.55); }
 .rowBody { padding: 0 14px 16px; }
 .table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.table th, .table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(16,16,16,.12); }
+.table th, .table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(16,16,16,.12); vertical-align: middle; }
 .table th { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: rgba(16,16,16,.55); }
+.table .buttonSecondary { height: 32px; padding: 0 12px; font-size: 9px; }
 .searchBar { display: flex; gap: 8px; margin-bottom: 18px; max-width: 480px; }
 .searchBar input { flex: 1; height: 42px; border: 1px solid rgba(16,16,16,.25); padding: 0 12px; font-size: 13px; }
 .searchBar button { height: 42px; padding: 0 18px; border: 0; background: #101010; color: #fff; font-size: 11px; font-weight: 700; text-transform: uppercase; cursor: pointer; }
