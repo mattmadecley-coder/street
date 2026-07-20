@@ -6,23 +6,23 @@ import { CatalogImage } from "@/components/catalog-image";
 import { HeroMedia } from "@/components/hero-media";
 import { getCatalogPage } from "@/lib/catalog-page";
 import { getCategoryDiverseProductShelf } from "@/lib/homepage-product-shelves";
-import { getSiteSettings } from "@/lib/site-settings";
+import { getEffectiveHomepageSettings } from "@/lib/homepage-feature-schedule";
 import { getHomepageBrandSummaries, getHomepageCategorySummaries } from "@/lib/homepage-summaries";
 import { getActiveCollectionsForHomepage } from "@/lib/collections-store";
 import { MEDIA_BLUR_DATA_URL } from "@/lib/media-placeholders";
 
-export const revalidate = 3600;
+// Scheduled homepage changes become visible within roughly one minute.
+export const revalidate = 60;
 
 export default async function HomePage() {
   const [settings, brands, categoryShowcase, newIn, under50, collections] = await Promise.all([
-    getSiteSettings(),
+    getEffectiveHomepageSettings(),
     getHomepageBrandSummaries(),
     getHomepageCategorySummaries(8),
     getCategoryDiverseProductShelf({ sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2, perCategoryCap: 2, poolPages: 4 }),
     getCategoryDiverseProductShelf({ max: 50, sort: "newest", availability: "in_stock" }, { limit: 10, perBrandCap: 2, perCategoryCap: 2, poolPages: 4 }),
     getActiveCollectionsForHomepage(),
   ]);
-
   const brandsWithStock = brands.filter((brand) => brand.productCount > 0);
   const featuredBrand = brandsWithStock.find((brand) => brand.slug === settings.featured_brand_slug) ?? brandsWithStock.find((brand) => brand.featured) ?? brandsWithStock[0];
   const featuredPage = featuredBrand ? await getCatalogPage({ brand: featuredBrand.slug, availability: "in_stock" }) : null;
@@ -43,14 +43,27 @@ export default async function HomePage() {
       <div className="shell">
         <section className={`hero ${styles.heroVideo}`}>
           <HeroMedia videoUrl={heroVideoUrl} imageUrl={heroImageUrl} className={styles.heroMedia} />
-          {featuredBrand ? <Link href={`/brands/${featuredBrand.slug}`} className={styles.brandSpotlight} aria-label={`View ${featuredBrand.name}`}><span className={styles.brandSpotlightLabel}>{settings.featured_brand_cta_label || "Check out their collections"}</span>{featuredBrand.logoUrl ? <CatalogImage src={featuredBrand.logoUrl} widthHint={360} fallback={<strong>{featuredBrand.name}</strong>} alt={featuredBrand.name} width={300} height={76} sizes="(max-width: 840px) 150px, 118px" className={styles.brandSpotlightLogo} /> : <strong>{featuredBrand.name}</strong>}</Link> : null}
+          {featuredBrand ? <Link href={`/brands/${featuredBrand.slug}`} className={styles.brandSpotlight} aria-label={`View ${featuredBrand.name}`}><span className={styles.brandSpotlightLabel}>{settings.featured_brand_cta_label || "Shop this brand"}</span>{featuredBrand.logoUrl ? <CatalogImage src={featuredBrand.logoUrl} widthHint={360} fallback={<strong>{featuredBrand.name}</strong>} alt={featuredBrand.name} width={300} height={76} sizes="(max-width: 840px) 150px, 118px" className={styles.brandSpotlightLogo} /> : <strong>{featuredBrand.name}</strong>}</Link> : null}
         </section>
         <Link href="/catalog" className="shop-all"><span>Shop all</span><span>→</span></Link>
 
         {featuredBrand && featured.length ? (
           <section className="section">
-            <div className="section-head"><div><p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Featured brand</p><h2 className="section-title">{featuredBrand.name}</h2></div><span className="link-small">Swipe to explore →</span></div>
-            <div className={styles.featuredRail}>{featured.map((product) => <div className={styles.featuredRailItem} key={product.id}><ProductCard product={product} /></div>)}<Link href={`/brands/${featuredBrand.slug}`} className={styles.viewBrandCard}><span>Explore the full collection</span>{featuredBrand.logoUrl ? <CatalogImage src={featuredBrand.logoUrl} widthHint={360} fallback={<strong>{featuredBrand.name}</strong>} alt={featuredBrand.name} width={260} height={90} /> : <strong>{featuredBrand.name}</strong>}<em>View brand →</em></Link></div>
+            <div className="section-head">
+              <div>
+                <p className="eyebrow" style={{ color: "rgba(16,16,16,.55)" }}>Featured brand</p>
+                <Link href={`/brands/${featuredBrand.slug}`} className={styles.featuredBrandTitle} aria-label={`Shop ${featuredBrand.name}`}><h2 className="section-title">{featuredBrand.name}</h2></Link>
+              </div>
+              <Link href={`/brands/${featuredBrand.slug}`} className="link-small">Shop this brand →</Link>
+            </div>
+            <div className={styles.featuredRail}>
+              {featured.map((product) => <div className={styles.featuredRailItem} key={product.id}><ProductCard product={product} /></div>)}
+              <Link href={`/brands/${featuredBrand.slug}`} className={styles.viewBrandCard} aria-label={`View all products from ${featuredBrand.name}`}>
+                <span>Explore the full collection</span>
+                <strong>{featuredBrand.name}</strong>
+                <em>Shop the brand →</em>
+              </Link>
+            </div>
           </section>
         ) : null}
 
