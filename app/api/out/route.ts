@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { trackingIdentityForRequest } from "@/lib/analytics-request";
 import { logOutboundClick, resolveOutboundDestination } from "@/lib/outbound-clicks";
 
 function referrerPath(referrer: string | null) {
@@ -20,26 +21,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Unrecognized or disallowed destination." }, { status: 400 });
   }
 
-  let attribution: { utmSource?: string | null; utmMedium?: string | null; utmCampaign?: string | null } = {};
-  try {
-    attribution = JSON.parse(decodeURIComponent(request.cookies.get("street_attribution")?.value ?? "{}"));
-  } catch {}
+  // Crawlers and link scanners should still reach the brand destination, but
+  // only a browser session established by Street's first-party tracker counts
+  // as purchase intent.
+  const identity = trackingIdentityForRequest(request);
+  if (identity) {
+    let attribution: { utmSource?: string | null; utmMedium?: string | null; utmCampaign?: string | null } = {};
+    try {
+      attribution = JSON.parse(decodeURIComponent(request.cookies.get("street_attribution")?.value ?? "{}"));
+    } catch {}
 
-  const referrer = request.headers.get("referer");
-  await logOutboundClick({
-    brandSlug: brand,
-    productSlug: product,
-    destinationUrl: destination.toString(),
-    anonymousUserId: request.cookies.get("street_visitor_id")?.value ?? null,
-    sessionId: request.cookies.get("street_session_id")?.value ?? null,
-    sourceComponent,
-    sourcePath: referrerPath(referrer),
-    searchQuery,
-    position,
-    referrer,
-    utmSource: attribution.utmSource ?? null,
-    utmMedium: attribution.utmMedium ?? null,
-    utmCampaign: attribution.utmCampaign ?? null,
-  });
+    const referrer = request.headers.get("referer");
+    await logOutboundClick({
+      brandSlug: brand,
+      productSlug: product,
+      destinationUrl: destination.toString(),
+      anonymousUserId: identity.visitorId,
+      sessionId: identity.sessionId,
+      sourceComponent,
+      sourcePath: referrerPath(referrer),
+      searchQuery,
+      position,
+      referrer,
+      utmSource: attribution.utmSource ?? null,
+      utmMedium: attribution.utmMedium ?? null,
+      utmCampaign: attribution.utmCampaign ?? null,
+    });
+  }
+
   return NextResponse.redirect(destination, 307);
 }

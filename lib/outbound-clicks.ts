@@ -36,7 +36,7 @@ export async function logOutboundClick(input: {
   utmCampaign?: string | null;
   metadata?: Record<string, unknown>;
 }) {
-  if (!hasSupabaseCatalog()) return;
+  if (!hasSupabaseCatalog() || !input.anonymousUserId?.trim() || !input.sessionId?.trim()) return;
   try {
     await supabaseRest("outbound_clicks", {
       method: "POST",
@@ -44,8 +44,8 @@ export async function logOutboundClick(input: {
         brand_slug: input.brandSlug,
         product_slug: input.productSlug ?? null,
         destination_url: input.destinationUrl,
-        anonymous_user_id: input.anonymousUserId ?? null,
-        session_id: input.sessionId ?? null,
+        anonymous_user_id: input.anonymousUserId,
+        session_id: input.sessionId,
         source_component: input.sourceComponent ?? null,
         source_path: input.sourcePath ?? null,
         search_query: input.searchQuery ?? null,

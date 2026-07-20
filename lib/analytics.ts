@@ -35,15 +35,15 @@ export type SiteEventInput = {
 };
 
 export async function logSiteEvent(input: SiteEventInput) {
-  if (!hasSupabaseCatalog()) return;
+  if (!hasSupabaseCatalog() || !input.anonymousUserId?.trim() || !input.sessionId?.trim()) return;
   try {
     await supabaseRest("site_events", {
       method: "POST",
       body: {
         event_type: input.eventType,
         event_id: input.eventId ?? undefined,
-        anonymous_user_id: input.anonymousUserId ?? null,
-        session_id: input.sessionId ?? null,
+        anonymous_user_id: input.anonymousUserId,
+        session_id: input.sessionId,
         event_sequence: input.eventSequence ?? null,
         query: input.query ?? null,
         results_count: input.resultsCount ?? null,

@@ -1,20 +1,28 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { payloadMatchesTrackingIdentity, trackingIdentityForRequest } from "@/lib/analytics-request";
 import { logSiteEvent } from "@/lib/analytics";
 
 const text = (value: unknown, max = 500) => typeof value === "string" ? value.trim().slice(0, max) || undefined : undefined;
 const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const identity = trackingIdentityForRequest(request);
+    if (!identity) return NextResponse.json({ ok: true, ignored: true }, { status: 202 });
+
     const body = await request.json();
+    if (!payloadMatchesTrackingIdentity(identity, body.anonymousUserId, body.sessionId)) {
+      return NextResponse.json({ ok: true, ignored: true }, { status: 202 });
+    }
+
     const eventType = text(body.eventType, 80);
     if (!eventType) return NextResponse.json({ ok: false, error: "Missing event type" }, { status: 400 });
 
     await logSiteEvent({
       eventType,
       eventId: text(body.eventId, 80),
-      anonymousUserId: text(body.anonymousUserId, 120),
-      sessionId: text(body.sessionId, 120),
+      anonymousUserId: identity.visitorId,
+      sessionId: identity.sessionId,
       eventSequence: number(body.eventSequence),
       query: text(body.query, 500),
       resultsCount: number(body.resultsCount),
