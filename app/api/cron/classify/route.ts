@@ -1,57 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
-import { recoverQueuedClassifications } from "@/lib/classification-recovery";
+import { runClassificationWorkerBatch } from "@/lib/classification-recovery";
 import { triggerClassificationDrain } from "@/lib/classification-trigger";
 import { CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
 
 export const maxDuration = 60;
+const WORKER_BATCH_SIZE = 8;
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   return !secret || request.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-async function drainQueue(brandSlug?: string) {
-  const deadline = Date.now() + 46_000;
-  let batches = 0;
-  let processed = 0;
-  let fallbackCount = 0;
-  let shouldContinue = false;
-
-  while (Date.now() < deadline) {
-    const run = await recoverQueuedClassifications(25, brandSlug);
-    if (!run.results.length) {
-      shouldContinue = false;
-      break;
+async function drainOneBatch(brandSlug?: string) {
+  try {
+    const run = await runClassificationWorkerBatch(WORKER_BATCH_SIZE, brandSlug);
+    if (run.busy) {
+      console.info("Street classification trigger joined an active worker", { brandSlug: brandSlug ?? null });
+      return;
     }
 
-    batches += 1;
-    processed += run.results.length;
-    fallbackCount += run.fallbackCount;
-    shouldContinue = run.found >= run.limit;
+    if (run.results.length) {
+      revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+    }
 
-    if (!shouldContinue) break;
+    // A full batch means there may be more work. Start a fresh invocation only
+    // after this bounded batch has completed and released the database lease.
+    // Continuations are global so older queued products cannot be stranded by
+    // a stream of newer brand-specific imports.
+    const shouldContinue = run.found >= run.limit;
+    if (shouldContinue) {
+      await triggerClassificationDrain();
+    }
+
+    console.info("Street classification batch completed", {
+      brandSlug: brandSlug ?? null,
+      found: run.found,
+      processed: run.results.length,
+      fallbackCount: run.fallbackCount,
+      continued: shouldContinue,
+    });
+  } catch (error) {
+    console.error("Street classification batch failed", error);
   }
-
-  if (processed > 0) {
-    revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
-  }
-
-  // A full final batch means there may still be work waiting. Start a fresh
-  // serverless invocation so classification continues beyond this request's
-  // runtime instead of leaving products pending until the next cron run.
-  if (shouldContinue) {
-    await triggerClassificationDrain(brandSlug);
-  }
-
-  console.info("Street classification drain completed", {
-    brandSlug: brandSlug ?? null,
-    batches,
-    processed,
-    fallbackCount,
-    continued: shouldContinue,
-  });
 }
 
 function enqueueDrain(request: NextRequest) {
@@ -60,34 +52,26 @@ function enqueueDrain(request: NextRequest) {
   }
 
   const brandSlug = request.nextUrl.searchParams.get("brand")?.trim() || undefined;
-  after(async () => {
-    try {
-      await drainQueue(brandSlug);
-    } catch (error) {
-      console.error("Street classification drain failed", error);
-    }
-  });
+  after(() => drainOneBatch(brandSlug));
 
   return NextResponse.json(
     {
       ok: true,
       mode: "classification-drain",
       brandSlug: brandSlug ?? null,
+      batchSize: WORKER_BATCH_SIZE,
       queuedAt: new Date().toISOString(),
     },
     { status: 202 },
   );
 }
 
-/**
- * Cron safety net and manual trigger. Work is handed to `after()` immediately,
- * then chained across new invocations until no pending/error products remain.
- */
+/** Cron safety net and manual trigger. */
 export async function GET(request: NextRequest) {
   return enqueueDrain(request);
 }
 
-/** Internal continuation endpoint used after brand imports and by prior runs. */
+/** Internal continuation endpoint used after imports and by prior runs. */
 export async function POST(request: NextRequest) {
   return enqueueDrain(request);
 }
