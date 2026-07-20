@@ -1,18 +1,23 @@
 .heroVideo { min-height: max(680px, 80svh); overflow: hidden; }
 .heroMedia { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-.brandSpotlight { position: absolute; right: 14px; bottom: 14px; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; width: 156px; min-height: 76px; padding: 10px 9px; color: #101010; text-align: center; background: rgba(255,255,255,.96); }
+.brandSpotlight { position: absolute; right: 14px; bottom: 14px; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; width: 156px; min-height: 76px; padding: 10px 9px; color: #101010; text-align: center; background: rgba(255,255,255,.96); transition: transform .18s ease, background .18s ease; }
+.brandSpotlight:hover,.brandSpotlight:focus-visible { transform: translateY(-2px); background: #fff; }
 .brandSpotlightLabel { display: block; width: 100%; font-size: 7px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; line-height: 1.2; }
 .brandSpotlightLogo { display: block; width: 118px; height: 30px; object-fit: contain; object-position: center; }
 @media (max-width: 840px) { .heroVideo { min-height: 77svh; } .brandSpotlight { left: 10px; right: 10px; bottom: 10px; width: auto; min-height: 60px; padding: 8px 12px; flex-direction: row; justify-content: space-between; gap: 12px; } .brandSpotlightLabel { width: auto; max-width: 120px; text-align: left; font-size: 8px; } .brandSpotlightLogo { width: 132px; height: 34px; } }
 
+.featuredBrandTitle { display: inline-block; }
+.featuredBrandTitle h2 { transition: opacity .16s ease; }
+.featuredBrandTitle:hover h2,.featuredBrandTitle:focus-visible h2 { opacity: .62; }
+
 .featuredRail { display: flex; gap: 12px; margin-top: 18px; padding: 0 0 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 0; scrollbar-width: none; overscroll-behavior-inline: contain; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
 .featuredRail::-webkit-scrollbar { display: none; }
 .featuredRailItem { flex: 0 0 clamp(176px, 18vw, 250px); min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
-.viewBrandCard { flex: 0 0 clamp(190px, 19vw, 265px); min-height: 330px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; border: 1px solid #101010; background: #101010; color: #f4f3ee; text-align: center; scroll-snap-align: start; scroll-snap-stop: always; }
-.viewBrandCard span { max-width: 160px; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; opacity: .65; }
-.viewBrandCard img { width: min(170px, 78%); height: 72px; object-fit: contain; filter: grayscale(1) brightness(0) invert(1); }
-.viewBrandCard strong { font-size: 30px; letter-spacing: -.07em; }
-.viewBrandCard em { font-style: normal; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 5px; }
+.viewBrandCard { flex: 0 0 clamp(190px, 19vw, 265px); min-height: 330px; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 14px; padding: 26px; border: 1px solid #101010; background: #101010; color: #f4f3ee; text-align: left; scroll-snap-align: start; scroll-snap-stop: always; transition: transform .18s ease, background .18s ease; }
+.viewBrandCard:hover,.viewBrandCard:focus-visible { transform: translateY(-3px); background: #202020; }
+.viewBrandCard span { max-width: 170px; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; opacity: .62; }
+.viewBrandCard strong { max-width: 100%; font-size: clamp(30px, 3vw, 46px); line-height: .92; letter-spacing: -.075em; overflow-wrap: anywhere; }
+.viewBrandCard em { margin-top: 4px; font-style: normal; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 5px; }
 
 .brandMarqueeViewport { width: 100%; margin-top: 22px; overflow: hidden; }
 .brandMarqueeTrack { display: flex; align-items: center; width: max-content; animation: brand-marquee var(--brand-marquee-duration, 42s) linear infinite; will-change: transform; }
