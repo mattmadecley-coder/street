@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { previewPendingClassifications } from "@/lib/classification-preview";
-import { classifyPendingProducts, syncBrandDirectory, syncStreetCatalog } from "@/lib/catalog-store";
+import { runClassificationWorkerBatch } from "@/lib/classification-recovery";
+import { syncBrandDirectory, syncStreetCatalog } from "@/lib/catalog-store";
 import { triggerClassificationDrain } from "@/lib/classification-trigger";
 import { CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
 
@@ -29,10 +30,10 @@ export async function GET(request: NextRequest) {
     if (mode === "classify") {
       const requestedLimit = Number(request.nextUrl.searchParams.get("limit"));
       const brandSlug = request.nextUrl.searchParams.get("brand") ?? undefined;
-      const run = await classifyPendingProducts(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined, brandSlug);
-      const failed = run.results.filter((result) => result.status === "error");
-      if (run.results.some((result) => result.status === "classified")) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
-      return NextResponse.json({ ok: failed.length === 0, mode: "classify", classifiedAt: new Date().toISOString(), ...run }, { status: failed.length ? 502 : 200 });
+      const run = await runClassificationWorkerBatch(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined, brandSlug);
+      if (run.results.length) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+      if (!run.busy && run.found >= run.limit) await triggerClassificationDrain();
+      return NextResponse.json({ ok: true, mode: "classify", classifiedAt: new Date().toISOString(), ...run }, { status: run.busy ? 202 : 200 });
     }
 
     // Wake the durable queue before the longer all-brand sync begins. This
