@@ -1,33 +1,40 @@
+import { hasSupabaseCatalog, supabaseRest } from "@/lib/supabase-rest";
+
 function siteOrigin(): string | null {
-  // Internal worker chaining should use the current Vercel deployment directly.
-  // This avoids custom-domain DNS, Cloudflare, www/non-www redirects, and the
-  // fact that Vercel cron requests treat redirects as final responses.
-  const vercelHost = process.env.VERCEL_URL?.trim() || process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
-  if (vercelHost) {
-    return `https://${vercelHost.replace(/^https?:\/\//i, "").replace(/\/$/, "")}`;
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (explicit) {
+    try {
+      return new URL(explicit).origin;
+    } catch {
+      // Fall through to Vercel-provided hostnames.
+    }
   }
 
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!explicit) return null;
-  try {
-    return new URL(explicit).origin;
-  } catch {
-    return null;
-  }
+  const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+  if (!vercelHost) return null;
+  return `https://${vercelHost.replace(/^https?:\/\//i, "").replace(/\/$/, "")}`;
 }
 
 /**
- * Starts one classifier-drain invocation. The classify route returns immediately
- * and performs one bounded batch through Next.js `after()`. A completed full
- * batch starts another invocation until the global queue is empty.
+ * Starts one classifier-drain invocation. In production, route through the
+ * database watchdog because it owns the stable public URL and private trigger
+ * token. This avoids deployment protection, self-call aliases, redirects, and
+ * other Vercel-to-itself failure modes. Local development falls back to a
+ * direct request when Supabase is not configured.
  */
-export async function triggerClassificationDrain(brandSlug?: string): Promise<boolean> {
+export async function triggerClassificationDrain(): Promise<boolean> {
+  if (hasSupabaseCatalog()) {
+    const requestId = await supabaseRest<number | null>("rpc/wake_classification_worker", {
+      method: "POST",
+      body: {},
+    });
+    return typeof requestId === "number" && requestId > 0;
+  }
+
   const origin = siteOrigin();
   if (!origin) return false;
 
   const url = new URL("/api/cron/classify", origin);
-  if (brandSlug) url.searchParams.set("brand", brandSlug);
-
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const secret = process.env.CRON_SECRET;
   if (secret) headers.Authorization = `Bearer ${secret}`;
@@ -36,7 +43,6 @@ export async function triggerClassificationDrain(brandSlug?: string): Promise<bo
     method: "POST",
     headers,
     cache: "no-store",
-    redirect: "error",
     body: "{}",
   });
 
