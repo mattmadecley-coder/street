@@ -1,23 +1,25 @@
 function siteOrigin(): string | null {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (explicit) {
-    try {
-      return new URL(explicit).origin;
-    } catch {
-      // Fall through to Vercel-provided hostnames.
-    }
+  // Internal worker chaining should use the current Vercel deployment directly.
+  // This avoids custom-domain DNS, Cloudflare, www/non-www redirects, and the
+  // fact that Vercel cron requests treat redirects as final responses.
+  const vercelHost = process.env.VERCEL_URL?.trim() || process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (vercelHost) {
+    return `https://${vercelHost.replace(/^https?:\/\//i, "").replace(/\/$/, "")}`;
   }
 
-  const vercelHost = process.env.VERCEL_URL?.trim() || process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
-  if (!vercelHost) return null;
-  return `https://${vercelHost.replace(/^https?:\/\//i, "").replace(/\/$/, "")}`;
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!explicit) return null;
+  try {
+    return new URL(explicit).origin;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Starts one classifier-drain invocation. The classify route returns immediately
- * and performs work through Next.js `after()`, so callers do not inherit the
- * classifier's serverless runtime. Each invocation schedules another one when
- * a full batch was found, allowing the queue to drain across multiple requests.
+ * and performs one bounded batch through Next.js `after()`. A completed full
+ * batch starts another invocation until the global queue is empty.
  */
 export async function triggerClassificationDrain(brandSlug?: string): Promise<boolean> {
   const origin = siteOrigin();
@@ -34,6 +36,7 @@ export async function triggerClassificationDrain(brandSlug?: string): Promise<bo
     method: "POST",
     headers,
     cache: "no-store",
+    redirect: "error",
     body: "{}",
   });
 
