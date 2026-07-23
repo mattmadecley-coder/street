@@ -126,22 +126,31 @@ export type OutboundClickRow = {
   created_at: string;
 };
 
-export async function getRecentSiteEvents(limit = 20000, since?: string): Promise<SiteEventRow[]> {
+const MAX_RAW_ANALYTICS_ROWS = 10000;
+
+function safeAnalyticsLimit(limit: number) {
+  if (!Number.isFinite(limit)) return MAX_RAW_ANALYTICS_ROWS;
+  return Math.min(Math.max(Math.trunc(limit), 1), MAX_RAW_ANALYTICS_ROWS);
+}
+
+export async function getRecentSiteEvents(limit = 5000, since?: string): Promise<SiteEventRow[]> {
   if (!hasSupabaseCatalog()) return [];
   try {
+    const safeLimit = safeAnalyticsLimit(limit);
     const dateFilter = since ? `&created_at=gte.${encodeURIComponent(since)}` : "";
-    return await supabaseRestAll<SiteEventRow[]>(`site_events?select=event_type,anonymous_user_id,session_id,query,results_count,product_id,brand_slug,street_group,street_category,price,path,referrer,source_component,position,device_type,browser,operating_system,screen_width,language,timezone,landing_path,utm_source,utm_medium,utm_campaign,metadata,created_at${dateFilter}&order=created_at.desc&limit=${limit}`, 500);
+    return await supabaseRestAll<SiteEventRow[]>(`site_events?select=event_type,anonymous_user_id,session_id,query,results_count,product_id,brand_slug,street_group,street_category,price,path,referrer,source_component,position,device_type,browser,operating_system,screen_width,language,timezone,landing_path,utm_source,utm_medium,utm_campaign,metadata,created_at${dateFilter}&order=created_at.desc&limit=${safeLimit}`, 1000);
   } catch (error) {
     console.error("Street analytics read failed", error);
     return [];
   }
 }
 
-export async function getRecentOutboundClicks(limit = 20000, since?: string): Promise<OutboundClickRow[]> {
+export async function getRecentOutboundClicks(limit = 5000, since?: string): Promise<OutboundClickRow[]> {
   if (!hasSupabaseCatalog()) return [];
   try {
+    const safeLimit = safeAnalyticsLimit(limit);
     const dateFilter = since ? `&created_at=gte.${encodeURIComponent(since)}` : "";
-    return await supabaseRestAll<OutboundClickRow[]>(`outbound_clicks?select=product_id,brand_slug,product_slug,product_title,product_price,destination_url,anonymous_user_id,session_id,source_component,source_path,search_query,position,referrer,utm_source,utm_medium,utm_campaign,created_at${dateFilter}&order=created_at.desc&limit=${limit}`, 500);
+    return await supabaseRestAll<OutboundClickRow[]>(`outbound_clicks?select=product_id,brand_slug,product_slug,product_title,product_price,destination_url,anonymous_user_id,session_id,source_component,source_path,search_query,position,referrer,utm_source,utm_medium,utm_campaign,created_at${dateFilter}&order=created_at.desc&limit=${safeLimit}`, 1000);
   } catch (error) {
     console.error("Street outbound click read failed", error);
     return [];
