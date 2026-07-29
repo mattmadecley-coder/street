@@ -8,6 +8,7 @@ import { SiteMascot } from "@/components/mascot/site-mascot";
 import { CartProvider } from "@/components/cart-context";
 import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { CatalogAnalytics } from "@/components/catalog-analytics";
+import { Analytics } from "@vercel/analytics/next";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const title = "Street — Discover independent streetwear";
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <CatalogAnalytics />
           </Suspense>
         </CartProvider>
+        <Analytics />
       </body>
     </html>
   );
