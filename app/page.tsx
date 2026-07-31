@@ -12,7 +12,7 @@ import { getActiveCollectionsForHomepage } from "@/lib/collections-store";
 import { MEDIA_BLUR_DATA_URL } from "@/lib/media-placeholders";
 
 // Scheduled homepage changes become visible within roughly one minute.
-export const revalidate = 60;
+export const revalidate = 300;
 
 export default async function HomePage() {
   const [settings, brands, categoryShowcase, newIn, under50, collections] = await Promise.all([

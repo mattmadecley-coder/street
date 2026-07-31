@@ -57,6 +57,18 @@ export async function getStoredCatalog(): Promise<StreetProduct[] | null> {
   }
 }
 
+/** Lightweight slug list used by generateStaticParams — fetches only handle + brand slug, not full product data. */
+export async function getAllProductSlugs(): Promise<string[]> {
+  if (!hasSupabaseCatalog()) return [];
+  try {
+    type SlugRow = { handle: string; brands: { slug: string } | null };
+    const rows = await supabaseRestAll<SlugRow[]>("products?select=handle,brands(slug)&is_active=eq.true&is_hidden=eq.false");
+    return rows.map((row) => `${row.brands?.slug ?? "brand"}--${row.handle}`);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Every brand Street knows about — DB rows (including brands added through
  * /admin/brands/new) layered over the static STREET_BRANDS seed list. The

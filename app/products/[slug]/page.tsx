@@ -7,10 +7,16 @@ import { ProductGallery } from "@/components/product-gallery";
 import { ProductVariantProvider } from "@/components/product-variant-context";
 import { ProductDetailPanel } from "@/components/product-detail-panel";
 import { getProduct, type StreetProduct } from "@/lib/catalog";
+import { getAllProductSlugs } from "@/lib/catalog-store";
 import { getRelatedProducts } from "@/lib/product-recommendations";
 import "./product-page.css";
 
 export const revalidate = 3600;
+
+export async function generateStaticParams() {
+  const slugs = await getAllProductSlugs();
+  return slugs.map((slug) => ({ slug }));
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;

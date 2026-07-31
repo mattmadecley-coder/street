@@ -4,6 +4,11 @@ import { Header, Footer, ProductCard } from "@/components/storefront";
 import { CatalogImage } from "@/components/catalog-image";
 import { CATALOG_PAGE_SIZE, getCatalogPage } from "@/lib/catalog-page";
 import { getBrandDirectory } from "@/lib/catalog-store";
+
+export async function generateStaticParams() {
+  const brands = await getBrandDirectory();
+  return brands.map((brand) => ({ slug: brand.slug }));
+}
 import styles from "./brand.module.css";
 
 type Params = { availability?: string; sort?: string; page?: string };
