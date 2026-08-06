@@ -69,6 +69,18 @@ export async function getAllProductSlugs(): Promise<string[]> {
   }
 }
 
+/** Lightweight slug + last-synced-at list for the sitemap — same shape of query as getAllProductSlugs, but also carries last_synced_at so app/sitemap.ts doesn't need the full nested getStoredCatalog() join (products+images+variants) just to build URL entries. */
+export async function getAllProductSitemapEntries(): Promise<Array<{ slug: string; lastSyncedAt: string }>> {
+  if (!hasSupabaseCatalog()) return [];
+  try {
+    type SitemapRow = { handle: string; last_synced_at: string; brands: { slug: string } | null };
+    const rows = await supabaseRestAll<SitemapRow[]>("products?select=handle,last_synced_at,brands(slug)&is_active=eq.true&is_hidden=eq.false&order=last_synced_at.desc");
+    return rows.map((row) => ({ slug: `${row.brands?.slug ?? "brand"}--${row.handle}`, lastSyncedAt: row.last_synced_at }));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Every brand Street knows about — DB rows (including brands added through
  * /admin/brands/new) layered over the static STREET_BRANDS seed list. The

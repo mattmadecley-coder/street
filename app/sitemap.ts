@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getStoredCatalog, getBrandDirectory } from "@/lib/catalog-store";
+import { getAllProductSitemapEntries, getBrandDirectory } from "@/lib/catalog-store";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -32,9 +32,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
 
   // Product detail pages are how shoppers land on Street from a Google search
-  // for a specific item, so they matter most for the discovery goal.
-  const products = await getStoredCatalog();
-  const productRoutes: MetadataRoute.Sitemap = (products ?? []).slice(0, MAX_PRODUCT_URLS).map((product) => ({
+  // for a specific item, so they matter most for the discovery goal. This
+  // only needs each product's slug + last-synced timestamp, so it goes
+  // through the lightweight sitemap query instead of the full nested
+  // products+images+variants join getStoredCatalog() does — that join was
+  // getting re-run on every hourly sitemap regeneration (and every crawler
+  // hit after a cache miss) just to read two fields per product, which was
+  // a meaningful chunk of Supabase egress for a catalog this size.
+  const products = await getAllProductSitemapEntries();
+  const productRoutes: MetadataRoute.Sitemap = products.slice(0, MAX_PRODUCT_URLS).map((product) => ({
     url: `${siteUrl}/products/${product.slug}`,
     lastModified: product.lastSyncedAt,
     changeFrequency: "daily",
