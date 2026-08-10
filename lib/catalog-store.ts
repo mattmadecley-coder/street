@@ -3,7 +3,7 @@ import { STREET_TAXONOMY, categoriesForGroup } from "@/lib/street-taxonomy";
 import { fetchBrandMetadata, type BrandMetadata } from "@/lib/brand-metadata";
 import { classifyProductWithAI } from "@/lib/ai-product-classifier";
 import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
-import { hasSupabaseCatalog, supabaseRest, supabaseRestAll } from "@/lib/supabase-rest";
+import { hasSupabaseCatalog, supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 import type { StreetProduct } from "@/lib/catalog";
 
 type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean; catalog_enabled?: boolean };
@@ -333,32 +333,88 @@ function databaseProduct(brandId: string, product: ImportedProduct) {
   return { brand_id: brandId, external_id: product.externalId, handle: product.handle, title: product.title, description: product.description, source_url: product.sourceUrl, price: product.price, compare_at_price: product.compareAtPrice ?? null, stock_status: product.stockStatus, is_preorder: product.isPreorder, category: product.category, tags: product.tags, colors: product.colors, sizes: product.sizes, primary_image_url: product.images[0] ?? null, is_active: true, last_synced_at: new Date().toISOString() };
 }
 
+type ExistingProductRow = { id: string; external_id: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; title: string; category: string; tags: string[]; colors: string[]; sizes: string[] };
+
+/** Same page-looping shape as supabaseRestAll, but noStore — for reads that feed a same-run diff/write decision and can't risk a cached snapshot. */
+async function fetchAllNoStore<T>(path: string, pageSize = 500): Promise<T[]> {
+  const all: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data, total } = await supabaseRestPage<T>(path, { from, to: from + pageSize - 1 }, { noStore: true });
+    all.push(...data);
+    if (data.length < pageSize || all.length >= total) return all;
+    from += pageSize;
+  }
+}
+
+/** Signature of the fields that matter for "did this product change" — price, stock, preorder flag, title/category, and tag/color/size options. Deliberately excludes photos: catching a photo-only change would mean joining product_images into every brand's daily diff check, which defeats the point of a cheap pre-check. */
+function productSignature(p: { price: number; compareAtPrice?: number; stockStatus: string; isPreorder: boolean; title: string; category: string; tags: string[]; colors: string[]; sizes: string[] }) {
+  return JSON.stringify([p.price, p.compareAtPrice ?? null, p.stockStatus, p.isPreorder, p.title, p.category, [...p.tags].sort(), [...p.colors].sort(), [...p.sizes].sort()]);
+}
+
+function existingSignature(row: ExistingProductRow) {
+  return productSignature({ price: number(row.price), compareAtPrice: row.compare_at_price === null ? undefined : number(row.compare_at_price), stockStatus: row.stock_status, isPreorder: row.is_preorder, title: row.title, category: row.category, tags: row.tags ?? [], colors: row.colors ?? [], sizes: row.sizes ?? [] });
+}
+
+function importedSignature(p: ImportedProduct) {
+  return productSignature({ price: p.price, compareAtPrice: p.compareAtPrice ?? undefined, stockStatus: p.stockStatus, isPreorder: p.isPreorder, title: p.title, category: p.category, tags: p.tags, colors: p.colors, sizes: p.sizes });
+}
+
 /**
  * Imports (or re-imports) one brand's full catalog: fetches the source feed,
- * marks everything previously on file for this brand inactive, then
- * upserts the fresh product/image/variant rows. Re-running this for a brand
+ * then writes only what actually changed. Re-running this for a brand
  * that's already in the database is exactly how "did anything sell out /
- * come back in stock / get added" is detected — stock_status, sizes
- * (product_variants), and the product list itself are fully replaced with
- * whatever the brand's source currently says. Used by both the daily cron
- * (syncStreetCatalog, all enabled brands) and the admin "sync now" /
- * new-brand-wizard import step (this brand only).
+ * come back in stock / get added" is detected — every fetched product is
+ * compared against what's on file (price, stock, preorder, title, category,
+ * tags/colors/sizes; see productSignature), so nothing is missed. Products
+ * whose signature matches what's already stored are just flipped back to
+ * active — the (typically large) majority of a brand's catalog on any given
+ * day — instead of being deleted and reinserted with their images/variants
+ * rebuilt from scratch. Only new-or-changed products pay that cost. Used by
+ * both the QStash-dispatched daily sync (app/api/qstash/sync-brand, one
+ * call per brand) and the admin "sync now" / new-brand-wizard import step.
  */
 export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncResult> {
   const brandRow = await upsertBrand(brand);
   const runRows = await supabaseRest<SyncRunRow[]>("catalog_sync_runs", { method: "POST", body: { brand_id: brandRow.id, status: "running" } });
   const runId = runRows[0]?.id;
   try {
-    const imported = await importBrandCatalog(brand);
+    const [imported, existingRows] = await Promise.all([
+      importBrandCatalog(brand),
+      fetchAllNoStore<ExistingProductRow>(`products?select=id,external_id,price,compare_at_price,stock_status,is_preorder,title,category,tags,colors,sizes&brand_id=eq.${brandRow.id}`),
+    ]);
     if (!imported.length) throw new Error("The brand source did not return any products.");
+
+    const existingByExternalId = new Map(existingRows.map((row) => [row.external_id, row]));
+    const changedOrNew = imported.filter((product) => {
+      const existing = existingByExternalId.get(product.externalId);
+      return !existing || existingSignature(existing) !== importedSignature(product);
+    });
+    const changedExternalIds = new Set(changedOrNew.map((product) => product.externalId));
+    const unchangedIds = imported
+      .map((product) => existingByExternalId.get(product.externalId))
+      .filter((row): row is ExistingProductRow => row !== undefined && !changedExternalIds.has(row.external_id))
+      .map((row) => row.id);
+
+    // Deactivate everything on file for this brand first, so anything the
+    // source dropped falls out of the catalog; both branches below flip the
+    // still-current rows back on.
     await supabaseRest(`products?brand_id=eq.${brandRow.id}`, { method: "PATCH", body: { is_active: false }, prefer: "return=minimal" });
-    const saved = await supabaseRest<Array<{ id: string; external_id: string }>>("products?on_conflict=brand_id,external_id", { method: "POST", body: imported.map((product) => databaseProduct(brandRow.id, product)), prefer: "resolution=merge-duplicates,return=representation" });
-    const ids = new Map(saved.map((product) => [product.external_id, product.id]));
-    await Promise.all(saved.flatMap((product) => [supabaseRest(`product_images?product_id=eq.${product.id}`, { method: "DELETE", prefer: "return=minimal" }), supabaseRest(`product_variants?product_id=eq.${product.id}`, { method: "DELETE", prefer: "return=minimal" })]));
-    const images = imported.flatMap((product) => { const productId = ids.get(product.externalId); return productId ? product.images.map((sourceUrl, sortOrder) => ({ product_id: productId, source_url: sourceUrl, sort_order: sortOrder, alt_text: product.title })) : []; });
-    const variants = imported.flatMap((product) => { const productId = ids.get(product.externalId); return productId ? product.variants.map((variant) => ({ product_id: productId, external_id: variant.externalId, title: variant.title || null, price: variant.price, compare_at_price: variant.compareAtPrice ?? null, available: variant.available, option1: variant.option1 ?? null, option2: variant.option2 ?? null, option3: variant.option3 ?? null, image_url: variant.imageUrl ?? null })) : []; });
-    if (images.length) await supabaseRest("product_images", { method: "POST", body: images, prefer: "return=minimal" });
-    if (variants.length) await supabaseRest("product_variants", { method: "POST", body: variants, prefer: "return=minimal" });
+
+    if (unchangedIds.length) {
+      await supabaseRest(`products?id=in.(${unchangedIds.join(",")})`, { method: "PATCH", body: { is_active: true, last_synced_at: new Date().toISOString() }, prefer: "return=minimal" });
+    }
+
+    if (changedOrNew.length) {
+      const saved = await supabaseRest<Array<{ id: string; external_id: string }>>("products?on_conflict=brand_id,external_id", { method: "POST", body: changedOrNew.map((product) => databaseProduct(brandRow.id, product)), prefer: "resolution=merge-duplicates,return=representation" });
+      const ids = new Map(saved.map((product) => [product.external_id, product.id]));
+      await Promise.all(saved.flatMap((product) => [supabaseRest(`product_images?product_id=eq.${product.id}`, { method: "DELETE", prefer: "return=minimal" }), supabaseRest(`product_variants?product_id=eq.${product.id}`, { method: "DELETE", prefer: "return=minimal" })]));
+      const images = changedOrNew.flatMap((product) => { const productId = ids.get(product.externalId); return productId ? product.images.map((sourceUrl, sortOrder) => ({ product_id: productId, source_url: sourceUrl, sort_order: sortOrder, alt_text: product.title })) : []; });
+      const variants = changedOrNew.flatMap((product) => { const productId = ids.get(product.externalId); return productId ? product.variants.map((variant) => ({ product_id: productId, external_id: variant.externalId, title: variant.title || null, price: variant.price, compare_at_price: variant.compareAtPrice ?? null, available: variant.available, option1: variant.option1 ?? null, option2: variant.option2 ?? null, option3: variant.option3 ?? null, image_url: variant.imageUrl ?? null })) : []; });
+      if (images.length) await supabaseRest("product_images", { method: "POST", body: images, prefer: "return=minimal" });
+      if (variants.length) await supabaseRest("product_variants", { method: "POST", body: variants, prefer: "return=minimal" });
+    }
+
     if (runId) await supabaseRest(`catalog_sync_runs?id=eq.${runId}`, { method: "PATCH", body: { status: "success", completed_at: new Date().toISOString(), product_count: imported.length }, prefer: "return=minimal" });
     return { brand: brand.slug, productCount: imported.length, ok: true };
   } catch (error) {
