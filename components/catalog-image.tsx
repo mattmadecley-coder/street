@@ -12,13 +12,15 @@ type CatalogImageProps = Omit<ImageProps, "src" | "unoptimized" | "onError"> & {
 };
 
 /**
- * Loads remote catalog media directly from the brand/CDN instead of routing it
- * through Next's server-side image optimizer. We tried enabling the optimizer
- * (real AVIF/WebP negotiation + responsive srcset) but Render's free/starter
- * plan can't keep up with the concurrent transform requests a catalog grid
- * fires off -- it started returning 500/503s and images went blank site-wide.
- * Revisit once the Render plan has more CPU headroom. Failed resized Shopify
- * URLs fall back to the original asset, then to any supplied alternate images.
+ * Loads remote catalog media through ImageKit's free "Web proxy" CDN (see
+ * lib/catalog-image.ts) instead of Next's own server-side image optimizer.
+ * We tried Next's optimizer directly on Render and it 500/503'd under a
+ * catalog grid's concurrent load (free/starter plan, not enough CPU) --
+ * ImageKit does the resizing/AVIF-WebP conversion at its own edge instead,
+ * so Render never touches it. `unoptimized` stays on so Next doesn't also
+ * try to process the already-optimized ImageKit URL. Failed candidates fall
+ * back down the chain built in catalogImageCandidates, then to any supplied
+ * alternate images.
  */
 export function CatalogImage({
   src,
