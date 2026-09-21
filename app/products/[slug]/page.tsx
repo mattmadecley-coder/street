@@ -7,15 +7,18 @@ import { ProductGallery } from "@/components/product-gallery";
 import { ProductVariantProvider } from "@/components/product-variant-context";
 import { ProductDetailPanel } from "@/components/product-detail-panel";
 import { getProduct, type StreetProduct } from "@/lib/catalog";
-import { getAllProductSlugs } from "@/lib/catalog-store";
 import { getRelatedProducts } from "@/lib/product-recommendations";
 import "./product-page.css";
 
 export const revalidate = 3600;
 
+// Render's free build machine runs out of memory pre-rendering every product
+// page at build time (this catalog is large enough to exceed 8GB). Instead,
+// build zero pages upfront and let each product page render on its first
+// real visit, then get cached for `revalidate` seconds like any other ISR
+// page. Same end-user behavior, no build-time memory spike.
 export async function generateStaticParams() {
-  const slugs = await getAllProductSlugs();
-  return slugs.map((slug) => ({ slug }));
+  return [];
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
