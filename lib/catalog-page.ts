@@ -92,6 +92,12 @@ export type CatalogPage = { products: StreetProduct[]; total: number; page: numb
 
 export const CATALOG_PAGE_SIZE = 50;
 
+// Search and best-sellers ranking need to look at every matching row to rank
+// or interleave them before slicing a page off the top. Cap how many rows
+// that ever pulls into memory at once — plenty for realistic filters/queries,
+// but bounded instead of scaling with the whole catalog.
+const CANDIDATE_SCAN_CAP = 3000;
+
 export function normalizeCatalogSort(value?: string): CatalogSort {
   if (value === "best-sellers" || value === "newest" || value === "price-low" || value === "price-high") return value;
   return "relevance";
@@ -233,12 +239,16 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
   const sort = normalizeCatalogSort(filters.sort);
 
   try {
-    // Rank the complete filtered result set using lightweight rows, paginate the
-    // resulting ID order, then hydrate only the requested page's cards. This is
-    // global balancing without loading every product image/variant before slice.
-    if (query || sort === "relevance" || sort === "best-sellers") {
+    // Only a text search (relevance ranking + brand balancing across matches)
+    // or an explicit best-sellers sort (popularity ranking) need the whole
+    // filtered result set in memory to rank. Plain category/group browsing
+    // with no search term — the common case, hit on every sidebar click —
+    // stays a single paginated database query in the branch below instead of
+    // pulling every matching row into memory just to count and interleave
+    // them.
+    if (query || sort === "best-sellers") {
       const select = query ? SEARCH_SELECT : BALANCE_SELECT;
-      const rows = await supabaseRestAll<CandidateRow[]>(productPath({ ...filters, q: undefined, sort }, select));
+      const rows = await supabaseRestAll<CandidateRow[]>(productPath({ ...filters, q: undefined, sort }, select), 500, CANDIDATE_SCAN_CAP);
       const candidates = rows.map(toCatalogCandidate);
 
       if (sort === "relevance") {

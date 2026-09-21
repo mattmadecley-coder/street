@@ -46,10 +46,19 @@ function toStreetBrand(row: BrandRow): StreetBrand {
   return { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url ?? undefined, featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true };
 }
 
+// Emergency fallback only — the catalog page itself now always reads through
+// lib/catalog-page.ts's paginated getCatalogPage, which queries Supabase
+// directly for one page at a time instead of loading every product. This
+// still-unpaginated full read stays as a last resort for getCatalog() (see
+// lib/catalog.ts) when that paginated path can't run at all. Capped so even
+// that fallback can't pull the whole ~10k-product catalog, with full joins,
+// into memory at once.
+const STORED_CATALOG_FALLBACK_CAP = 2000;
+
 export async function getStoredCatalog(): Promise<StreetProduct[] | null> {
   if (!hasSupabaseCatalog()) return null;
   try {
-    const rows = await supabaseRestAll<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&is_hidden=eq.false&order=updated_at.desc,id.desc");
+    const rows = await supabaseRestAll<ProductRow[]>("products?select=*,brands(*),product_images(*),product_variants(*)&is_active=eq.true&is_hidden=eq.false&order=updated_at.desc,id.desc", 500, STORED_CATALOG_FALLBACK_CAP);
     return rows.map(toStreetProduct);
   } catch (error) {
     console.error("Street database catalog read failed", error);
@@ -176,22 +185,26 @@ export type CategorySummary = { group: string; categories: string[] };
 
 /**
  * Which taxonomy groups/categories currently have at least one live,
- * classified product — powers the header's "Categories" mega-menu so it
- * never links somewhere empty. Cached the same way as the rest of the
- * catalog (see supabaseRestAll / CATALOG_CACHE_TAG), so this doesn't add a
- * real extra round trip on top of normal page loads.
+ * classified product — powers the header's "Categories" mega-menu (rendered
+ * on every single page) so it never links somewhere empty. This used to scan
+ * every active product's street_group/street_category on every page load to
+ * work this out live; it now reads catalog_category_summaries instead, a
+ * small precomputed table (one row per group/category with its current
+ * product count) that a Supabase trigger keeps in sync as products change —
+ * see refresh_catalog_category_summaries, called from the daily catalog-sync
+ * cron. A handful of rows instead of the whole catalog, every page load.
  */
 export async function getActiveCategorySummary(): Promise<CategorySummary[]> {
   if (!hasSupabaseCatalog()) return [];
   try {
-    const rows = await supabaseRestAll<Array<{ street_group: string | null; street_category: string | null }>>(
-      "products?select=street_group,street_category&is_active=eq.true&is_hidden=eq.false&street_group=not.is.null&street_category=not.is.null&order=id.asc"
+    const rows = await supabaseRest<Array<{ group_name: string; category_name: string; product_count: number | string }>>(
+      "catalog_category_summaries?select=group_name,category_name,product_count&order=category_name.asc"
     );
     const byGroup = new Map<string, Set<string>>();
     for (const row of rows) {
-      if (!row.street_group || !row.street_category) continue;
-      if (!byGroup.has(row.street_group)) byGroup.set(row.street_group, new Set());
-      byGroup.get(row.street_group)!.add(row.street_category);
+      if (!row.group_name || !row.category_name || Number(row.product_count ?? 0) <= 0) continue;
+      if (!byGroup.has(row.group_name)) byGroup.set(row.group_name, new Set());
+      byGroup.get(row.group_name)!.add(row.category_name);
     }
     // Taxonomy order (Footwear, Apparel, Accessories, ...), not row order.
     return Object.keys(STREET_TAXONOMY)

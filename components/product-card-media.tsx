@@ -61,8 +61,15 @@ export function ProductCardMedia({
   }, [loadAlternate, priority, secondImage]);
 
   useEffect(() => {
+    // Preload the hover-swap image as soon as the primary photo has loaded
+    // and the card is near the viewport, on every device — not only ones
+    // with a fine hover pointer. On touch devices there's no hover event to
+    // wait for, so gating this behind "(hover: hover)" meant the second
+    // image never started fetching until the shopper's first tap (which is
+    // also what triggers the swap), and they'd sit looking at a blank/slow
+    // second image. A short delay still lets the primary image's own
+    // request win the priority race.
     if (!secondImage || loadAlternate || !primaryLoaded || !nearViewport) return;
-    if (typeof window !== "undefined" && !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
 
     const timer = window.setTimeout(() => setLoadAlternate(true), priority ? 0 : 180);
     return () => window.clearTimeout(timer);

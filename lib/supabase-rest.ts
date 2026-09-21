@@ -107,13 +107,18 @@ export async function supabaseRestPage<T>(path: string, range: { from: number; t
   return { data: Array.isArray(data) ? data as T[] : [], total: Number.isFinite(total) ? total : 0 };
 }
 
-export async function supabaseRestAll<T>(path: string, pageSize = 500): Promise<ArrayItem<T>[]> {
+export async function supabaseRestAll<T>(path: string, pageSize = 500, maxItems?: number): Promise<ArrayItem<T>[]> {
   const all: ArrayItem<T>[] = [];
   let from = 0;
 
   while (true) {
     const page = await supabaseRest<ArrayItem<T>[]>(path, { range: { from, to: from + pageSize - 1 } });
     all.push(...page);
+    // Some callers rank/interleave across the whole matching set (search
+    // relevance, best-sellers) — cap how much of it we'll ever hold in
+    // memory at once so an unusually broad filter can't balloon a single
+    // request's memory the way an unbounded full-catalog scan did before.
+    if (maxItems && all.length >= maxItems) return all.slice(0, maxItems);
     if (page.length < pageSize) return all;
     from += pageSize;
   }
