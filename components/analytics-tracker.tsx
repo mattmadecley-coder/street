@@ -148,7 +148,8 @@ export function AnalyticsTracker() {
         sourceComponent: "product_page",
       };
       void trackStreetEvent("product_view", details);
-      if (product.dataset.searchQuery) void trackStreetEvent("search_click", { ...details, query: product.dataset.searchQuery, sourceComponent: "search_results" });
+      const sq = searchParams.get("sq");
+      if (sq) void trackStreetEvent("search_click", { ...details, query: sq, sourceComponent: "search_results" });
     }
   }, [pathname, searchParams]);
 

@@ -6,6 +6,7 @@ import { Header, Footer, ProductCard, isRecentlyAdded } from "@/components/store
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductVariantProvider } from "@/components/product-variant-context";
 import { ProductDetailPanel } from "@/components/product-detail-panel";
+import { ProductSearchBackLink } from "./search-back-link";
 import { getProduct, type StreetProduct } from "@/lib/catalog";
 import { getRelatedProducts } from "@/lib/product-recommendations";
 import "./product-page.css";
@@ -36,9 +37,8 @@ async function RelatedProducts({ product }: { product: StreetProduct }) {
   return <section className="shell product-recommendations" aria-labelledby="related-products"><div className="section-head"><div><p className="eyebrow">Keep discovering</p><h2 id="related-products" className="section-title">{related.some((item) => item.brandSlug === product.brandSlug) ? `More from ${product.brandName}` : "You may also like"}</h2></div><Link className="link-small" href={`/brands/${product.brandSlug}`}>View brand</Link></div><div className="grid">{related.map((item, index) => <ProductCard key={item.id} product={item} position={index + 1} sourceComponent="product_recommendations" />)}</div></section>;
 }
 
-export default async function ProductPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ sq?: string }> }) {
+export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { sq } = await searchParams;
   const { product, source } = await getProduct(slug);
   if (!product) notFound();
 
@@ -67,11 +67,11 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   return <main className="product-page">
     <Header />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
-    <div hidden data-mascot-product data-analytics-product-view data-product-id={product.id} data-product-slug={product.slug} data-brand-slug={product.brandSlug} data-search-query={sq?.trim() || undefined} data-street-group={product.streetGroup ?? undefined} data-street-category={product.streetCategory ?? undefined} data-title={product.title} data-brand={product.brandName} data-price={product.price} data-stock={product.stockStatus} data-category={product.streetCategory ?? product.category} data-colors={product.colors.join("|")} />
+    <div hidden data-mascot-product data-analytics-product-view data-product-id={product.id} data-product-slug={product.slug} data-brand-slug={product.brandSlug} data-street-group={product.streetGroup ?? undefined} data-street-category={product.streetCategory ?? undefined} data-title={product.title} data-brand={product.brandName} data-price={product.price} data-stock={product.stockStatus} data-category={product.streetCategory ?? product.category} data-colors={product.colors.join("|")} />
     <ProductVariantProvider>
       <div className="shell product-shell">
         <nav className="product-breadcrumbs" aria-label="Breadcrumb"><Link href="/catalog">Shop</Link><span>/</span>{product.streetCategory || product.category ? <><Link href={`/catalog?category=${encodeURIComponent(product.streetCategory ?? product.category)}`}>{product.streetCategory ?? product.category}</Link><span>/</span></> : null}<span>{product.title}</span></nav>
-        {sq ? <p className="product-back-link"><Link href={`/catalog?q=${encodeURIComponent(sq)}`}>← Back to results for “{sq}”</Link></p> : null}
+        <Suspense fallback={null}><ProductSearchBackLink /></Suspense>
         <div className="product-layout">
           <ProductGallery images={product.images} title={product.title} />
           <ProductDetailPanel product={{ ...product, variants: product.variants ?? [] }} recentlyAdded={recentlyAdded} sourceMessage={sourceMessage} />
