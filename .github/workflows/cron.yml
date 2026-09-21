@@ -1,0 +1,39 @@
+name: Street scheduled jobs
+
+on:
+  schedule:
+    # Times are UTC. Matches the old vercel.json schedule.
+    - cron: "0 5 * * *"   # catalog sync
+    - cron: "30 6 * * *"  # storefront health check
+    - cron: "0 7 * * *"   # classify
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run manually"
+        required: true
+        default: catalog
+        type: choice
+        options: [catalog, storefront-health, classify]
+
+jobs:
+  run-cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine which job this run is for
+        id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "path=${{ github.event.inputs.job }}" >> "$GITHUB_OUTPUT"
+          else
+            case "${{ github.event.schedule }}" in
+              "0 5 * * *") echo "path=catalog" >> "$GITHUB_OUTPUT" ;;
+              "30 6 * * *") echo "path=storefront-health" >> "$GITHUB_OUTPUT" ;;
+              "0 7 * * *") echo "path=classify" >> "$GITHUB_OUTPUT" ;;
+            esac
+          fi
+
+      - name: Call the cron endpoint
+        run: |
+          curl -sS -f --max-time 90 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.SITE_URL }}/api/cron/${{ steps.pick.outputs.path }}"
