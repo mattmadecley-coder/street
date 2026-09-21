@@ -64,7 +64,13 @@ export function Footer() {
 }
 
 export async function ProductCard({ product, searchQuery, priority = false, position, sourceComponent }: { product: StreetProduct; searchQuery?: string; priority?: boolean; position?: number; sourceComponent?: string }) {
-  const secondImage = product.images.length > 1 ? product.images[1] : null;
+  // Only treat this as a "second image" when it's actually a different photo.
+  // Some products only have one real image but it ends up duplicated into
+  // both image slots by the source import — without this check that still
+  // looked like a two-image product, so the card would preload and "swap" to
+  // a second image identical to the first: pointless work, and it reads as a
+  // phantom hover-swap glitch on what's really a single-image item.
+  const secondImage = product.images.length > 1 && product.images[1] !== product.primaryImage ? product.images[1] : null;
   const href = searchQuery ? `/products/${product.slug}?sq=${encodeURIComponent(searchQuery)}` : `/products/${product.slug}`;
   const recentlyAdded = product.createdAt ? isRecentlyAdded(product.createdAt) : await isProductRecentlyAdded(product.id);
   const component = sourceComponent ?? (searchQuery ? "search_results" : "product_grid");
