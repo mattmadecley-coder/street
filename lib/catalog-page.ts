@@ -120,7 +120,7 @@ function toStreetProduct(row: ProductRow): StreetProduct {
     stockStatus: row.stock_status,
     isPreorder: row.is_preorder,
     primaryImage: row.primary_image_url ?? images[0] ?? "",
-    images,
+    images: images.length ? images : row.primary_image_url ? [row.primary_image_url] : [],
     colors: row.colors ?? [],
     sizes: row.sizes ?? [],
     category: row.category,
