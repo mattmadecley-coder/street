@@ -55,7 +55,7 @@ export function Footer() {
           <p className="footer-heading">For brands</p>
           <p className="footer-note">Reach more streetwear shoppers, grow awareness, and send qualified traffic to your store.</p>
           <Link href="/brands/apply" className="footer-apply">Grow your brand with Street →</Link>
-          <div className="footer-inline-links"><Link href="/privacy">Privacy &amp; terms</Link><a href="mailto:hello@street.com">Contact</a></div>
+          <div className="footer-inline-links"><Link href="/returns">Shipping &amp; returns</Link><Link href="/privacy">Privacy &amp; terms</Link><a href="mailto:hello@street.com">Contact</a></div>
         </div>
       </div>
       <div className="footer-bottom">© {new Date().getFullYear()} Street. Street is independent and is not affiliated with the brands listed.</div>
