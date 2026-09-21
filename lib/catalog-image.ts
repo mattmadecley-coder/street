@@ -9,9 +9,14 @@ function isShopifyCdnHost(hostname: string) {
  * Build direct browser-loadable image candidates for catalog media.
  *
  * Shopify's CDN can resize an image with a width query parameter, so Street can
- * request an appropriately sized asset without sending it through Vercel's
- * billable /_next/image optimizer. The original URL remains the second
- * candidate in case a particular Shopify asset rejects the resize parameter.
+ * ask Shopify for a source asset that's already close to the right size instead
+ * of always pulling the full original through the network. We deliberately ask
+ * for 2x the layout width hint (not 1x) so Next's own image optimizer -
+ * running server-side on Render, not a per-image billed endpoint - has enough
+ * source resolution to serve genuinely sharp images on high-DPI/retina
+ * screens once it re-encodes and resizes per device. The original URL remains
+ * a fallback candidate in case a particular Shopify asset rejects the resize
+ * parameter.
  */
 export function catalogImageCandidates(source: string, widthHint: number): string[] {
   const trimmed = source.trim();
@@ -29,7 +34,8 @@ export function catalogImageCandidates(source: string, widthHint: number): strin
     if (!shopify || !Number.isFinite(widthHint) || widthHint <= 0) return [normalized];
 
     const resized = new URL(normalized);
-    resized.searchParams.set("width", String(Math.min(2400, Math.max(64, Math.round(widthHint)))));
+    const retinaWidth = Math.round(widthHint) * 2;
+    resized.searchParams.set("width", String(Math.min(2400, Math.max(64, retinaWidth))));
     const resizedUrl = resized.toString();
     return resizedUrl === normalized ? [normalized] : [resizedUrl, normalized];
   } catch {
