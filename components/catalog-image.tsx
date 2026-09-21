@@ -12,11 +12,13 @@ type CatalogImageProps = Omit<ImageProps, "src" | "unoptimized" | "onError"> & {
 };
 
 /**
- * Loads remote catalog media through Next's built-in image optimizer, which
- * runs server-side on Render (no per-image billing like Vercel's optimizer had)
- * and gives us real AVIF/WebP negotiation plus a responsive srcset generated
- * from next.config's deviceSizes/imageSizes. Failed resized Shopify URLs fall
- * back to the original asset, then to any supplied alternate images.
+ * Loads remote catalog media directly from the brand/CDN instead of routing it
+ * through Next's server-side image optimizer. We tried enabling the optimizer
+ * (real AVIF/WebP negotiation + responsive srcset) but Render's free/starter
+ * plan can't keep up with the concurrent transform requests a catalog grid
+ * fires off -- it started returning 500/503s and images went blank site-wide.
+ * Revisit once the Render plan has more CPU headroom. Failed resized Shopify
+ * URLs fall back to the original asset, then to any supplied alternate images.
  */
 export function CatalogImage({
   src,
@@ -43,10 +45,10 @@ export function CatalogImage({
 
   return (
     <Image
-      quality={80}
       {...imageProps}
       key={`${sourceKey}-${candidateIndex}`}
       src={candidate}
+      unoptimized
       onError={() => setCandidateIndex((index) => Math.min(index + 1, candidates.length))}
     />
   );
