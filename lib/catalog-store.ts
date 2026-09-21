@@ -391,10 +391,10 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
       return !existing || existingSignature(existing) !== importedSignature(product);
     });
     const changedExternalIds = new Set(changedOrNew.map((product) => product.externalId));
-    const unchangedIds = imported
-      .map((product) => existingByExternalId.get(product.externalId))
-      .filter((row): row is ExistingProductRow => row !== undefined && !changedExternalIds.has(row.external_id))
-      .map((row) => row.id);
+    const unchangedEntries = imported
+      .map((product) => ({ product, existing: existingByExternalId.get(product.externalId) }))
+      .filter((entry): entry is { product: ImportedProduct; existing: ExistingProductRow } => entry.existing !== undefined && !changedExternalIds.has(entry.existing.external_id));
+    const unchangedIds = unchangedEntries.map((entry) => entry.existing.id);
 
     // Deactivate everything on file for this brand first, so anything the
     // source dropped falls out of the catalog; both branches below flip the
@@ -403,6 +403,24 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
 
     if (unchangedIds.length) {
       await supabaseRest(`products?id=in.(${unchangedIds.join(",")})`, { method: "PATCH", body: { is_active: true, last_synced_at: new Date().toISOString() }, prefer: "return=minimal" });
+
+      // Self-heal a product that ended up with primary_image_url set but zero
+      // product_images rows. That happens because the products upsert and the
+      // product_images insert below are two separate, non-transactional
+      // requests -- if the first commits and the second then fails (a bad
+      // row, a timeout, a payload limit), the product is left photo-less in
+      // product_images forever, since photo-only differences are
+      // deliberately excluded from the change signature above and every
+      // later sync sees the product as unchanged. Check which of this run's
+      // unchanged products are missing product_images and backfill just
+      // those from the source data already fetched above.
+      const withImages = new Set<string>();
+      const imageCheck = await supabaseRest<Array<{ product_id: string }>>(`product_images?select=product_id&product_id=in.(${unchangedIds.join(",")})`, { noStore: true });
+      imageCheck.forEach((row) => withImages.add(row.product_id));
+      const repairImages = unchangedEntries
+        .filter((entry) => entry.product.images.length && !withImages.has(entry.existing.id))
+        .flatMap((entry) => entry.product.images.map((sourceUrl, sortOrder) => ({ product_id: entry.existing.id, source_url: sourceUrl, sort_order: sortOrder, alt_text: entry.product.title })));
+      if (repairImages.length) await supabaseRest("product_images", { method: "POST", body: repairImages, prefer: "return=minimal" });
     }
 
     if (changedOrNew.length) {
