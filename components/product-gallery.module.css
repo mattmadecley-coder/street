@@ -1,5 +1,5 @@
 .gallery { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; align-items: start; }
-.track { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.track { display: flex; flex-direction: column; gap: 12px; min-width: 0; grid-column: 2; }
 .slide { position: relative; min-height: 520px; max-height: 880px; overflow: hidden; display: grid; place-items: center; background: #f4f3ee; }
 .imageButton { position: absolute; inset: 0; border: 0; padding: 16px; background: transparent; cursor: zoom-in; }
 .imageButton img { width: 100%; height: 100%; object-fit: contain; display: block; }
