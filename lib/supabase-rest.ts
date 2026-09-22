@@ -51,7 +51,12 @@ function headers(config: SupabaseConfig, options: RestOptions, count = false) {
 }
 
 function responseError(data: unknown, status: number) {
-  return typeof data === "object" && data && "message" in data ? String(data.message) : `Supabase request failed (${status})`;
+  if (typeof data === "object" && data && "message" in data) {
+    const parts = [String((data as { message: unknown }).message)];
+    if ("details" in data && (data as { details: unknown }).details) parts.push(String((data as { details: unknown }).details));
+    return parts.join(" -- ");
+  }
+  return `Supabase request failed (${status})`;
 }
 
 export async function supabaseRest<T>(path: string, options: RestOptions = {}): Promise<T> {
