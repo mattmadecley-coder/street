@@ -436,6 +436,18 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
     }
     if (!imported.length) throw new Error("The brand source did not return any products.");
 
+    // A handful of brands' sources hand back the same product twice in one
+    // fetch (different external_id, same handle) -- seen on merchants whose
+    // paginated collection feed overlaps at a page boundary. Left alone,
+    // both copies land in changedOrNew below as "new" against products'
+    // (brand_id, handle) unique constraint, and the sync fails outright
+    // (products_brand_id_handle_key, or product_images_product_id_sort_
+    // order_key once two copies' photos both try to claim the same
+    // product_id's sort_order slots). De-dupe by handle up front -- last
+    // occurrence wins, since a later page is never less current than an
+    // earlier one for the same product.
+    const dedupedImported = [...new Map(imported.map((product) => [product.handle, product])).values()];
+
     const existingByExternalId = new Map(existingRows.map((row) => [row.external_id, row]));
     // Some brands' source platforms (seen on Shopify) occasionally reissue a
     // product's internal id while its handle/slug stays the same -- typically
@@ -448,7 +460,7 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
     // case up front and relink the existing row's id to the new external_id
     // rather than attempting a fresh insert.
     const existingByHandle = new Map(existingRows.map((row) => [row.handle, row]));
-    const importedExternalIds = new Set(imported.map((product) => product.externalId));
+    const importedExternalIds = new Set(dedupedImported.map((product) => product.externalId));
     function relinkTarget(product: ImportedProduct): ExistingProductRow | undefined {
       if (existingByExternalId.has(product.externalId)) return undefined;
       const byHandle = existingByHandle.get(product.handle);
@@ -456,7 +468,7 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
       return byHandle;
     }
 
-    const changedOrNew = imported.filter((product) => {
+    const changedOrNew = dedupedImported.filter((product) => {
       const existing = existingByExternalId.get(product.externalId);
       return !existing || existingSignature(existing) !== importedSignature(product);
     });
@@ -518,8 +530,8 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
       if (variants.length) await supabaseRest("product_variants", { method: "POST", body: variants, prefer: "return=minimal" });
     }
 
-    if (runId) await supabaseRest(`catalog_sync_runs?id=eq.${runId}`, { method: "PATCH", body: { status: "success", completed_at: new Date().toISOString(), product_count: imported.length }, prefer: "return=minimal" });
-    return { brand: brand.slug, productCount: imported.length, ok: true };
+    if (runId) await supabaseRest(`catalog_sync_runs?id=eq.${runId}`, { method: "PATCH", body: { status: "success", completed_at: new Date().toISOString(), product_count: dedupedImported.length }, prefer: "return=minimal" });
+    return { brand: brand.slug, productCount: dedupedImported.length, ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync error";
     if (runId) await supabaseRest(`catalog_sync_runs?id=eq.${runId}`, { method: "PATCH", body: { status: "failed", completed_at: new Date().toISOString(), error_message: message }, prefer: "return=minimal" }).catch(() => undefined);
