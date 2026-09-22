@@ -19,8 +19,12 @@ export default async function BrandAnalyticsPage({ params, searchParams }: { par
   const sinceDay = since.slice(0, 10);
   const [summaries, events, clicks] = await Promise.all([
     getAnalyticsBrandDailySummaries(slug, sinceDay),
-    getRecentSiteEvents(10000, since),
-    getRecentOutboundClicks(10000, since),
+    // Filtered server-side to this brand instead of pulling every brand's
+    // events and filtering in memory — also fixes a real undercount: the
+    // 10,000-row cap is shared across all brands, so an active brand could
+    // previously crowd a smaller one out of its own drilldown entirely.
+    getRecentSiteEvents(10000, since, slug),
+    getRecentOutboundClicks(10000, since, slug),
   ]);
   const totals = summaries.reduce((row, day) => ({
     impressions: row.impressions + summaryNumber(day.impressions),
@@ -29,8 +33,8 @@ export default async function BrandAnalyticsPage({ params, searchParams }: { par
     sessions: row.sessions + summaryNumber(day.sessions),
     outbound: row.outbound + summaryNumber(day.outbound_clicks),
   }), { impressions: 0, productClicks: 0, views: 0, sessions: 0, outbound: 0 });
-  const brandEvents = events.filter((event) => event.brand_slug === slug);
-  const brandClicks = clicks.filter((click) => click.brand_slug === slug);
+  const brandEvents = events;
+  const brandClicks = clicks;
   const products = new Map<string, { impressions: number; clicks: number; views: number; outbound: number }>();
   for (const event of brandEvents) {
     const key = typeof event.metadata?.productSlug === "string" ? event.metadata.productSlug : event.product_id;

@@ -52,15 +52,24 @@ export async function getRecentCatalogDiagnostics(): Promise<RecentCatalogDiagno
   if (!hasSupabaseCatalog()) return EMPTY;
 
   try {
-    const [runs, products] = await Promise.all([
-      supabaseRest<SyncRunRow[]>(
-        "catalog_sync_runs?select=brand_id,started_at,completed_at,status,product_count,error_message,brands(slug,name)&order=started_at.desc&limit=300",
-        { noStore: true },
-      ),
-      supabaseRestAll<ProductCreatedRow[]>(
-        "products?select=brand_id,created_at&is_active=eq.true&order=created_at.desc",
-      ),
-    ]);
+    const runs = await supabaseRest<SyncRunRow[]>(
+      "catalog_sync_runs?select=brand_id,started_at,completed_at,status,product_count,error_message,brands(slug,name)&order=started_at.desc&limit=300",
+      { noStore: true },
+    );
+
+    // Only two things ever need product rows here: which products were
+    // created in the last 24h, and which were created during one of these
+    // (at most 300) sync runs' start–finish window. Both are bounded by
+    // time, so instead of pulling every active product in the catalog (this
+    // used to be a full unbounded scan — the same pattern that caused the
+    // storefront's memory issues), only ask Supabase for products created
+    // since the earliest moment either of those needs to see.
+    const runStarts = runs.map((run) => new Date(run.started_at).getTime()).filter(Number.isFinite);
+    const dayCutoff = Date.now() - 24 * 60 * 60_000;
+    const productsSince = new Date(Math.min(dayCutoff, ...(runStarts.length ? runStarts : [dayCutoff]))).toISOString();
+    const products = await supabaseRestAll<ProductCreatedRow[]>(
+      `products?select=brand_id,created_at&is_active=eq.true&created_at=gte.${encodeURIComponent(productsSince)}&order=created_at.desc`,
+    );
 
     const productTimesByBrand = new Map<string, number[]>();
     for (const product of products) {

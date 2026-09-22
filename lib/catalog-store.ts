@@ -6,12 +6,11 @@ import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
 import { hasSupabaseCatalog, supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 import type { StreetProduct } from "@/lib/catalog";
 
-type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean; catalog_enabled?: boolean };
+type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean; catalog_enabled?: boolean; product_count?: number | string };
 type ImageRow = { source_url: string; sort_order: number; alt_text?: string | null };
 type VariantRow = { external_id: string; title: string | null; price: string | number; compare_at_price: string | number | null; available: boolean; option1: string | null; option2: string | null; option3: string | null; image_url: string | null };
 type ProductRow = { id: string; brand_id: string; external_id: string; handle: string; title: string; description: string; source_url: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; category: string; tags: string[]; colors: string[]; sizes: string[]; primary_image_url: string | null; last_synced_at: string; is_active: boolean; brands: BrandRow | null; product_images: ImageRow[] | null; product_variants: VariantRow[] | null; street_group: string | null; street_category: string | null; street_type: string | null; street_detail: string | null };
 type PendingClassificationRow = { id: string; title: string; description: string; category: string; tags: string[]; colors: string[] };
-type ProductCountRow = { brand_id: string };
 type SyncRunRow = { id: string };
 type SyncRunHistoryRow = { brand_id: string; started_at: string; completed_at: string | null; status: "running" | "success" | "failed"; product_count: number; error_message: string | null; brands: { slug: string } | null };
 
@@ -143,12 +142,13 @@ export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
   const fallback = new Map<string, StreetBrandProfile>(brands.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured), catalogEnabled: brand.catalogEnabled ?? true, createdAt: new Date(0).toISOString() }]));
   if (!hasSupabaseCatalog()) return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   try {
-    const [rows, products] = await Promise.all([
-      supabaseRest<(BrandRow & { created_at: string })[]>("brands?select=*&is_active=eq.true&order=name.asc"),
-      supabaseRestAll<ProductCountRow[]>("products?select=brand_id&is_active=eq.true&order=id.asc"),
-    ]);
-    const counts = products.reduce((map, product) => map.set(product.brand_id, (map.get(product.brand_id) ?? 0) + 1), new Map<string, number>());
-    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: counts.get(row.id) ?? 0, featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true, createdAt: row.created_at });
+    // product_count lives right on the brands row (kept in sync by the
+    // catalog-sync trigger, same mechanism as catalog_category_summaries —
+    // see getHomepageBrandSummaries) so this used to also pull every active
+    // product's brand_id just to re-derive the same number in memory. One
+    // small query instead of a full catalog scan on every admin page load.
+    const rows = await supabaseRest<(BrandRow & { created_at: string })[]>("brands?select=*&is_active=eq.true&order=name.asc");
+    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: Number(row.product_count ?? 0), featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true, createdAt: row.created_at });
     return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error("Street brand directory read failed", error);
