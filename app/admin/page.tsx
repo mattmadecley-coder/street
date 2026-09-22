@@ -73,6 +73,13 @@ export default async function AdminOverviewPage() {
           </div>
           <p>Searches, category popularity, price ranges, and outbound clicks to brands.</p>
         </Link>
+        <a href="https://dashboard.render.com/web/srv-dao9mnuk1f9s73b7d4u0/metrics" target="_blank" rel="noreferrer" className={styles.linkCard}>
+          <div className={styles.linkCardHead}>
+            <h3>System health</h3>
+            <span className={`${styles.pill} ${styles.pillAlert}`}>Memory ~90% of cap</span>
+          </div>
+          <p>Render free tier: 0.15 vCPU / 512MB. Memory has been running ~460&ndash;490MB during normal activity (last checked Sep 22, 2026) &mdash; little headroom left. Opens Render&rsquo;s live metrics ↗</p>
+        </a>
       </div>
     </div>
   );
