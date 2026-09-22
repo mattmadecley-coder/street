@@ -112,19 +112,40 @@ export async function supabaseRestPage<T>(path: string, range: { from: number; t
   return { data: Array.isArray(data) ? data as T[] : [], total: Number.isFinite(total) ? total : 0 };
 }
 
-export async function supabaseRestAll<T>(path: string, pageSize = 500, maxItems?: number): Promise<ArrayItem<T>[]> {
-  const all: ArrayItem<T>[] = [];
-  let from = 0;
+// How many pages we'll ever have in flight to Supabase at once. Bounds the
+// burst so a huge maxItems (e.g. an analytics export) can't fire hundreds of
+// concurrent requests, while still letting a normal catalog/search scan
+// (~10 pages) fetch in one wave instead of one round trip at a time.
+const MAX_CONCURRENT_PAGES = 8;
 
-  while (true) {
-    const page = await supabaseRest<ArrayItem<T>[]>(path, { range: { from, to: from + pageSize - 1 } });
-    all.push(...page);
-    // Some callers rank/interleave across the whole matching set (search
-    // relevance, best-sellers) — cap how much of it we'll ever hold in
-    // memory at once so an unusually broad filter can't balloon a single
-    // request's memory the way an unbounded full-catalog scan did before.
-    if (maxItems && all.length >= maxItems) return all.slice(0, maxItems);
-    if (page.length < pageSize) return all;
-    from += pageSize;
+export async function supabaseRestAll<T>(path: string, pageSize = 500, maxItems?: number): Promise<ArrayItem<T>[]> {
+  // First page also asks for an exact count via supabaseRestPage's
+  // count=exact header, so we learn the total row count up front and can
+  // fire every remaining page in parallel instead of paging sequentially.
+  // Sequential paging was the dominant cause of slow cold-cache search and
+  // Shop All loads (~10 serial round trips for the full candidate scan).
+  const first = await supabaseRestPage<ArrayItem<T>>(path, { from: 0, to: pageSize - 1 });
+  let all: ArrayItem<T>[] = first.data;
+
+  if (maxItems && all.length >= maxItems) return all.slice(0, maxItems);
+  if (first.data.length < pageSize) return all;
+
+  const total = first.total || all.length;
+  const cap = maxItems ? Math.min(total, maxItems) : total;
+
+  const remainingRanges: { from: number; to: number }[] = [];
+  for (let from = pageSize; from < cap; from += pageSize) {
+    remainingRanges.push({ from, to: Math.min(from + pageSize - 1, cap - 1) });
   }
+  if (remainingRanges.length === 0) return all;
+
+  const pages: ArrayItem<T>[][] = new Array(remainingRanges.length);
+  for (let i = 0; i < remainingRanges.length; i += MAX_CONCURRENT_PAGES) {
+    const batch = remainingRanges.slice(i, i + MAX_CONCURRENT_PAGES);
+    const batchResults = await Promise.all(batch.map((range) => supabaseRestPage<ArrayItem<T>>(path, range)));
+    for (let j = 0; j < batchResults.length; j++) pages[i + j] = batchResults[j].data;
+  }
+  for (const page of pages) all = all.concat(page);
+
+  return maxItems ? all.slice(0, maxItems) : all;
 }
