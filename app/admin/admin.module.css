@@ -40,7 +40,7 @@
 .rowSummary img { width: 90px; height: 28px; object-fit: contain; }
 .rowMeta { font-size: 11px; color: rgba(16,16,16,.55); }
 .rowBody { padding: 0 14px 16px; }
-.table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.table { width: 100%; border-collapse: collapse; font-size: 12px; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .table th, .table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(16,16,16,.12); vertical-align: middle; }
 .table th { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: rgba(16,16,16,.55); }
 .table .buttonSecondary { height: 32px; padding: 0 12px; font-size: 9px; }
@@ -116,3 +116,7 @@
   .analyticsMetricCard p { font-size: 23px; }
   .analyticsMetricCard span { font-size: 9px; }
 }
+
+.linkCardHead { display: flex; align-items: start; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.linkCardHead h3 { margin: 0; }
+.pillAlert { background: #fbeceb; color: #a4302a; }

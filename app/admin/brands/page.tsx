@@ -5,6 +5,7 @@ import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { SortSelect } from "@/components/admin/sort-select";
 import { ClassifyRunner } from "@/components/admin/classify-runner";
 import { SubmitButton } from "@/components/admin/submit-button";
+import { PendingStatus } from "@/components/admin/pending-status";
 import { ScrollMemory } from "@/components/admin/scroll-memory";
 import { getBrandDirectory, getBrandSyncStatuses, getBrandClassificationProgress, type StreetBrandProfile, type BrandSyncStatus } from "@/lib/catalog-store";
 import { getRecentCatalogDiagnostics, type BrandSyncDiagnostic } from "@/lib/recent-catalog-diagnostics";
@@ -146,10 +147,11 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
           </p>
         ) : null}
         {diagnostic ? <SyncDiagnostics diagnostic={diagnostic} pending={pending} /> : null}
-        <div className={styles.actions} style={{ marginBottom: 16 }}>
+        <div className={styles.actions} style={{ marginBottom: 16, flexDirection: "column", alignItems: "flex-start" }}>
           <form action={syncBrandNow}>
             <input type="hidden" name="slug" value={brand.slug} />
             <SubmitButton pendingText="Syncing…" className={styles.buttonSecondary}>Sync now ({brand.productCount} pieces on file{status?.lastProductCount != null ? `, ${status.lastProductCount} last import` : ""})</SubmitButton>
+            <PendingStatus label="Pulling the latest catalog from the brand's store — this can take up to a minute" />
           </form>
         </div>
         {pending > 0 ? (
@@ -180,6 +182,7 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
             Include in the daily automatic sync
           </label>
           <SubmitButton pendingText="Saving…" className={styles.button}>Save {brand.name}</SubmitButton>
+          <PendingStatus label="Saving — uploading the new logo if one was selected" />
         </form>
       </div>
     </details>

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { setSiteSetting } from "@/lib/site-settings";
 import { uploadSiteAsset } from "@/lib/supabase-storage";
-import { createHomepageFeatureSchedule, deleteHomepageFeatureSchedule } from "@/lib/homepage-feature-schedule";
+import { createHomepageFeatureSchedule, deleteHomepageFeatureSchedule, updateHomepageFeatureSchedule } from "@/lib/homepage-feature-schedule";
 
 const EASTERN_TIME_ZONE = "America/New_York";
 
@@ -35,6 +35,11 @@ function parseEasternDateTime(value: string) {
   const date = new Date(resolved);
   if (!Number.isFinite(date.getTime())) throw new Error("Choose a valid schedule date and time.");
   return date.toISOString();
+}
+
+/** A schedule entry only makes sense in the future — enforced here (not just the input's `min`) since that's a client-side hint a stale page load or a direct request can bypass. */
+function assertFuture(startsAt: string) {
+  if (new Date(startsAt).getTime() <= Date.now()) throw new Error("Start time must be in the future.");
 }
 
 export async function saveHomepageSettings(formData: FormData) {
@@ -70,6 +75,11 @@ export async function scheduleHomepageFeature(formData: FormData) {
 
   if (!brandSlug) throw new Error("Choose a featured brand.");
   const startsAt = parseEasternDateTime(startsAtInput);
+  try {
+    assertFuture(startsAt);
+  } catch (error) {
+    redirect(`/admin/homepage?scheduleError=${encodeURIComponent(error instanceof Error ? error.message : "Invalid schedule")}`);
+  }
   let heroImageUrl = heroImageUrlInput;
   if (heroFile instanceof File && heroFile.size > 0) {
     heroImageUrl = await uploadSiteAsset(heroFile, `hero-schedule/${brandSlug}`);
@@ -86,6 +96,41 @@ export async function scheduleHomepageFeature(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/admin/homepage");
   redirect("/admin/homepage?scheduled=1");
+}
+
+export async function updateScheduledFeatureAction(formData: FormData) {
+  const id = String(formData.get("schedule_id") ?? "").trim();
+  const startsAtInput = String(formData.get("starts_at") ?? "").trim();
+  const brandSlug = String(formData.get("scheduled_brand_slug") ?? "").trim();
+  const heroVideoUrl = String(formData.get("scheduled_hero_video_url") ?? "").trim();
+  const heroImageUrlInput = String(formData.get("scheduled_hero_image_url") ?? "").trim();
+  const ctaLabel = String(formData.get("scheduled_cta_label") ?? "").trim();
+  const heroFile = formData.get("scheduled_hero_image_file");
+
+  if (!id) throw new Error("Missing schedule id.");
+  if (!brandSlug) throw new Error("Choose a featured brand.");
+  const startsAt = parseEasternDateTime(startsAtInput);
+  try {
+    assertFuture(startsAt);
+  } catch (error) {
+    redirect(`/admin/homepage?edit=${encodeURIComponent(id)}&scheduleError=${encodeURIComponent(error instanceof Error ? error.message : "Invalid schedule")}`);
+  }
+  let heroImageUrl = heroImageUrlInput;
+  if (heroFile instanceof File && heroFile.size > 0) {
+    heroImageUrl = await uploadSiteAsset(heroFile, `hero-schedule/${brandSlug}`);
+  }
+
+  await updateHomepageFeatureSchedule(id, {
+    brandSlug,
+    startsAt,
+    heroImageUrl,
+    heroVideoUrl,
+    ctaLabel: ctaLabel || "Shop this brand",
+  });
+
+  revalidatePath("/");
+  revalidatePath("/admin/homepage");
+  redirect("/admin/homepage?scheduleUpdated=1");
 }
 
 export async function removeHomepageFeature(formData: FormData) {

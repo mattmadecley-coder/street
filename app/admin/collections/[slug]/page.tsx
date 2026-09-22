@@ -6,7 +6,8 @@ import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { SubmitButton } from "@/components/admin/submit-button";
 import { ScrollMemory } from "@/components/admin/scroll-memory";
 import { getCollectionBySlug, searchProductsForPicker } from "@/lib/collections-store";
-import { updateCollectionAction, deleteCollectionAction, addProductAction, removeProductAction, moveProductAction } from "../actions";
+import { updateCollectionAction, deleteCollectionAction, addProductAction } from "../actions";
+import { CollectionProductList } from "@/components/admin/collection-product-list";
 
 export const dynamic = "force-dynamic";
 
@@ -113,50 +114,18 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
       <ScrollMemory>
       <div className={styles.section}>
         <div className={styles.sectionHead}><h2>Products in this collection</h2></div>
-        {collection.products.length ? (
-          <table className={styles.table}>
-            <thead><tr><th></th><th>Product</th><th>Brand</th><th>Price</th><th></th></tr></thead>
-            <tbody>
-              {collection.products.map((product, index) => {
-                const rawProductId = product.id.slice(product.brandSlug.length + 1);
-                return (
-                  <tr key={product.id}>
-                    <td>{product.primaryImage ? <img src={product.primaryImage} alt="" style={{ width: 40, height: 40, objectFit: "contain" }} /> : null}</td>
-                    <td>{product.title}</td>
-                    <td>{product.brandName}</td>
-                    <td>${product.price.toFixed(2)}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <form action={moveProductAction}>
-                          <input type="hidden" name="collection_id" value={collection.id} />
-                          <input type="hidden" name="slug" value={collection.slug} />
-                          <input type="hidden" name="product_id" value={rawProductId} />
-                          <input type="hidden" name="direction" value="up" />
-                          <SubmitButton className={styles.buttonSecondary} disabled={index === 0} aria-label="Move up">↑</SubmitButton>
-                        </form>
-                        <form action={moveProductAction}>
-                          <input type="hidden" name="collection_id" value={collection.id} />
-                          <input type="hidden" name="slug" value={collection.slug} />
-                          <input type="hidden" name="product_id" value={rawProductId} />
-                          <input type="hidden" name="direction" value="down" />
-                          <SubmitButton className={styles.buttonSecondary} disabled={index === collection.products.length - 1} aria-label="Move down">↓</SubmitButton>
-                        </form>
-                        <form action={removeProductAction}>
-                          <input type="hidden" name="collection_id" value={collection.id} />
-                          <input type="hidden" name="slug" value={collection.slug} />
-                          <input type="hidden" name="product_id" value={rawProductId} />
-                          <SubmitButton pendingText="Removing…" className={styles.buttonSecondary}>Remove</SubmitButton>
-                        </form>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <p className={styles.rowMeta}>No products yet — search above to add some.</p>
-        )}
+        <CollectionProductList
+          collectionId={collection.id}
+          slug={collection.slug}
+          initialProducts={collection.products.map((product) => ({
+            rawId: product.id.slice(product.brandSlug.length + 1),
+            displayId: product.id,
+            title: product.title,
+            brandName: product.brandName,
+            price: product.price,
+            primaryImage: product.primaryImage || null,
+          }))}
+        />
       </div>
       </ScrollMemory>
     </div>

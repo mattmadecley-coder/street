@@ -106,6 +106,28 @@ export async function createHomepageFeatureSchedule(input: {
   });
 }
 
+export async function updateHomepageFeatureSchedule(id: string, input: {
+  brandSlug: string;
+  startsAt: string;
+  heroImageUrl: string;
+  heroVideoUrl: string;
+  ctaLabel: string;
+}) {
+  if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured.");
+  await supabaseRest(`homepage_feature_schedule?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: {
+      brand_slug: input.brandSlug,
+      starts_at: input.startsAt,
+      hero_image_url: input.heroImageUrl,
+      hero_video_url: input.heroVideoUrl,
+      cta_label: input.ctaLabel || "Shop this brand",
+      updated_at: new Date().toISOString(),
+    },
+    prefer: "return=minimal",
+  });
+}
+
 export async function deleteHomepageFeatureSchedule(id: string) {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured.");
   await supabaseRest(`homepage_feature_schedule?id=eq.${encodeURIComponent(id)}`, {

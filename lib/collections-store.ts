@@ -271,6 +271,17 @@ export async function removeProductFromCollection(collectionId: string, productI
   await supabaseRest(`collection_products?collection_id=eq.${collectionId}&product_id=eq.${productId}`, { method: "DELETE", prefer: "return=minimal" });
 }
 
+/** Persists a full new product order in one request (drag/optimistic reorder) — index in the array becomes sort_order. Relies on the same (collection_id, product_id) uniqueness addProductToCollection's ignore-duplicates upsert already assumes. */
+export async function reorderCollectionProducts(collectionId: string, orderedProductIds: string[]): Promise<void> {
+  if (!orderedProductIds.length) return;
+  const body = orderedProductIds.map((productId, index) => ({ collection_id: collectionId, product_id: productId, sort_order: index }));
+  await supabaseRest("collection_products", {
+    method: "POST",
+    body,
+    prefer: "resolution=merge-duplicates,return=minimal",
+  });
+}
+
 /** Swaps this product's sort_order with its neighbor in the given direction, for simple up/down reordering. */
 export async function moveProductInCollection(collectionId: string, productId: string, direction: "up" | "down"): Promise<void> {
   const rows = await supabaseRest<Array<{ product_id: string; sort_order: number }>>(

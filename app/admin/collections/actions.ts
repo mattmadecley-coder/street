@@ -12,6 +12,7 @@ import {
   addProductToCollection,
   removeProductFromCollection,
   moveProductInCollection,
+  reorderCollectionProducts,
 } from "@/lib/collections-store";
 
 function bump() {
@@ -83,6 +84,19 @@ export async function removeProductAction(formData: FormData) {
   await removeProductFromCollection(collectionId, productId);
   bump();
   redirect(`/admin/collections/${slug}`);
+}
+
+/**
+ * Called directly from a client component (not a <form action>), so the
+ * client can update its own local order immediately and let this run in the
+ * background — one request for the whole reorder instead of a full-page
+ * reload per up/down nudge. No redirect: the caller already has the new
+ * order and just needs it persisted.
+ */
+export async function reorderProductsAction(collectionId: string, orderedProductIds: string[]): Promise<void> {
+  if (!collectionId || !orderedProductIds.length) return;
+  await reorderCollectionProducts(collectionId, orderedProductIds);
+  bump();
 }
 
 export async function moveProductAction(formData: FormData) {
