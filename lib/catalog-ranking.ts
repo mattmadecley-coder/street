@@ -22,10 +22,16 @@ type SearchRankEntry<T> = {
 const SEARCH_STOP_WORDS = new Set(["a", "an", "and", "for", "in", "of", "on", "or", "the", "to", "with"]);
 const SEARCH_EQUIVALENCE_GROUPS = [
   ["jacket", "outerwear", "coat"],
-  ["pant", "bottom", "trouser", "jean"],
-  ["shoe", "footwear", "sneaker", "boot"],
+  // "denim" is a material, not just a garment name -- but the common
+  // shopper query "red denim" means "red jeans", so it belongs in the
+  // bottoms group as a search term even though a product tagged "denim"
+  // isn't necessarily pants (a denim jacket also exists, and still matches
+  // separately via the jacket group above -- a product can satisfy both).
+  ["pant", "bottom", "trouser", "jean", "denim"],
+  ["shoe", "footwear", "sneaker", "boot", "sandal", "slide"],
   ["tee", "tshirt", "shirt"],
-  ["hoodie", "sweatshirt", "pullover"],
+  ["hoodie", "sweatshirt", "pullover", "crewneck"],
+  ["hat", "cap", "beanie"],
   ["black", "charcoal", "onyx", "jet black"],
 ] as const;
 
