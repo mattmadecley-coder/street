@@ -29,9 +29,14 @@ export function AdminNav({ active }: { active: string }) {
           ))}
         </nav>
       </div>
-      <form action={logout} className={styles.logout}>
-        <button type="submit">Log out</button>
-      </form>
+      <div className={styles.topbarActions}>
+        <a href="https://streetdotcom.com" target="_blank" rel="noopener noreferrer" className={styles.visitSite}>
+          Visit site &#8599;
+        </a>
+        <form action={logout} className={styles.logout}>
+          <button type="submit">Log out</button>
+        </form>
+      </div>
     </div>
   );
 }

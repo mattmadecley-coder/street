@@ -92,11 +92,17 @@ export type CatalogPage = { products: StreetProduct[]; total: number; page: numb
 
 export const CATALOG_PAGE_SIZE = 50;
 
-// Search and best-sellers ranking need to look at every matching row to rank
-// or interleave them before slicing a page off the top. Cap how many rows
-// that ever pulls into memory at once — plenty for realistic filters/queries,
-// but bounded instead of scaling with the whole catalog.
-const CANDIDATE_SCAN_CAP = 3000;
+// Search, best-sellers, and the default relevance browse (brand-interleaved)
+// all need to look at every matching row to rank or interleave them before
+// slicing a page off the top -- including the unfiltered Shop All page,
+// which scans the whole active catalog. Cap how many rows that ever pulls
+// into memory at once, comfortably above the current catalog size (~6,400
+// active products as of Sept 2026) with headroom for growth, rather than
+// silently dropping the tail of the catalog from ever appearing. Each
+// underlying page fetch is cache-tagged (CATALOG_CACHE_TAG) and only
+// re-hit after a catalog sync, so raising this doesn't add live per-request
+// cost.
+const CANDIDATE_SCAN_CAP = 15000;
 
 export function normalizeCatalogSort(value?: string): CatalogSort {
   if (value === "best-sellers" || value === "newest" || value === "price-low" || value === "price-high") return value;
@@ -239,14 +245,15 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
   const sort = normalizeCatalogSort(filters.sort);
 
   try {
-    // Only a text search (relevance ranking + brand balancing across matches)
-    // or an explicit best-sellers sort (popularity ranking) need the whole
-    // filtered result set in memory to rank. Plain category/group browsing
-    // with no search term — the common case, hit on every sidebar click —
-    // stays a single paginated database query in the branch below instead of
-    // pulling every matching row into memory just to count and interleave
-    // them.
-    if (query || sort === "best-sellers") {
+    // A text search (relevance ranking + brand balancing across matches), an
+    // explicit best-sellers sort (popularity ranking), or the default
+    // relevance browse (brand-interleaved, so Shop All and category pages
+    // aren't dominated by whichever brand most recently synced a big batch
+    // of products) all need the whole filtered result set in memory to rank
+    // or interleave. Only an explicit Newest/price sort -- which keeps the
+    // database's own ordering and needs no reranking -- stays a single
+    // paginated database query in the branch below.
+    if (query || sort === "best-sellers" || sort === "relevance") {
       const select = query ? SEARCH_SELECT : BALANCE_SELECT;
       const rows = await supabaseRestAll<CandidateRow[]>(productPath({ ...filters, q: undefined, sort }, select), 500, CANDIDATE_SCAN_CAP);
       const candidates = rows.map(toCatalogCandidate);
