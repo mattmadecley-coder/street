@@ -159,7 +159,20 @@ export async function getRecentSiteEvents(limit = 5000, since?: string, brandSlu
     // above is shared across every brand, so an unfiltered pull can crowd a
     // smaller brand's events out of the window entirely and undercount it.
     const brandFilter = brandSlug ? `&brand_slug=eq.${encodeURIComponent(brandSlug)}` : "";
-    return await supabaseRestAll<SiteEventRow[]>(`site_events?select=event_type,anonymous_user_id,session_id,query,results_count,product_id,brand_slug,street_group,street_category,price,path,referrer,source_component,position,device_type,browser,operating_system,screen_width,language,timezone,landing_path,utm_source,utm_medium,utm_campaign,metadata,created_at${dateFilter}${brandFilter}&order=created_at.desc&limit=${safeLimit}`, 1000);
+    // Cap via supabaseRestAll's own maxItems (a client-side stop once
+    // enough rows are in hand), not an embedded PostgREST `limit=` query
+    // param. Combining a `limit` query param with supabaseRestAll's
+    // Range-header pagination broke silently once the real row count
+    // (any day with meaningful traffic routinely passed 5000) exceeded
+    // that limit: the loop kept requesting further Range-header pages
+    // past what `limit` allowed, and PostgREST rejected the resulting
+    // request with "Requested range not satisfiable -- Limit should be
+    // greater than or equal to zero". That error was caught here and
+    // swallowed into an empty array, so the whole admin analytics
+    // dashboard quietly showed zeros any time a window's true event count
+    // passed the limit -- which was most of the time, since the site sees
+    // well over 5000 events in a normal 30-day window.
+    return await supabaseRestAll<SiteEventRow[]>(`site_events?select=event_type,anonymous_user_id,session_id,query,results_count,product_id,brand_slug,street_group,street_category,price,path,referrer,source_component,position,device_type,browser,operating_system,screen_width,language,timezone,landing_path,utm_source,utm_medium,utm_campaign,metadata,created_at${dateFilter}${brandFilter}&order=created_at.desc`, 1000, safeLimit);
   } catch (error) {
     console.error("Street analytics read failed", error);
     return [];
@@ -172,7 +185,9 @@ export async function getRecentOutboundClicks(limit = 5000, since?: string, bran
     const safeLimit = safeAnalyticsLimit(limit);
     const dateFilter = since ? `&created_at=gte.${encodeURIComponent(since)}` : "";
     const brandFilter = brandSlug ? `&brand_slug=eq.${encodeURIComponent(brandSlug)}` : "";
-    return await supabaseRestAll<OutboundClickRow[]>(`outbound_clicks?select=product_id,brand_slug,product_slug,product_title,product_price,destination_url,anonymous_user_id,session_id,source_component,source_path,search_query,position,referrer,utm_source,utm_medium,utm_campaign,created_at${dateFilter}${brandFilter}&order=created_at.desc&limit=${safeLimit}`, 1000);
+    // See getRecentSiteEvents above for why maxItems (not an embedded
+    // `limit=` query param) is the right way to cap this.
+    return await supabaseRestAll<OutboundClickRow[]>(`outbound_clicks?select=product_id,brand_slug,product_slug,product_title,product_price,destination_url,anonymous_user_id,session_id,source_component,source_path,search_query,position,referrer,utm_source,utm_medium,utm_campaign,created_at${dateFilter}${brandFilter}&order=created_at.desc`, 1000, safeLimit);
   } catch (error) {
     console.error("Street outbound click read failed", error);
     return [];
