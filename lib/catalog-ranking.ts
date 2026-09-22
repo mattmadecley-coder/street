@@ -20,26 +20,60 @@ type SearchRankEntry<T> = {
 };
 
 const SEARCH_STOP_WORDS = new Set(["a", "an", "and", "for", "in", "of", "on", "or", "the", "to", "with"]);
-const SEARCH_EQUIVALENCE_GROUPS = [
-  ["jacket", "outerwear", "coat"],
-  // "jean" and "denim" are their own tight group, deliberately separate from
-  // the general "pant/bottom/trouser" group below. Lumping them together
-  // (an earlier version of this list did) made "jean"/"jeans" inherit every
-  // variant in the shared group, so searching "jeans" matched *any* pant --
-  // track pants, joggers, cargo pants -- since they all carry "pant"
-  // somewhere in their category/type data. Keeping jean/denim on their own
-  // still gets the goat.com-style "red denim" -> "red jeans" match (denim is
-  // a material name for jeans), without jeans search picking up unrelated
-  // bottoms. A denim jacket still matches separately via the jacket group
-  // above -- a product can satisfy both groups.
-  ["jean", "denim"],
-  ["pant", "bottom", "trouser"],
-  ["shoe", "footwear", "sneaker", "boot", "sandal", "slide"],
-  ["tee", "tshirt", "shirt"],
-  ["hoodie", "sweatshirt", "pullover", "crewneck"],
-  ["hat", "cap", "beanie"],
-  ["black", "charcoal", "onyx", "jet black"],
-] as const;
+
+// Every group below fixes the same class of bug: "jeans" used to be lumped
+// into the same flat synonym list as "pant"/"bottom"/"trouser", so it
+// inherited every variant in that list and matched track pants, joggers,
+// cargo pants -- anything tagged as a "pant" -- not just jeans (reported by
+// Matthew, fixed, then generalized here to every group that had the same
+// shape). The fix: split each group into `broad` umbrella terms and
+// `specific` sibling terms. An umbrella term ("footwear") fans out to every
+// specific type below it (sneaker, boot, sandal, slide, ...) since a broad
+// search should surface the whole category. A specific term ("sneaker")
+// only bubbles UP to the umbrella terms -- never sideways to another
+// specific sibling ("boot") -- because a boot is not a sneaker, the same
+// way a jogger is not a pair of jeans. Where a group has no real
+// umbrella/sibling structure (jean/denim, tee/tshirt, color names -- these
+// are just alternate names for the same thing), `specific` stays empty and
+// the group behaves as a plain mutual synonym set, same as before.
+type SearchEquivalenceGroup = { broad: readonly string[]; specific: readonly string[] };
+const SEARCH_EQUIVALENCE_GROUPS: readonly SearchEquivalenceGroup[] = [
+  // "Jackets" and "Coats" are distinct sibling categories in the catalog
+  // (Track/Bomber/Denim/Puffer... Jackets vs Trench/Overcoat/Peacoat...
+  // Coats) -- searching one must not pull in the other. "outerwear" is the
+  // umbrella that legitimately covers both.
+  { broad: ["outerwear"], specific: ["jacket", "coat"] },
+  // Genuinely interchangeable shopper vocabulary ("red denim" == "red
+  // jeans"), and neither term is an umbrella over the other, so this stays
+  // its own tight mutual pair -- deliberately not merged into the general
+  // bottoms group below (that merge was the original "jeans" bug).
+  { broad: ["jean", "denim"], specific: [] },
+  // "pant" and "trouser" are the same garment (US/UK terms) and "bottom" is
+  // the plain-English umbrella for both -- all three are true synonyms of
+  // each other, so this stays a flat mutual group. Jeans, joggers,
+  // sweatpants, shorts and skirts are siblings elsewhere in the catalog and
+  // deliberately excluded here.
+  { broad: ["pant", "bottom", "trouser"], specific: [] },
+  // Sneakers, boots, sandals and slides are distinct sibling categories --
+  // searching "sneakers" must not surface boots. "shoe" and "footwear" are
+  // the umbrella terms that legitimately cover all of them.
+  { broad: ["shoe", "footwear"], specific: ["sneaker", "boot", "sandal", "slide"] },
+  // Same garment, two names -- a flat mutual pair. "shirt" alone is
+  // deliberately left out: in this catalog it usually means a button-up/
+  // collared shirt, a distinct sibling category from T-shirts.
+  { broad: ["tee", "tshirt"], specific: [] },
+  // "sweatshirt" and "pullover" are the umbrella terms; "hoodie" (has a
+  // hood) and "crewneck" (doesn't) are distinct sibling categories that
+  // must not match each other.
+  { broad: ["sweatshirt", "pullover"], specific: ["hoodie", "crewneck"] },
+  // "hat" is used colloquially as the umbrella for all headwear, but "cap"
+  // and "beanie" are distinct sibling categories that must not match each
+  // other.
+  { broad: ["hat"], specific: ["cap", "beanie"] },
+  // True alternate names for the same shade, not sibling categories -- a
+  // full mutual group is correct here.
+  { broad: ["black", "charcoal", "onyx", "jet black"], specific: [] },
+];
 
 function normalizeSearchText(value: string | null | undefined) {
   return (value ?? "")
@@ -55,6 +89,7 @@ function normalizeSearchText(value: string | null | undefined) {
 function singularizeSearchTerm(value: string) {
   const term = normalizeSearchText(value);
   const irregular: Record<string, string> = {
+    beanies: "beanie",
     bottoms: "bottom",
     boots: "boot",
     coats: "coat",
@@ -85,14 +120,26 @@ function pluralizeSearchTerm(term: string) {
 function searchTermVariants(term: string) {
   const canonical = singularizeSearchTerm(term);
   const variants = new Set([normalizeSearchText(term), canonical, pluralizeSearchTerm(canonical)]);
-  const group = SEARCH_EQUIVALENCE_GROUPS.find((items) => items.some((item) => singularizeSearchTerm(item) === canonical));
-  for (const item of group ?? []) {
-    const normalized = normalizeSearchText(item);
-    const singular = singularizeSearchTerm(normalized);
-    variants.add(normalized);
-    variants.add(singular);
-    variants.add(pluralizeSearchTerm(singular));
+
+  for (const group of SEARCH_EQUIVALENCE_GROUPS) {
+    const isBroad = group.broad.some((item) => singularizeSearchTerm(item) === canonical);
+    const isSpecific = !isBroad && group.specific.some((item) => singularizeSearchTerm(item) === canonical);
+    if (!isBroad && !isSpecific) continue;
+
+    // Broad/umbrella terms fan out to the whole group; a specific term only
+    // bubbles up to the umbrella terms, never sideways to a sibling -- see
+    // the comment on SEARCH_EQUIVALENCE_GROUPS above.
+    const additions = isBroad ? [...group.broad, ...group.specific] : group.broad;
+    for (const item of additions) {
+      const normalized = normalizeSearchText(item);
+      const singular = singularizeSearchTerm(normalized);
+      variants.add(normalized);
+      variants.add(singular);
+      variants.add(pluralizeSearchTerm(singular));
+    }
+    break; // a term belongs to at most one group
   }
+
   return [...variants].filter(Boolean);
 }
 
