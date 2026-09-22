@@ -470,7 +470,17 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
 
     const changedOrNew = dedupedImported.filter((product) => {
       const existing = existingByExternalId.get(product.externalId);
-      return !existing || existingSignature(existing) !== importedSignature(product);
+      // Handle isn't part of productSignature (see existingSignature/
+      // importedSignature) -- a source that renames a product's slug with
+      // nothing else about it changing was therefore treated as "unchanged"
+      // and skipped entirely, silently leaving its DB row's handle stale.
+      // Worse, if a *different* product then claims that now-legitimately-
+      // free handle, the stale row is still occupying it and the insert
+      // fails products_brand_id_handle_key (seen on katalyststudios).
+      // Treat a handle change as a change too, so the rename always goes
+      // through the update path (and its handle-vacating update above) even
+      // when nothing else on the product moved.
+      return !existing || existing.handle !== product.handle || existingSignature(existing) !== importedSignature(product);
     });
     const changedExternalIds = new Set(changedOrNew.map((product) => product.externalId));
     const unchangedEntries = imported
