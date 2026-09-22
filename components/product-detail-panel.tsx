@@ -1,29 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import type { ProductVariantSummary } from "@/lib/catalog";
 import { useProductVariantFocus } from "@/components/product-variant-context";
 import { VariantPicker } from "@/components/variant-picker";
 import { ProductPurchaseActions } from "@/components/product-purchase-actions";
+import { useSaved } from "@/components/saved-context";
 
 export function ProductDetailPanel({ product, recentlyAdded, sourceMessage }: { product: { id: string; slug: string; title: string; brandName: string; brandSlug: string; price: number; compareAtPrice?: number; primaryImage: string; sourceUrl: string; stockStatus: "in_stock" | "sold_out"; isPreorder: boolean; variantCount: number; variants: ProductVariantSummary[]; colors: string[]; sizes: string[]; description: string; category: string; streetCategory?: string; tags: string[]; lastSyncedAt: string }; recentlyAdded: boolean; sourceMessage: string }) {
   const { selectedVariant } = useProductVariantFocus();
-  const [saved, setSaved] = useState(false);
+  const { isSaved, toggle } = useSaved();
   const price = selectedVariant?.price ?? product.price;
   const available = product.stockStatus === "in_stock" && selectedVariant?.available !== false;
-
-  useEffect(() => {
-    try { setSaved(JSON.parse(localStorage.getItem("street:saved-products") || "[]").includes(product.slug)); } catch {}
-  }, [product.slug]);
+  const saved = isSaved(product.slug);
 
   function toggleSaved() {
-    try {
-      const items: string[] = JSON.parse(localStorage.getItem("street:saved-products") || "[]");
-      const next = items.includes(product.slug) ? items.filter((item) => item !== product.slug) : [...items, product.slug];
-      localStorage.setItem("street:saved-products", JSON.stringify(next));
-      setSaved(next.includes(product.slug));
-    } catch {}
+    toggle({
+      productId: product.id,
+      slug: product.slug,
+      title: product.title,
+      brandName: product.brandName,
+      brandSlug: product.brandSlug,
+      price,
+      image: product.primaryImage,
+      sourceUrl: product.sourceUrl,
+    });
   }
 
   async function share() {

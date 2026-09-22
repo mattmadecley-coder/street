@@ -4,6 +4,7 @@ import { SearchToggle } from "@/components/search-overlay";
 import { CategoryMenu } from "@/components/category-menu";
 import { ProductCardMedia } from "@/components/product-card-media";
 import { CartNavLink } from "@/components/cart-nav-link";
+import { SavedNavLink } from "@/components/saved-nav-link";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { getActiveCategorySummary } from "@/lib/catalog-store";
 import { isProductRecentlyAdded } from "@/lib/recent-products";
@@ -29,7 +30,7 @@ export async function Header() {
       <div className="header-actions">
         <div className="mobile-cart-link"><CartNavLink /></div>
         <SearchToggle />
-        <div className="desktop-cart-link"><CartNavLink /></div>
+        <div className="desktop-cart-link"><SavedNavLink /><CartNavLink /></div>
         <MobileNavigation categorySummary={categorySummary} />
       </div>
     </header>
@@ -49,6 +50,7 @@ export function Footer() {
           <Link href="/catalog">Shop all</Link>
           <Link href="/catalog?sort=newest">New in</Link>
           <Link href="/brands">Brands</Link>
+          <Link href="/saved">Saved</Link>
           <Link href="/cart">Cart</Link>
         </div>
         <div>

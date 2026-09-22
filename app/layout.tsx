@@ -6,6 +6,7 @@ import "./mobile.css";
 import "./catalog-polish.css";
 import { SiteMascot } from "@/components/mascot/site-mascot";
 import { CartProvider } from "@/components/cart-context";
+import { SavedProvider } from "@/components/saved-context";
 import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { CatalogAnalytics } from "@/components/catalog-analytics";
 
@@ -32,12 +33,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         <CartProvider>
-          {children}
-          <SiteMascot />
-          <Suspense fallback={null}>
-            <AnalyticsTracker />
-            <CatalogAnalytics />
-          </Suspense>
+          <SavedProvider>
+            {children}
+            <SiteMascot />
+            <Suspense fallback={null}>
+              <AnalyticsTracker />
+              <CatalogAnalytics />
+            </Suspense>
+          </SavedProvider>
         </CartProvider>
       </body>
     </html>

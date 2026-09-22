@@ -62,6 +62,7 @@ export function MobileNavigation({ categorySummary }: { categorySummary: Categor
           </details>
           <Link href="/catalog?sort=newest" onClick={close}>New in</Link>
           <Link href="/brands" onClick={close}>Brands</Link>
+          <Link href="/saved" onClick={close}>Saved</Link>
           <Link href="/cart" onClick={close}>Cart</Link>
         </nav>
         <div className="mobile-menu-secondary">
