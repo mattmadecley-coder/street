@@ -519,8 +519,15 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
       // later sync sees the product as unchanged. Check which of this run's
       // unchanged products are missing product_images and backfill just
       // those from the source data already fetched above.
+      // Uses the products_with_images RPC (distinct product_id per input
+      // id) rather than a raw product_images select -- a raw select
+      // returns one row per IMAGE, and an image-dense brand's 100-id
+      // chunk can return 1000+ rows and get silently truncated by
+      // PostgREST's default max-rows cap, making already-imaged products
+      // look photo-less and triggering a duplicate insert (seen on
+      // shampoooty, avg 16.4 images/product, and trendtvision).
       const withImages = new Set<string>();
-      const imageCheckChunks = await Promise.all(idChunks(unchangedIds).map((chunk) => supabaseRest<Array<{ product_id: string }>>(`product_images?select=product_id&product_id=in.(${chunk.join(",")})`, { noStore: true })));
+      const imageCheckChunks = await Promise.all(idChunks(unchangedIds).map((chunk) => supabaseRest<Array<{ product_id: string }>>("rpc/products_with_images", { method: "POST", body: { p_ids: chunk }, noStore: true })));
       imageCheckChunks.flat().forEach((row) => withImages.add(row.product_id));
       const repairImages = unchangedEntries
         .filter((entry) => entry.product.images.length && !withImages.has(entry.existing.id))
