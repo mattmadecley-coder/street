@@ -18,3 +18,4 @@ cleanup*.ps1
 # Cloudflare / OpenNext build output
 .open-next/
 .wrangler/
+next-env.d.ts
