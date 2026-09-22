@@ -50,7 +50,19 @@ export async function startBrandOnboarding(formData: FormData) {
     slug = `${baseSlug}-${attempt}`;
   }
 
-  await createBrandDraft({ slug, name, storeUrl });
+  try {
+    await createBrandDraft({ slug, name, storeUrl });
+  } catch (error) {
+    // Extremely rare: two submissions for the same domain raced past the
+    // findBrandByDomain check above and both got this far. The database's
+    // brands_active_store_domain_key constraint is the backstop -- surface
+    // its friendly message the same way the normal duplicate check does.
+    if (error instanceof Error && !error.message.startsWith("NEXT_REDIRECT")) {
+      redirect(`/admin/brands/new?error=${encodeURIComponent(error.message)}`);
+      return;
+    }
+    throw error;
+  }
   redirect(`/admin/brands/new?step=logo&slug=${encodeURIComponent(slug)}`);
 }
 

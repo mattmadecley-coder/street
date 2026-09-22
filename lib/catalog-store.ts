@@ -307,8 +307,25 @@ async function upsertBrand(brand: StreetBrand, metadata?: BrandMetadata) {
  */
 export async function createBrandDraft(input: { slug: string; name: string; storeUrl: string }): Promise<StreetBrand> {
   if (!hasSupabaseCatalog()) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
-  const row = await upsertBrand({ slug: input.slug, name: input.name, storeUrl: input.storeUrl, catalogEnabled: false });
-  return toStreetBrand(row);
+  try {
+    const row = await upsertBrand({ slug: input.slug, name: input.name, storeUrl: input.storeUrl, catalogEnabled: false });
+    return toStreetBrand(row);
+  } catch (error) {
+    // brands_active_store_domain_key (see migration 20260922_brands_unique_
+    // store_domain) is the database-level backstop for the same check
+    // findBrandByDomain does above in startBrandOnboarding -- it only trips
+    // when two "add brand" submissions for the same domain race each other
+    // past that app-level check (e.g. a double form submit). Turn the raw
+    // Postgres unique-violation message into the same friendly error the
+    // app-level check gives.
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("brands_active_store_domain_key")) {
+      const existing = await findBrandByDomain(input.storeUrl);
+      const hostname = existing ? new URL(existing.storeUrl).hostname.replace(/^www\./, "") : new URL(input.storeUrl).hostname.replace(/^www\./, "");
+      throw new Error(`${existing?.name ?? "Another brand"} is already in Street's catalog (same domain: ${hostname}).`);
+    }
+    throw error;
+  }
 }
 
 export async function setBrandCatalogEnabled(slug: string, enabled: boolean) {
