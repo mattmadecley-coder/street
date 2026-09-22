@@ -2,7 +2,7 @@ import Link from "next/link";
 import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AnalyticsNav } from "@/components/admin/analytics-nav";
-import { getRecentSiteEvents, getRecentOutboundClicks } from "@/lib/analytics";
+import { getRecentSiteEvents, getRecentOutboundClicks, cacheFriendlySince } from "@/lib/analytics";
 import { getAnalyticsBrandDailySummaries, summaryNumber } from "@/lib/analytics-summaries";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export default async function BrandAnalyticsPage({ params, searchParams }: { par
   const { slug } = await params;
   const query = await searchParams;
   const days = [7, 30, 90].includes(Number(query.days)) ? Number(query.days) : 30;
-  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const since = cacheFriendlySince(days);
   const sinceDay = since.slice(0, 10);
   const [summaries, events, clicks] = await Promise.all([
     getAnalyticsBrandDailySummaries(slug, sinceDay),

@@ -128,6 +128,22 @@ export type OutboundClickRow = {
 
 const MAX_RAW_ANALYTICS_ROWS = 10000;
 
+/**
+ * `since` cutoffs computed from `Date.now()` to the millisecond mean every
+ * request builds a unique Supabase REST URL, so Next's fetch cache (see
+ * supabaseRest's `next.revalidate`) never gets a hit even though these are
+ * idempotent reads on GET requests -- every page load is a fully live pull.
+ * Rounding down to a shared window lets repeated loads within that window
+ * (a person clicking between analytics pages, a second admin tab, a stray
+ * refresh) reuse the same cached response instead of re-scanning the table.
+ * A 5-minute window is a small enough lag for a single-operator dashboard.
+ */
+export function cacheFriendlySince(days: number, windowMs = 5 * 60 * 1000): string {
+  const raw = Date.now() - days * 86400000;
+  const rounded = Math.floor(raw / windowMs) * windowMs;
+  return new Date(rounded).toISOString();
+}
+
 function safeAnalyticsLimit(limit: number) {
   if (!Number.isFinite(limit)) return MAX_RAW_ANALYTICS_ROWS;
   return Math.min(Math.max(Math.trunc(limit), 1), MAX_RAW_ANALYTICS_ROWS);

@@ -2,7 +2,7 @@ import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AnalyticsControls } from "@/components/admin/analytics-controls";
 import { AnalyticsOverviewChart } from "@/components/admin/analytics-overview-chart";
-import { getRecentSiteEvents, getRecentOutboundClicks, type SiteEventRow, type OutboundClickRow } from "@/lib/analytics";
+import { getRecentSiteEvents, getRecentOutboundClicks, cacheFriendlySince, type SiteEventRow, type OutboundClickRow } from "@/lib/analytics";
 import { analyzeAudience, buildAnalyticsTrend, summarizePurchaseIntent } from "@/lib/analytics-audience";
 
 export const dynamic = "force-dynamic";
@@ -219,7 +219,7 @@ function searchOpportunities(events: SiteEventRow[]) {
 export default async function AdminAnalyticsPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
   const params = await searchParams;
   const days = [1, 7, 30, 90].includes(Number(params.days)) ? Number(params.days) : 30;
-  const since = new Date(Date.now() - Math.max(days, 90) * 86400000).toISOString();
+  const since = cacheFriendlySince(Math.max(days, 90));
   const [allEvents, allOutboundClicks] = await Promise.all([
     getRecentSiteEvents(100000, since),
     getRecentOutboundClicks(100000, since),
