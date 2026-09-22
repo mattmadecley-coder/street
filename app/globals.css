@@ -148,10 +148,15 @@ h1, h2, h3, p { margin-top: 0; }
 }
 
 
-.footer { margin-top: 64px; border-top: 1px solid rgba(16,16,16,.12); padding: 26px 22px 34px; }
-.footer-inner { max-width: 1080px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
-.footer-note { flex: 1 1 420px; margin: 0; font-size: 11.5px; line-height: 1.5; color: rgba(16,16,16,.55); max-width: 640px; }
-.footer-links { display: flex; gap: 18px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.footer-links a { color: rgba(16,16,16,.65); text-decoration: none; }
-.footer-links a:hover { color: #101010; text-decoration: underline; text-underline-offset: 3px; }
-@media (max-width: 700px) { .footer-inner { flex-direction: column; align-items: flex-start; } }
+/* Legacy footer-inner/footer-links markup was replaced by the expanded
+   three-column footer (storefront.tsx Footer(), styled in commerce.css)
+   -- nothing renders those classes anymore. The old .footer-note rule set
+   `flex: 1 1 420px`, meant as a max-width basis in that old *row* flex
+   layout; the new footer's columns are *column* flex containers, where
+   flex-basis governs height, not width -- so that leftover rule was
+   silently stretching the "For brands" column's note to 420px TALL,
+   shoving the "Grow your brand" link and legal links far down the page
+   and leaving a huge empty gap in the footer. Dropped the whole dead
+   block rather than leave a conflicting rule for the next markup change
+   to rediscover the hard way.
+*/
