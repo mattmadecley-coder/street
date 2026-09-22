@@ -7,6 +7,23 @@ export const maxDuration = 60;
 
 const CONCURRENCY = 6;
 
+async function isAuthorized(request: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || request.headers.get("authorization") === `Bearer ${secret}`) return true;
+
+  const watchdogToken = request.headers.get("x-street-worker-token")?.trim();
+  if (!watchdogToken) return false;
+  try {
+    return await supabaseRest<boolean>("rpc/authorize_cron_watchdog", {
+      method: "POST",
+      body: { p_job_key: "storefront-health", p_token: watchdogToken },
+    });
+  } catch (error) {
+    console.error("Street storefront-health watchdog authorization failed", error);
+    return false;
+  }
+}
+
 type BrandHealthRow = {
   id: string;
   slug: string;
@@ -28,9 +45,8 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, callback: (it
   return results;
 }
 
-export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
+async function handleStorefrontHealthCron(request: NextRequest) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
@@ -99,4 +115,14 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Storefront health check failed" }, { status: 500 });
   }
+}
+
+/** Cron safety net and manual trigger. */
+export async function GET(request: NextRequest) {
+  return handleStorefrontHealthCron(request);
+}
+
+/** Watchdog continuation endpoint (net.http_post from Supabase pg_cron). */
+export async function POST(request: NextRequest) {
+  return handleStorefrontHealthCron(request);
 }

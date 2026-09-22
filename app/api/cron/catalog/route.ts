@@ -5,13 +5,29 @@ import { runClassificationWorkerBatch } from "@/lib/classification-recovery";
 import { getAllBrands, syncBrandDirectory, syncStreetCatalog } from "@/lib/catalog-store";
 import { triggerClassificationDrain } from "@/lib/classification-trigger";
 import { enqueueBrandSync, hasQStash } from "@/lib/qstash";
-import { CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
+import { CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS, supabaseRest } from "@/lib/supabase-rest";
 
 export const maxDuration = 60;
 
-export async function GET(request: NextRequest) {
+async function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!secret || request.headers.get("authorization") === `Bearer ${secret}`) return true;
+
+  const watchdogToken = request.headers.get("x-street-worker-token")?.trim();
+  if (!watchdogToken) return false;
+  try {
+    return await supabaseRest<boolean>("rpc/authorize_cron_watchdog", {
+      method: "POST",
+      body: { p_job_key: "catalog", p_token: watchdogToken },
+    });
+  } catch (error) {
+    console.error("Street catalog watchdog authorization failed", error);
+    return false;
+  }
+}
+
+async function handleCatalogCron(request: NextRequest) {
+  if (!(await isAuthorized(request))) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   try {
     const mode = request.nextUrl.searchParams.get("mode");
@@ -76,4 +92,14 @@ export async function GET(request: NextRequest) {
     const message = error instanceof Error ? error.message : "Catalog sync failed";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
+}
+
+/** Cron safety net and manual trigger. */
+export async function GET(request: NextRequest) {
+  return handleCatalogCron(request);
+}
+
+/** Watchdog continuation endpoint (net.http_post from Supabase pg_cron). */
+export async function POST(request: NextRequest) {
+  return handleCatalogCron(request);
 }
