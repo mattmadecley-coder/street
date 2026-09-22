@@ -5,28 +5,25 @@ import { usePathname } from "next/navigation";
 
 /**
  * Every admin save/hide/sync/move action is a Server Action that ends in
- * `redirect()`, which reloads the whole page. Without this, that reload
- * snaps scroll back to the top and closes every open <details> row —
- * annoying when you're 40 rows down a review queue and just hit Save.
+ * `redirect()`. Next.js turns that into a client-side transition rather
+ * than a hard browser reload — no `beforeunload` fires — and the redirect
+ * target usually carries a fresh `?saved=...`-style query string, so a key
+ * built from the full URL stops matching the instant the action succeeds.
+ * Keying on the pathname alone survives that; scroll/accordion state is
+ * scoped per admin page, not per filter combination.
  *
  * Wrap a row list with this and give each <details> a stable
  * `data-scroll-id` (e.g. the row's id/slug). It restores scroll position
- * and re-opens whichever rows were open, keyed by the current URL so it
- * doesn't leak state between different searches/filters/pages.
- *
- * Reads `window.location.search` directly (rather than `useSearchParams`)
- * so this never needs its own Suspense boundary.
+ * and re-opens whichever rows were open before the last save on this page.
  */
 export function ScrollMemory({ children, scrollKey }: { children: ReactNode; scrollKey?: string }) {
   const pathname = usePathname();
   const containerRef = useRef<HTMLDivElement>(null);
+  const key = `street-admin-scroll:${scrollKey ?? pathname}`;
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-
-    const search = typeof window !== "undefined" ? window.location.search : "";
-    const key = `street-admin-scroll:${scrollKey ?? `${pathname}${search}`}`;
 
     try {
       const raw = sessionStorage.getItem(key);
@@ -64,10 +61,14 @@ export function ScrollMemory({ children, scrollKey }: { children: ReactNode; scr
     container.addEventListener("toggle", save, true);
     window.addEventListener("beforeunload", save);
     return () => {
+      // A Server Action's redirect() is a soft client-side transition, not
+      // a real unload — save here too, or the state captured above is lost
+      // the moment this component unmounts for the new page.
+      save();
       container.removeEventListener("toggle", save, true);
       window.removeEventListener("beforeunload", save);
     };
-  }, [pathname, scrollKey]);
+  }, [key]);
 
   return <div ref={containerRef}>{children}</div>;
 }
