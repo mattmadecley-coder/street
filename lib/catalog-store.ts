@@ -512,7 +512,25 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
 
       const saved: Array<{ id: string; external_id: string }> = [];
       if (normalProducts.length) {
-        saved.push(...await supabaseRest<Array<{ id: string; external_id: string }>>("products?on_conflict=brand_id,external_id", { method: "POST", body: normalProducts.map((product) => databaseProduct(brandRow.id, product)), prefer: "resolution=merge-duplicates,return=representation" }));
+        // Split into updates-to-an-existing-row vs brand new inserts, and
+        // run updates first. A source occasionally frees up a handle by
+        // renaming one product (its external_id is unchanged, so it's an
+        // "update" here) onto a new slug in the very same sync that gives a
+        // different, genuinely new product that freed-up handle. Batching
+        // both together in one upsert makes success depend on row-processing
+        // order inside Postgres -- the new product's insert can land before
+        // the rename's update actually vacates the handle and fail
+        // products_brand_id_handle_key even though the end state is
+        // perfectly valid. Committing the renames first guarantees the
+        // handle is free by the time anything tries to claim it.
+        const updates = normalProducts.filter((product) => existingByExternalId.has(product.externalId));
+        const inserts = normalProducts.filter((product) => !existingByExternalId.has(product.externalId));
+        if (updates.length) {
+          saved.push(...await supabaseRest<Array<{ id: string; external_id: string }>>("products?on_conflict=brand_id,external_id", { method: "POST", body: updates.map((product) => databaseProduct(brandRow.id, product)), prefer: "resolution=merge-duplicates,return=representation" }));
+        }
+        if (inserts.length) {
+          saved.push(...await supabaseRest<Array<{ id: string; external_id: string }>>("products?on_conflict=brand_id,external_id", { method: "POST", body: inserts.map((product) => databaseProduct(brandRow.id, product)), prefer: "resolution=merge-duplicates,return=representation" }));
+        }
       }
       if (relinkedProducts.length) {
         // Upsert by primary key instead of (brand_id, external_id): these
