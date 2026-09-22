@@ -22,12 +22,18 @@ type SearchRankEntry<T> = {
 const SEARCH_STOP_WORDS = new Set(["a", "an", "and", "for", "in", "of", "on", "or", "the", "to", "with"]);
 const SEARCH_EQUIVALENCE_GROUPS = [
   ["jacket", "outerwear", "coat"],
-  // "denim" is a material, not just a garment name -- but the common
-  // shopper query "red denim" means "red jeans", so it belongs in the
-  // bottoms group as a search term even though a product tagged "denim"
-  // isn't necessarily pants (a denim jacket also exists, and still matches
-  // separately via the jacket group above -- a product can satisfy both).
-  ["pant", "bottom", "trouser", "jean", "denim"],
+  // "jean" and "denim" are their own tight group, deliberately separate from
+  // the general "pant/bottom/trouser" group below. Lumping them together
+  // (an earlier version of this list did) made "jean"/"jeans" inherit every
+  // variant in the shared group, so searching "jeans" matched *any* pant --
+  // track pants, joggers, cargo pants -- since they all carry "pant"
+  // somewhere in their category/type data. Keeping jean/denim on their own
+  // still gets the goat.com-style "red denim" -> "red jeans" match (denim is
+  // a material name for jeans), without jeans search picking up unrelated
+  // bottoms. A denim jacket still matches separately via the jacket group
+  // above -- a product can satisfy both groups.
+  ["jean", "denim"],
+  ["pant", "bottom", "trouser"],
   ["shoe", "footwear", "sneaker", "boot", "sandal", "slide"],
   ["tee", "tshirt", "shirt"],
   ["hoodie", "sweatshirt", "pullover", "crewneck"],
