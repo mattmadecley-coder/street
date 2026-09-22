@@ -14,3 +14,7 @@ cleanup.ps1
 time-test*.ps1
 cleanup*.ps1
 
+
+# Cloudflare / OpenNext build output
+.open-next/
+.wrangler/
