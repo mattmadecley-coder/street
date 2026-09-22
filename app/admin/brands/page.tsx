@@ -133,6 +133,7 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
           <strong>{brand.name}</strong>
           {brand.featured ? <span className={styles.pill}>Featured</span> : null}
           {!brand.catalogEnabled ? <span className={styles.pill}>Not in daily sync</span> : null}
+          {brand.storefrontStatus === "closed" ? <span className={`${styles.pill} ${styles.pillAlert}`}>Password protected / closed</span> : null}
           {diagnostic?.newProducts ? <span className={styles.pill}>+{diagnostic.newProducts} new</span> : null}
           {progress.state === "failed" ? <span className={styles.pill}>Import interrupted</span> : null}
           {progress.state === "waiting" ? <span className={styles.pill}>{progress.pending} waiting to classify</span> : null}
@@ -140,6 +141,11 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
         <span className={styles.rowMeta}>{brand.productCount} pieces · {timeAgo(status?.lastSyncedAt ?? null)}</span>
       </summary>
       <div className={styles.rowBody}>
+        {brand.storefrontStatus === "closed" ? (
+          <p className={styles.noticeError}>
+            This store looks password-protected or not yet live{brand.storefrontStatusReason ? ` (${brand.storefrontStatusReason})` : ""}, likely mid-drop or pre-launch. Checked {timeAgo(brand.storefrontCheckedAt)} — it&rsquo;s rechecked automatically the next time this brand syncs.
+          </p>
+        ) : null}
         {progress.state === "failed" && progress.error ? <p className={styles.noticeError}>{progress.error}</p> : null}
         {progress.state === "waiting" ? (
           <p className={styles.notice}>

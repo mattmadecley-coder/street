@@ -3,10 +3,11 @@ import { STREET_TAXONOMY, categoriesForGroup } from "@/lib/street-taxonomy";
 import { fetchBrandMetadata, type BrandMetadata } from "@/lib/brand-metadata";
 import { classifyProductWithAI } from "@/lib/ai-product-classifier";
 import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
+import { inspectStorefront, type StorefrontHealth } from "@/lib/storefront-health";
 import { hasSupabaseCatalog, supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 import type { StreetProduct } from "@/lib/catalog";
 
-type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean; catalog_enabled?: boolean; product_count?: number | string };
+type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean; catalog_enabled?: boolean; product_count?: number | string; storefront_status?: "unknown" | "open" | "closed"; storefront_status_reason?: string | null; storefront_checked_at?: string | null };
 type ImageRow = { source_url: string; sort_order: number; alt_text?: string | null };
 type VariantRow = { external_id: string; title: string | null; price: string | number; compare_at_price: string | number | null; available: boolean; option1: string | null; option2: string | null; option3: string | null; image_url: string | null };
 type ProductRow = { id: string; brand_id: string; external_id: string; handle: string; title: string; description: string; source_url: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; category: string; tags: string[]; colors: string[]; sizes: string[]; primary_image_url: string | null; last_synced_at: string; is_active: boolean; brands: BrandRow | null; product_images: ImageRow[] | null; product_variants: VariantRow[] | null; street_group: string | null; street_category: string | null; street_type: string | null; street_detail: string | null };
@@ -14,7 +15,7 @@ type PendingClassificationRow = { id: string; title: string; description: string
 type SyncRunRow = { id: string };
 type SyncRunHistoryRow = { brand_id: string; started_at: string; completed_at: string | null; status: "running" | "success" | "failed"; product_count: number; error_message: string | null; brands: { slug: string } | null };
 
-export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; instagramUrl: string | null; productCount: number; featured: boolean; catalogEnabled: boolean; createdAt: string };
+export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; instagramUrl: string | null; productCount: number; featured: boolean; catalogEnabled: boolean; createdAt: string; storefrontStatus: "unknown" | "open" | "closed"; storefrontStatusReason: string | null; storefrontCheckedAt: string | null };
 export type CatalogSyncResult = { brand: string; productCount: number; ok: boolean; error?: string };
 export type ClassificationRunResult = { id: string; title: string; status: "classified" | "needs_review" | "error"; group?: string; category?: string; tags?: string[]; error?: string };
 export type BrandSyncStatus = { lastSyncedAt: string | null; lastStatus: "running" | "success" | "failed" | null; lastProductCount: number | null; lastError: string | null };
@@ -139,7 +140,7 @@ export async function findBrandByDomain(url: string): Promise<StreetBrand | null
 
 export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
   const brands = await getAllBrands();
-  const fallback = new Map<string, StreetBrandProfile>(brands.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured), catalogEnabled: brand.catalogEnabled ?? true, createdAt: new Date(0).toISOString() }]));
+  const fallback = new Map<string, StreetBrandProfile>(brands.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured), catalogEnabled: brand.catalogEnabled ?? true, createdAt: new Date(0).toISOString(), storefrontStatus: "unknown", storefrontStatusReason: null, storefrontCheckedAt: null }]));
   if (!hasSupabaseCatalog()) return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   try {
     // product_count lives right on the brands row (kept in sync by the
@@ -148,7 +149,7 @@ export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
     // product's brand_id just to re-derive the same number in memory. One
     // small query instead of a full catalog scan on every admin page load.
     const rows = await supabaseRest<(BrandRow & { created_at: string })[]>("brands?select=*&is_active=eq.true&order=name.asc");
-    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: Number(row.product_count ?? 0), featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true, createdAt: row.created_at });
+    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: Number(row.product_count ?? 0), featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true, createdAt: row.created_at, storefrontStatus: row.storefront_status ?? "unknown", storefrontStatusReason: row.storefront_status_reason ?? null, storefrontCheckedAt: row.storefront_checked_at ?? null });
     return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error("Street brand directory read failed", error);
@@ -346,7 +347,7 @@ function databaseProduct(brandId: string, product: ImportedProduct) {
   return { brand_id: brandId, external_id: product.externalId, handle: product.handle, title: product.title, description: product.description, source_url: product.sourceUrl, price: product.price, compare_at_price: product.compareAtPrice ?? null, stock_status: product.stockStatus, is_preorder: product.isPreorder, category: product.category, tags: product.tags, colors: product.colors, sizes: product.sizes, primary_image_url: product.images[0] ?? null, is_active: true, last_synced_at: new Date().toISOString() };
 }
 
-type ExistingProductRow = { id: string; external_id: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; title: string; category: string; tags: string[]; colors: string[]; sizes: string[] };
+type ExistingProductRow = { id: string; external_id: string; handle: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; title: string; category: string; tags: string[]; colors: string[]; sizes: string[] };
 
 /** Same page-looping shape as supabaseRestAll, but noStore — for reads that feed a same-run diff/write decision and can't risk a cached snapshot. */
 async function fetchAllNoStore<T>(path: string, pageSize = 500): Promise<T[]> {
@@ -392,13 +393,52 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
   const runRows = await supabaseRest<SyncRunRow[]>("catalog_sync_runs", { method: "POST", body: { brand_id: brandRow.id, status: "running" } });
   const runId = runRows[0]?.id;
   try {
-    const [imported, existingRows] = await Promise.all([
+    const [imported, existingRows, health] = await Promise.all([
       importBrandCatalog(brand),
-      fetchAllNoStore<ExistingProductRow>(`products?select=id,external_id,price,compare_at_price,stock_status,is_preorder,title,category,tags,colors,sizes&brand_id=eq.${brandRow.id}`),
+      fetchAllNoStore<ExistingProductRow>(`products?select=id,external_id,handle,price,compare_at_price,stock_status,is_preorder,title,category,tags,colors,sizes&brand_id=eq.${brandRow.id}`),
+      // No automated job currently re-checks storefront health on its own
+      // schedule (see app/api/cron/storefront-health), so a manual/scheduled
+      // catalog sync is the one reliable place left to keep this brand's
+      // status current. Refresh it every time regardless of outcome.
+      inspectStorefront(brand.storeUrl).catch((): StorefrontHealth => ({ status: "unknown", reason: "Storefront health check failed" })),
     ]);
+
+    await supabaseRest(`brands?id=eq.${brandRow.id}`, {
+      method: "PATCH",
+      body: { storefront_status: health.status, storefront_status_reason: health.reason ?? null, storefront_checked_at: new Date().toISOString() },
+      prefer: "return=minimal",
+    }).catch(() => undefined);
+
+    // A closed/password-gated storefront returning zero products isn't a
+    // parsing failure to troubleshoot -- it's an expected "nothing to import
+    // right now" state (mid-drop, pre-launch, etc). Surface that plainly
+    // instead of the generic "did not return any products" message so it
+    // reads correctly in the sync history and doesn't get mistaken for a bug.
+    if (health.status === "closed") {
+      throw new Error(`Storefront appears password-protected or not yet live${health.reason ? ` (${health.reason})` : ""} -- skipped this sync, nothing was changed.`);
+    }
     if (!imported.length) throw new Error("The brand source did not return any products.");
 
     const existingByExternalId = new Map(existingRows.map((row) => [row.external_id, row]));
+    // Some brands' source platforms (seen on Shopify) occasionally reissue a
+    // product's internal id while its handle/slug stays the same -- typically
+    // an unpublish-then-republish rather than an in-place edit. Matching only
+    // on external_id then makes that product look brand new to this diff,
+    // but the products table also has a separate unique constraint on
+    // (brand_id, handle) -- so inserting it as "new" collides with the row
+    // that already owns that handle and fails the whole sync batch with
+    // products_brand_id_handle_key instead of just updating it. Detect that
+    // case up front and relink the existing row's id to the new external_id
+    // rather than attempting a fresh insert.
+    const existingByHandle = new Map(existingRows.map((row) => [row.handle, row]));
+    const importedExternalIds = new Set(imported.map((product) => product.externalId));
+    function relinkTarget(product: ImportedProduct): ExistingProductRow | undefined {
+      if (existingByExternalId.has(product.externalId)) return undefined;
+      const byHandle = existingByHandle.get(product.handle);
+      if (!byHandle || importedExternalIds.has(byHandle.external_id)) return undefined;
+      return byHandle;
+    }
+
     const changedOrNew = imported.filter((product) => {
       const existing = existingByExternalId.get(product.externalId);
       return !existing || existingSignature(existing) !== importedSignature(product);
@@ -437,7 +477,22 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
     }
 
     if (changedOrNew.length) {
-      const saved = await supabaseRest<Array<{ id: string; external_id: string }>>("products?on_conflict=brand_id,external_id", { method: "POST", body: changedOrNew.map((product) => databaseProduct(brandRow.id, product)), prefer: "resolution=merge-duplicates,return=representation" });
+      const relinkIds = new Map(changedOrNew.map((product) => [product.externalId, relinkTarget(product)?.id]).filter((entry): entry is [string, string] => Boolean(entry[1])));
+      const normalProducts = changedOrNew.filter((product) => !relinkIds.has(product.externalId));
+      const relinkedProducts = changedOrNew.filter((product) => relinkIds.has(product.externalId));
+
+      const saved: Array<{ id: string; external_id: string }> = [];
+      if (normalProducts.length) {
+        saved.push(...await supabaseRest<Array<{ id: string; external_id: string }>>("products?on_conflict=brand_id,external_id", { method: "POST", body: normalProducts.map((product) => databaseProduct(brandRow.id, product)), prefer: "resolution=merge-duplicates,return=representation" }));
+      }
+      if (relinkedProducts.length) {
+        // Upsert by primary key instead of (brand_id, external_id): these
+        // rows already own their handle under a different, stale
+        // external_id, so a plain insert would collide with
+        // products_brand_id_handle_key.
+        saved.push(...await supabaseRest<Array<{ id: string; external_id: string }>>("products?on_conflict=id", { method: "POST", body: relinkedProducts.map((product) => ({ id: relinkIds.get(product.externalId), ...databaseProduct(brandRow.id, product) })), prefer: "resolution=merge-duplicates,return=representation" }));
+      }
+
       const ids = new Map(saved.map((product) => [product.external_id, product.id]));
       await Promise.all(saved.flatMap((product) => [supabaseRest(`product_images?product_id=eq.${product.id}`, { method: "DELETE", prefer: "return=minimal" }), supabaseRest(`product_variants?product_id=eq.${product.id}`, { method: "DELETE", prefer: "return=minimal" })]));
       const images = changedOrNew.flatMap((product) => { const productId = ids.get(product.externalId); return productId ? product.images.map((sourceUrl, sortOrder) => ({ product_id: productId, source_url: sourceUrl, sort_order: sortOrder, alt_text: product.title })) : []; });
