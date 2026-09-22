@@ -1,12 +1,15 @@
+import Link from "next/link";
 import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { TaxonomyPicker } from "@/components/admin/taxonomy-picker";
-import { supabaseRest } from "@/lib/supabase-rest";
+import { supabaseRestPage } from "@/lib/supabase-rest";
 import { getAllBrands } from "@/lib/catalog-store";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { updateProductTaxonomy, hideProduct, deleteProduct } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 30;
 
 type AdminProductRow = {
   id: string;
@@ -33,29 +36,53 @@ const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
 ];
 
-async function searchProducts(q: string | undefined, status: string, brandSlug: string | undefined) {
+function productsPath(q: string | undefined, status: string, brandSlug: string | undefined) {
   const params = new URLSearchParams();
   params.set("select", "id,title,price,primary_image_url,street_group,street_category,street_type,street_detail,street_activity,street_tags,classification_status,is_hidden,stock_status,brands!inner(slug,name)");
   params.set("is_active", "eq.true");
   params.set("order", "updated_at.desc");
-  params.set("limit", "30");
   if (status !== "all") params.set("classification_status", `eq.${status}`);
   if (q?.trim()) params.set("title", `ilike.*${q.trim().replace(/[%,()]/g, " ")}*`);
   if (brandSlug) params.set("brands.slug", `eq.${brandSlug}`);
+  return `products?${params.toString()}`;
+}
 
+/** Paginated instead of a flat 30-row cap — the review queue can run well past 30 items, and the old version made everything past the newest 30 invisible with no way to page to it. */
+async function searchProducts(q: string | undefined, status: string, brandSlug: string | undefined, requestedPage: number): Promise<{ products: AdminProductRow[]; total: number; page: number }> {
+  const path = productsPath(q, status, brandSlug);
   try {
-    return await supabaseRest<AdminProductRow[]>(`products?${params.toString()}`, { noStore: true });
+    let page = requestedPage;
+    let from = (page - 1) * PAGE_SIZE;
+    let result = await supabaseRestPage<AdminProductRow>(path, { from, to: from + PAGE_SIZE - 1 }, { noStore: true });
+    const lastPage = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+    if (result.total > 0 && page > lastPage) {
+      page = lastPage;
+      from = (page - 1) * PAGE_SIZE;
+      result = await supabaseRestPage<AdminProductRow>(path, { from, to: from + PAGE_SIZE - 1 }, { noStore: true });
+    }
+    return { products: result.data, total: result.total, page };
   } catch (error) {
     console.error("Street admin product search failed", error);
-    return [];
+    return { products: [], total: 0, page: 1 };
   }
 }
 
-export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; brand?: string; saved?: string }> }) {
-  const { q, status: statusParam, brand: brandParam, saved } = await searchParams;
+function productsHref(q: string | undefined, status: string, brandSlug: string | undefined, page: number) {
+  const search = new URLSearchParams();
+  search.set("status", status);
+  if (brandSlug) search.set("brand", brandSlug);
+  if (q) search.set("q", q);
+  if (page > 1) search.set("page", String(page));
+  return `/admin/products?${search.toString()}`;
+}
+
+export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; brand?: string; saved?: string; page?: string }> }) {
+  const { q, status: statusParam, brand: brandParam, saved, page: pageParam } = await searchParams;
   const status = statusParam ?? "needs_review";
-  const returnTo = `/admin/products?status=${encodeURIComponent(status)}${brandParam ? `&brand=${encodeURIComponent(brandParam)}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
-  const [products, brands] = await Promise.all([searchProducts(q, status, brandParam), getAllBrands()]);
+  const requestedPage = Math.max(1, Math.floor(Number(pageParam) || 1));
+  const [{ products, total, page: currentPage }, brands] = await Promise.all([searchProducts(q, status, brandParam, requestedPage), getAllBrands()]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const returnTo = productsHref(q, status, brandParam, currentPage);
 
   return (
     <div className={styles.shell}>
@@ -77,7 +104,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
         <button type="submit">Search</button>
       </form>
 
-      <p className={styles.rowMeta} style={{ marginBottom: 14 }}>{products.length} product{products.length === 1 ? "" : "s"} shown (max 30 — search to narrow further).</p>
+      <p className={styles.rowMeta} style={{ marginBottom: 14 }}>{total.toLocaleString()} product{total === 1 ? "" : "s"} match — showing {products.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}–{(currentPage - 1) * PAGE_SIZE + products.length} (page {currentPage} of {totalPages}).</p>
 
       <div className={styles.rowList}>
         {products.map((product) => (
@@ -137,6 +164,13 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
         ))}
         {!products.length ? <p className={styles.rowMeta}>No products match this search/filter.</p> : null}
       </div>
+      {totalPages > 1 ? (
+        <nav aria-label="Product pages" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, margin: "22px 0 8px", fontSize: 12 }}>
+          {currentPage > 1 ? <Link className="link-small" href={productsHref(q, status, brandParam, currentPage - 1)}>← Previous</Link> : <span />}
+          <span className={styles.rowMeta}>Page {currentPage} of {totalPages}</span>
+          {currentPage < totalPages ? <Link className="link-small" href={productsHref(q, status, brandParam, currentPage + 1)}>Next →</Link> : <span />}
+        </nav>
+      ) : null}
     </div>
   );
 }
