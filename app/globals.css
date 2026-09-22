@@ -76,10 +76,15 @@ h1, h2, h3, p { margin-top: 0; }
 .empty { padding: 90px 20px; border: 1px dashed rgba(16,16,16,.35); text-align: center; }
 @media (max-width: 840px) { .header { height: 56px; padding: 0 14px; flex-wrap: nowrap; } .wordmark { font-size: 18px; } .nav { gap: 14px; font-size: 10px; flex-wrap: nowrap; white-space: nowrap; } .nav .nav-hide-mobile { display: none; } .shell { padding: 12px 14px 42px; } .hero { min-height: 56svh; } .grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px 4px; } .section { margin-top: 52px; } .dark-section { margin-top: 52px; padding: 50px 14px; } .dark-section-inner { grid-template-columns: 1fr; } .filters { grid-template-columns: repeat(2, minmax(0,1fr)); } .filters input { grid-column: 1 / -1; } .filters button { width: 100%; } .product-layout { grid-template-columns: 1fr; gap: 24px; } .product-info { position: static; } .gallery { gap: 7px; } .gallery > div { min-height: min(74svh, 640px); padding: 8px; } }
 
-/* --- Product card hover: swap to the second catalog photo --- */
+/* --- Product card hover: swap to the second catalog photo ---
+   Gated on .card-media-has-alt (set in React only once a second photo
+   actually exists and is being shown -- see product-card-media.tsx) so a
+   single-photo product's hover has no effect at all, rather than the old
+   plain ":hover" rule which faded the primary photo to nothing on every
+   card whether or not a replacement was ever going to appear. */
 .card-image-secondary { opacity: 0; transition: opacity .15s ease; }
-.card-image:hover .card-image-secondary { opacity: 1; }
-.card-image:hover .card-image-primary { opacity: 0; }
+.card-media-has-alt:hover .card-image-secondary { opacity: 1; }
+.card-media-has-alt:hover .card-image-primary { opacity: 0; }
 @media (hover: none) { .card-image-secondary { display: none; } }
 
 /* --- Header search overlay --- */

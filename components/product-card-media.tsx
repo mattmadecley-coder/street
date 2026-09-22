@@ -160,7 +160,7 @@ export function ProductCardMedia({
   return (
     <div
       ref={containerRef}
-      className="card-media-layer"
+      className={`card-media-layer${showAlternate ? " card-media-has-alt" : ""}`}
       style={{ position: "absolute", inset: 8 }}
       onPointerEnter={() => setLoadAlternate(true)}
       onFocusCapture={() => setLoadAlternate(true)}
