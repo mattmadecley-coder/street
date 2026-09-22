@@ -483,7 +483,7 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
       return !existing || existing.handle !== product.handle || existingSignature(existing) !== importedSignature(product);
     });
     const changedExternalIds = new Set(changedOrNew.map((product) => product.externalId));
-    const unchangedEntries = imported
+    const unchangedEntries = dedupedImported
       .map((product) => ({ product, existing: existingByExternalId.get(product.externalId) }))
       .filter((entry): entry is { product: ImportedProduct; existing: ExistingProductRow } => entry.existing !== undefined && !changedExternalIds.has(entry.existing.external_id));
     const unchangedIds = unchangedEntries.map((entry) => entry.existing.id);
@@ -493,8 +493,21 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
     // still-current rows back on.
     await supabaseRest(`products?brand_id=eq.${brandRow.id}`, { method: "PATCH", body: { is_active: false }, prefer: "return=minimal" });
 
+    // A brand with a large, mostly-stable catalog (200+ products) can leave
+    // unchangedIds with hundreds of UUIDs -- a single `id=in.(...)` query
+    // string for all of them can run past PostgREST/the proxy's URL length
+    // limit and come back silently truncated rather than erroring, which
+    // then makes the missing-images check below think some brand's products
+    // have no photos when they do and re-insert a full image set for
+    // whichever ones happen to already have one, colliding with what's
+    // already there (seen on shampoooty, 6pm-season and others -- all
+    // large catalogs). Chunk both id-list queries so no single request URL
+    // can grow large enough to hit that limit.
+    const ID_CHUNK_SIZE = 100;
+    const idChunks = <T,>(ids: T[]) => { const chunks: T[][] = []; for (let i = 0; i < ids.length; i += ID_CHUNK_SIZE) chunks.push(ids.slice(i, i + ID_CHUNK_SIZE)); return chunks; };
+
     if (unchangedIds.length) {
-      await supabaseRest(`products?id=in.(${unchangedIds.join(",")})`, { method: "PATCH", body: { is_active: true, last_synced_at: new Date().toISOString() }, prefer: "return=minimal" });
+      await Promise.all(idChunks(unchangedIds).map((chunk) => supabaseRest(`products?id=in.(${chunk.join(",")})`, { method: "PATCH", body: { is_active: true, last_synced_at: new Date().toISOString() }, prefer: "return=minimal" })));
 
       // Self-heal a product that ended up with primary_image_url set but zero
       // product_images rows. That happens because the products upsert and the
@@ -507,8 +520,8 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
       // unchanged products are missing product_images and backfill just
       // those from the source data already fetched above.
       const withImages = new Set<string>();
-      const imageCheck = await supabaseRest<Array<{ product_id: string }>>(`product_images?select=product_id&product_id=in.(${unchangedIds.join(",")})`, { noStore: true });
-      imageCheck.forEach((row) => withImages.add(row.product_id));
+      const imageCheckChunks = await Promise.all(idChunks(unchangedIds).map((chunk) => supabaseRest<Array<{ product_id: string }>>(`product_images?select=product_id&product_id=in.(${chunk.join(",")})`, { noStore: true })));
+      imageCheckChunks.flat().forEach((row) => withImages.add(row.product_id));
       const repairImages = unchangedEntries
         .filter((entry) => entry.product.images.length && !withImages.has(entry.existing.id))
         .flatMap((entry) => entry.product.images.map((sourceUrl, sortOrder) => ({ product_id: entry.existing.id, source_url: sourceUrl, sort_order: sortOrder, alt_text: entry.product.title })));
