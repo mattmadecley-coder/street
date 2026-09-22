@@ -100,7 +100,11 @@ export async function ProductCard({ product, searchQuery, priority = false, posi
         {product.stockStatus === "sold_out" ? <span className="badge badge-stock" style={{ top: recentlyAdded ? 42 : 8 }}>Sold out</span> : null}
         {product.variantCount > 1 ? <span className="badge badge-variants">{product.variantCount} options</span> : null}
       </div>
-      <p className="brand">{product.brandName}</p><p className="name">{product.title}</p><p className="price">${product.price.toFixed(2)}</p>
+      <p className="brand">{product.brandName}</p><p className="name">{product.title}</p>
+      <div className="price-row">
+        <p className="price">${product.price.toFixed(2)}</p>
+        {product.compareAtPrice && product.compareAtPrice > product.price ? <p className="compare-price">${product.compareAtPrice.toFixed(2)}</p> : null}
+      </div>
     </Link>
   );
 }

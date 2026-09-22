@@ -25,7 +25,9 @@ h1, h2, h3, p { margin-top: 0; }
 .badge-variants { left: auto; right: 8px; background: rgba(16,16,16,.72); }
 .brand { margin: 10px 0 6px; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: rgba(16,16,16,.58); }
 .name { min-height: 34px; margin: 0; font-size: 13px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.price { margin: 6px 0 0; font-size: 13px; }
+.price-row { display: flex; align-items: baseline; gap: 6px; margin: 6px 0 0; }
+.price { margin: 0; font-size: 13px; }
+.compare-price { margin: 0; font-size: 11.5px; color: rgba(16,16,16,.45); text-decoration: line-through; text-decoration-thickness: 1px; }
 .dark-section { margin-top: 80px; padding: 68px 22px; background: #101010; color: #f4f3ee; }
 .dark-section-inner { width: min(1600px, 100%); margin: 0 auto; display: grid; grid-template-columns: .75fr 1.5fr; gap: 30px; }
 .dark-section h2 { max-width: 900px; margin: 0; font-size: clamp(38px, 6vw, 92px); line-height: .9; letter-spacing: -.09em; }
