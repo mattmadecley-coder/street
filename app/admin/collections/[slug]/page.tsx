@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
+import { SubmitButton } from "@/components/admin/submit-button";
+import { ScrollMemory } from "@/components/admin/scroll-memory";
 import { getCollectionBySlug, searchProductsForPicker } from "@/lib/collections-store";
 import { updateCollectionAction, deleteCollectionAction, addProductAction, removeProductAction, moveProductAction } from "../actions";
 
@@ -55,7 +57,7 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
             Active (shows on the homepage once it has at least one product)
           </label>
           <div className={styles.actions}>
-            <button type="submit" className={styles.button}>Save</button>
+            <SubmitButton pendingText="Saving…" className={styles.button}>Save</SubmitButton>
           </div>
         </form>
         <form action={deleteCollectionAction} style={{ marginTop: 14 }}>
@@ -93,7 +95,7 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
                             <input type="hidden" name="collection_id" value={collection.id} />
                             <input type="hidden" name="slug" value={collection.slug} />
                             <input type="hidden" name="product_id" value={product.id} />
-                            <button type="submit" className={styles.buttonSecondary}>Add</button>
+                            <SubmitButton pendingText="Adding…" className={styles.buttonSecondary}>Add</SubmitButton>
                           </form>
                         )}
                       </td>
@@ -108,6 +110,7 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
         ) : null}
       </div>
 
+      <ScrollMemory>
       <div className={styles.section}>
         <div className={styles.sectionHead}><h2>Products in this collection</h2></div>
         {collection.products.length ? (
@@ -129,20 +132,20 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
                           <input type="hidden" name="slug" value={collection.slug} />
                           <input type="hidden" name="product_id" value={rawProductId} />
                           <input type="hidden" name="direction" value="up" />
-                          <button type="submit" className={styles.buttonSecondary} disabled={index === 0} aria-label="Move up">↑</button>
+                          <SubmitButton className={styles.buttonSecondary} disabled={index === 0} aria-label="Move up">↑</SubmitButton>
                         </form>
                         <form action={moveProductAction}>
                           <input type="hidden" name="collection_id" value={collection.id} />
                           <input type="hidden" name="slug" value={collection.slug} />
                           <input type="hidden" name="product_id" value={rawProductId} />
                           <input type="hidden" name="direction" value="down" />
-                          <button type="submit" className={styles.buttonSecondary} disabled={index === collection.products.length - 1} aria-label="Move down">↓</button>
+                          <SubmitButton className={styles.buttonSecondary} disabled={index === collection.products.length - 1} aria-label="Move down">↓</SubmitButton>
                         </form>
                         <form action={removeProductAction}>
                           <input type="hidden" name="collection_id" value={collection.id} />
                           <input type="hidden" name="slug" value={collection.slug} />
                           <input type="hidden" name="product_id" value={rawProductId} />
-                          <button type="submit" className={styles.buttonSecondary}>Remove</button>
+                          <SubmitButton pendingText="Removing…" className={styles.buttonSecondary}>Remove</SubmitButton>
                         </form>
                       </div>
                     </td>
@@ -155,6 +158,7 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
           <p className={styles.rowMeta}>No products yet — search above to add some.</p>
         )}
       </div>
+      </ScrollMemory>
     </div>
   );
 }

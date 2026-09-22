@@ -5,6 +5,8 @@ import { TaxonomyPicker } from "@/components/admin/taxonomy-picker";
 import { supabaseRestPage } from "@/lib/supabase-rest";
 import { getAllBrands } from "@/lib/catalog-store";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
+import { SubmitButton } from "@/components/admin/submit-button";
+import { ScrollMemory } from "@/components/admin/scroll-memory";
 import { updateProductTaxonomy, hideProduct, deleteProduct } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -106,9 +108,10 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
 
       <p className={styles.rowMeta} style={{ marginBottom: 14 }}>{total.toLocaleString()} product{total === 1 ? "" : "s"} match — showing {products.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}–{(currentPage - 1) * PAGE_SIZE + products.length} (page {currentPage} of {totalPages}).</p>
 
+      <ScrollMemory>
       <div className={styles.rowList}>
         {products.map((product) => (
-          <details key={product.id} className={styles.row}>
+          <details key={product.id} data-scroll-id={product.id} className={styles.row}>
             <summary className={styles.rowSummary}>
               <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 {product.primary_image_url ? <img src={product.primary_image_url} alt="" style={{ width: 40, height: 40, objectFit: "contain", background: "#f4f3ee" }} /> : null}
@@ -142,14 +145,14 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
                   <label htmlFor={`${product.id}-tags`}>Tags (comma-separated)</label>
                   <textarea id={`${product.id}-tags`} name="street_tags" defaultValue={(product.street_tags ?? []).join(", ")} />
                 </div>
-                <button type="submit" className={styles.button}>Save product</button>
+                <SubmitButton pendingText="Saving…" className={styles.button}>Save product</SubmitButton>
               </form>
               <div className={styles.actions} style={{ marginTop: 14, borderTop: "1px solid rgba(16,16,16,.12)", paddingTop: 14 }}>
                 <form action={hideProduct}>
                   <input type="hidden" name="product_id" value={product.id} />
                   <input type="hidden" name="return_to" value={returnTo} />
                   <input type="hidden" name="hidden" value={product.is_hidden ? "false" : "true"} />
-                  <button type="submit" className={styles.buttonSecondary}>{product.is_hidden ? "Unhide (show on site)" : "Hide from site"}</button>
+                  <SubmitButton pendingText="Saving…" className={styles.buttonSecondary}>{product.is_hidden ? "Unhide (show on site)" : "Hide from site"}</SubmitButton>
                 </form>
                 <form action={deleteProduct}>
                   <input type="hidden" name="product_id" value={product.id} />
@@ -164,6 +167,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
         ))}
         {!products.length ? <p className={styles.rowMeta}>No products match this search/filter.</p> : null}
       </div>
+      </ScrollMemory>
       {totalPages > 1 ? (
         <nav aria-label="Product pages" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, margin: "22px 0 8px", fontSize: 12 }}>
           {currentPage > 1 ? <Link className="link-small" href={productsHref(q, status, brandParam, currentPage - 1)}>← Previous</Link> : <span />}

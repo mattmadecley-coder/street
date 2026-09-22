@@ -4,6 +4,8 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { SortSelect } from "@/components/admin/sort-select";
 import { ClassifyRunner } from "@/components/admin/classify-runner";
+import { SubmitButton } from "@/components/admin/submit-button";
+import { ScrollMemory } from "@/components/admin/scroll-memory";
 import { getBrandDirectory, getBrandSyncStatuses, getBrandClassificationProgress, type StreetBrandProfile, type BrandSyncStatus } from "@/lib/catalog-store";
 import { getRecentCatalogDiagnostics, type BrandSyncDiagnostic } from "@/lib/recent-catalog-diagnostics";
 import { updateBrand, syncBrandNow } from "./actions";
@@ -123,7 +125,7 @@ function SyncDiagnostics({ diagnostic, pending }: { diagnostic: BrandSyncDiagnos
 
 function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: StreetBrandProfile; status: BrandSyncStatus | undefined; pending: number; progress: Progress; diagnostic?: BrandSyncDiagnostic }) {
   return (
-    <details className={styles.row}>
+    <details className={styles.row} data-scroll-id={brand.slug}>
       <summary className={styles.rowSummary}>
         <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           {brand.logoUrl ? <img src={brand.logoUrl} alt="" /> : <span className={styles.pill}>No logo</span>}
@@ -147,7 +149,7 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
         <div className={styles.actions} style={{ marginBottom: 16 }}>
           <form action={syncBrandNow}>
             <input type="hidden" name="slug" value={brand.slug} />
-            <button type="submit" className={styles.buttonSecondary}>Sync now ({brand.productCount} pieces on file{status?.lastProductCount != null ? `, ${status.lastProductCount} last import` : ""})</button>
+            <SubmitButton pendingText="Syncing…" className={styles.buttonSecondary}>Sync now ({brand.productCount} pieces on file{status?.lastProductCount != null ? `, ${status.lastProductCount} last import` : ""})</SubmitButton>
           </form>
         </div>
         {pending > 0 ? (
@@ -177,7 +179,7 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
             <input type="checkbox" name="catalog_enabled" defaultChecked={brand.catalogEnabled} />
             Include in the daily automatic sync
           </label>
-          <button type="submit" className={styles.button}>Save {brand.name}</button>
+          <SubmitButton pendingText="Saving…" className={styles.button}>Save {brand.name}</SubmitButton>
         </form>
       </div>
     </details>
@@ -298,11 +300,13 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
       <div className={styles.section}>
         <div className={styles.sectionHead}><h2>All brands</h2></div>
         <SortSelect defaultValue={sort} />
+        <ScrollMemory>
         <div className={styles.rowList}>
           {allSorted.map(({ brand, status, pending, progress, diagnostic }) => (
             <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} />
           ))}
         </div>
+        </ScrollMemory>
       </div>
     </div>
   );

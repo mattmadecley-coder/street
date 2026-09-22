@@ -4,6 +4,8 @@ import { getSiteSettings } from "@/lib/site-settings";
 import { getBrandDirectory } from "@/lib/catalog-store";
 import { getActiveHomepageFeatureSchedule, getHomepageFeatureSchedules } from "@/lib/homepage-feature-schedule";
 import { removeHomepageFeature, saveHomepageSettings, scheduleHomepageFeature } from "./actions";
+import { SubmitButton } from "@/components/admin/submit-button";
+import { ScrollMemory } from "@/components/admin/scroll-memory";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +65,7 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
             <label htmlFor="featured_brand_cta_label">Spotlight button label</label>
             <input id="featured_brand_cta_label" name="featured_brand_cta_label" type="text" defaultValue={settings.featured_brand_cta_label} placeholder="Shop this brand" />
           </div>
-          <button type="submit" className={styles.button}>Save live homepage</button>
+          <SubmitButton pendingText="Saving…" className={styles.button}>Save live homepage</SubmitButton>
         </form>
       </section>
 
@@ -97,10 +99,11 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
             <label htmlFor="scheduled_cta_label">Spotlight button label</label>
             <input id="scheduled_cta_label" name="scheduled_cta_label" type="text" defaultValue="Shop this brand" />
           </div>
-          <button type="submit" className={styles.button}>Add to schedule</button>
+          <SubmitButton pendingText="Adding…" className={styles.button}>Add to schedule</SubmitButton>
         </form>
       </section>
 
+      <ScrollMemory>
       <section className={styles.section}>
         <div className={styles.sectionHead}><h2>Featured-brand schedule</h2><span className={styles.rowMeta}>{schedules.length} saved</span></div>
         {schedules.length ? (
@@ -118,7 +121,7 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
                     <td>{media}</td>
                     <td>{item.ctaLabel}</td>
                     <td><span className={styles.pill}>{status}</span></td>
-                    <td><form action={removeHomepageFeature}><input type="hidden" name="schedule_id" value={item.id} /><button type="submit" className={styles.buttonSecondary}>Remove</button></form></td>
+                    <td><form action={removeHomepageFeature}><input type="hidden" name="schedule_id" value={item.id} /><SubmitButton pendingText="Removing…" className={styles.buttonSecondary}>Remove</SubmitButton></form></td>
                   </tr>;
                 })}
               </tbody>
@@ -126,6 +129,7 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
           </div>
         ) : <p className={styles.rowMeta}>No future homepage features are scheduled yet.</p>}
       </section>
+      </ScrollMemory>
     </div>
   );
 }
