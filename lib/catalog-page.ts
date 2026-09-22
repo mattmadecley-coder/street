@@ -2,8 +2,11 @@ import type { StreetProduct } from "@/lib/catalog";
 import {
   balanceProductsByBrand,
   balanceProductsForRelevance,
+  balanceRankedEntriesForRelevance,
+  buildSearchTsQuery,
   filterProductsForSearch,
   rankProductsForSearch,
+  type RankedSearchEntry,
 } from "@/lib/catalog-ranking";
 import { hasSupabaseCatalog, supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 
@@ -206,6 +209,40 @@ function selectedProductsPath(ids: string[]) {
   return `products?${params.toString()}`;
 }
 
+/**
+ * Indexed full-text search via the search_products_ranked Postgres function
+ * (see the products_search_vector migration): does the matching AND the
+ * ranking inside the database against a GIN index, instead of pulling every
+ * candidate row into Node and string-matching it there. Falls back to null
+ * on any failure so the caller can use the slower in-memory path -- this
+ * keeps search itself the fast path without ever hard-depending on it.
+ */
+async function searchProductsRanked(tsQuery: string, filters: CatalogPageFilters): Promise<RankedSearchEntry[] | null> {
+  try {
+    const rows = await supabaseRest<Array<{ id: string; brand_slug: string | null; rank: number }>>("rpc/search_products_ranked", {
+      method: "POST",
+      body: {
+        p_tsquery: tsQuery,
+        p_brand: filters.brand ?? null,
+        p_group: filters.group ?? null,
+        p_category: filters.category ?? null,
+        p_type: filters.type ?? null,
+        p_detail: filters.detail ?? null,
+        p_color: filters.color ?? null,
+        p_size: filters.size ?? null,
+        p_in_stock_only: filters.availability !== "all",
+        p_min: typeof filters.min === "number" && Number.isFinite(filters.min) && filters.min > 0 ? filters.min : null,
+        p_max: typeof filters.max === "number" && Number.isFinite(filters.max) && filters.max > 0 ? filters.max : null,
+        p_limit: CANDIDATE_SCAN_CAP,
+      },
+    });
+    return rows.map((row) => ({ id: row.id, brandSlug: row.brand_slug ?? "", rank: Number(row.rank) }));
+  } catch (error) {
+    console.error("Street ranked search RPC failed, falling back to in-memory search", error);
+    return null;
+  }
+}
+
 async function getProductPopularityScores() {
   try {
     const rows = await supabaseRestAll<PopularityRow[]>("catalog_product_popularity?select=product_id,popularity_score");
@@ -216,7 +253,7 @@ async function getProductPopularityScores() {
   }
 }
 
-async function hydrateCandidatePage(candidates: CatalogCandidate[], requestedPage: number): Promise<CatalogPage> {
+async function hydrateCandidatePage(candidates: Array<{ id: string }>, requestedPage: number): Promise<CatalogPage> {
   const total = candidates.length;
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE)));
   const from = (page - 1) * CATALOG_PAGE_SIZE;
@@ -253,6 +290,29 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
     // or interleave. Only an explicit Newest/price sort -- which keeps the
     // database's own ordering and needs no reranking -- stays a single
     // paginated database query in the branch below.
+    // Text search on the default relevance sort or an explicit best-sellers
+    // sort goes through the indexed search_products_ranked RPC first -- it
+    // does the matching AND the ranking inside Postgres against a GIN index
+    // (single-digit milliseconds) instead of pulling thousands of candidate
+    // rows into Node to string-match, which was the dominant cause of slow
+    // search response times. Falls back to the in-memory path below on any
+    // failure, and for query-less browsing / explicit Newest / price sorts,
+    // which the RPC doesn't cover.
+    if (query && (sort === "relevance" || sort === "best-sellers")) {
+      const tsQuery = buildSearchTsQuery(query);
+      if (tsQuery) {
+        const ranked = await searchProductsRanked(tsQuery, filters);
+        if (ranked) {
+          if (sort === "best-sellers") {
+            const scores = await getProductPopularityScores();
+            const sorted = [...ranked].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) || b.rank - a.rank);
+            return hydrateCandidatePage(sorted, requestedPage);
+          }
+          return hydrateCandidatePage(balanceRankedEntriesForRelevance(ranked), requestedPage);
+        }
+      }
+    }
+
     if (query || sort === "best-sellers" || sort === "relevance") {
       const select = query ? SEARCH_SELECT : BALANCE_SELECT;
       const rows = await supabaseRestAll<CandidateRow[]>(productPath({ ...filters, q: undefined, sort }, select), 500, CANDIDATE_SCAN_CAP);

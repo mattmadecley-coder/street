@@ -143,6 +143,33 @@ function searchTermVariants(term: string) {
   return [...variants].filter(Boolean);
 }
 
+/**
+ * Builds a Postgres `to_tsquery`-compatible boolean expression from the same
+ * synonym/equivalence logic as the in-memory ranker above, so the database
+ * index (products.search_vector, see the search_products_ranked migration)
+ * can do the matching instead of pulling every candidate row into Node to
+ * string-match. Distinct user words are AND'd together; each word's
+ * synonym variants are OR'd within it. A multi-word variant (e.g. "jet
+ * black") becomes a `<->`-joined phrase. Returns null when the query has no
+ * meaningful terms (all stop words / empty) -- callers should fall back to
+ * the in-memory path in that case rather than sending an empty tsquery.
+ */
+export function buildSearchTsQuery(query: string): string | null {
+  const terms = meaningfulSearchTerms(query);
+  if (!terms.length) return null;
+
+  const groups = terms.map(({ variants }) => {
+    const lexemes = variants
+      .map((variant) => variant.split(" ").filter(Boolean).join("<->"))
+      .filter(Boolean);
+    const unique = [...new Set(lexemes)];
+    if (!unique.length) return null;
+    return unique.length > 1 ? `(${unique.join(" | ")})` : unique[0];
+  }).filter((group): group is string => Boolean(group));
+
+  return groups.length ? groups.join(" & ") : null;
+}
+
 function meaningfulSearchTerms(query: string) {
   const seen = new Set<string>();
   return normalizeSearchText(query)
@@ -318,6 +345,45 @@ export function balanceProductsForRelevance<T extends SearchableCatalogProduct>(
     const balancedTier = balanceProductsByBrand(tiers.get(key) ?? [], previousBrand);
     output.push(...balancedTier);
     previousBrand = balancedTier.length ? brandKey(balancedTier[balancedTier.length - 1]) : previousBrand;
+  }
+  return output;
+}
+
+export type RankedSearchEntry = { id: string; brandSlug: string; rank: number };
+
+/**
+ * Same tiering idea as balanceProductsForRelevance, adapted for results that
+ * already came back ranked and filtered from search_products_ranked (a
+ * Postgres ts_rank score per id, no per-field matchedTerms breakdown
+ * available client-side). Buckets by rank relative to the top score in
+ * 10%-wide bands, then balances brands within each band -- so one brand
+ * with many strong matches still can't bury a weaker match from another
+ * brand within the same relevance band.
+ */
+export function balanceRankedEntriesForRelevance(entries: RankedSearchEntry[]): RankedSearchEntry[] {
+  if (entries.length < 2) return entries;
+
+  const maxRank = entries.reduce((max, entry) => Math.max(max, entry.rank), 0);
+  const tiers = new Map<number, RankedSearchEntry[]>();
+  const tierOrder: number[] = [];
+  for (const entry of entries) {
+    const band = maxRank > 0 ? Math.min(10, Math.floor((entry.rank / maxRank) * 10)) : 0;
+    if (!tiers.has(band)) {
+      tiers.set(band, []);
+      tierOrder.push(band);
+    }
+    tiers.get(band)?.push(entry);
+  }
+
+  const output: RankedSearchEntry[] = [];
+  let previousBrand = "";
+  for (const band of tierOrder) {
+    const balanced = balanceProductsByBrand(
+      (tiers.get(band) ?? []).map((entry) => ({ ...entry, brandSlug: entry.brandSlug || "__unbranded" })),
+      previousBrand
+    );
+    output.push(...balanced);
+    previousBrand = balanced.length ? brandKey(balanced[balanced.length - 1]) : previousBrand;
   }
   return output;
 }
