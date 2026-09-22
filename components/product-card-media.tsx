@@ -26,6 +26,64 @@ function UnavailableProductImage() {
   );
 }
 
+// Some brands' source data lists two *different* file URLs for what is
+// really the same single product photo -- a re-export, a re-compress, a
+// duplicate upload under a new asset id. Our string-equality check
+// (product.images[1] !== primaryImage in ProductCard) only catches an
+// exact URL match, so these slip through as a "second image" and the
+// hover-swap fires on what the shopper sees as one photo: it reads as a
+// glitchy flicker rather than a useful alternate view. Once both images
+// have actually loaded (so this reuses the browser's own cache instead of
+// issuing new requests), downsample both onto a tiny shared canvas and
+// compare average pixel difference -- two truly different photos (a back
+// view, a different color, a model shot) diverge far more than two
+// re-saves of the same shot. Below the threshold, drop the swap entirely
+// so the card behaves like the single-image product it actually is.
+const DUPLICATE_DIFF_THRESHOLD = 4;
+const duplicateCheckCache: Map<string, boolean> =
+  typeof window !== "undefined" ? ((window as unknown as { __streetDupImgCache?: Map<string, boolean> }).__streetDupImgCache ??= new Map()) : new Map();
+
+async function loadBitmap(url: string) {
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return createImageBitmap(blob);
+}
+
+async function imagesLookIdentical(urlA: string, urlB: string): Promise<boolean> {
+  const cacheKey = `${urlA}\n${urlB}`;
+  const cached = duplicateCheckCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  try {
+    const [bitmapA, bitmapB] = await Promise.all([loadBitmap(urlA), loadBitmap(urlB)]);
+    const width = 24;
+    const height = 30;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return false;
+
+    ctx.drawImage(bitmapA, 0, 0, width, height);
+    const pixelsA = ctx.getImageData(0, 0, width, height).data;
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(bitmapB, 0, 0, width, height);
+    const pixelsB = ctx.getImageData(0, 0, width, height).data;
+
+    let diff = 0;
+    for (let i = 0; i < pixelsA.length; i += 4) {
+      diff += Math.abs(pixelsA[i] - pixelsB[i]) + Math.abs(pixelsA[i + 1] - pixelsB[i + 1]) + Math.abs(pixelsA[i + 2] - pixelsB[i + 2]);
+    }
+    const identical = diff / (width * height * 3) < DUPLICATE_DIFF_THRESHOLD;
+    duplicateCheckCache.set(cacheKey, identical);
+    return identical;
+  } catch {
+    // Fetch/CORS/decoding hiccup -- fail open and keep the swap rather than
+    // silently hiding a genuinely different second photo.
+    return false;
+  }
+}
+
 export function ProductCardMedia({
   primaryImage,
   secondImage,
@@ -41,6 +99,7 @@ export function ProductCardMedia({
   const [primaryLoaded, setPrimaryLoaded] = useState(false);
   const [nearViewport, setNearViewport] = useState(priority);
   const [loadAlternate, setLoadAlternate] = useState(false);
+  const [suppressAsDuplicate, setSuppressAsDuplicate] = useState(false);
 
   useEffect(() => {
     if (!secondImage || priority || loadAlternate) return;
@@ -75,9 +134,28 @@ export function ProductCardMedia({
     return () => window.clearTimeout(timer);
   }, [loadAlternate, nearViewport, primaryLoaded, priority, secondImage]);
 
+  useEffect(() => {
+    setSuppressAsDuplicate(false);
+  }, [primaryImage, secondImage]);
+
+  function handleSecondaryLoad() {
+    const element = containerRef.current;
+    if (!element) return;
+    const primaryEl = element.querySelector<HTMLImageElement>(".card-image-primary");
+    const secondaryEl = element.querySelector<HTMLImageElement>(".card-image-secondary");
+    const primarySrc = primaryEl?.currentSrc || primaryEl?.src;
+    const secondarySrc = secondaryEl?.currentSrc || secondaryEl?.src;
+    if (!primarySrc || !secondarySrc) return;
+    void imagesLookIdentical(primarySrc, secondarySrc).then((identical) => {
+      if (identical) setSuppressAsDuplicate(true);
+    });
+  }
+
   if (!primaryImage) {
     return <div aria-hidden="true" style={{ position: "absolute", inset: 8, background: "#ebe9e3" }} />;
   }
+
+  const showAlternate = Boolean(secondImage) && loadAlternate && !suppressAsDuplicate;
 
   return (
     <div
@@ -104,9 +182,9 @@ export function ProductCardMedia({
         style={{ objectFit: "contain" }}
         onLoad={() => setPrimaryLoaded(true)}
       />
-      {secondImage && loadAlternate ? (
+      {showAlternate ? (
         <CatalogImage
-          src={secondImage}
+          src={secondImage!}
           widthHint={720}
           fallback={null}
           alt=""
@@ -119,6 +197,7 @@ export function ProductCardMedia({
           blurDataURL={MEDIA_BLUR_DATA_URL}
           className="card-image-secondary"
           style={{ objectFit: "contain" }}
+          onLoad={handleSecondaryLoad}
         />
       ) : null}
     </div>
