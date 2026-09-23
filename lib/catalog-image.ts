@@ -25,12 +25,17 @@ function imageKitUrl(source: string, widthHint: number): string | null {
 /**
  * Build direct browser-loadable image candidates for catalog media.
  *
- * The first candidate routes through ImageKit (see imageKitUrl above) when
- * NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT is configured. Remaining candidates are
- * the old direct-CDN path as a fallback chain: Shopify's own ?width= resize
- * (for Shopify hosts), then the untouched original -- so a broken ImageKit
- * asset, or ImageKit being unconfigured/down, still falls back to exactly
- * what Street served before ImageKit was added.
+ * Shopify already resizes and auto-negotiates WebP/AVIF for free on its own
+ * CDN (confirmed by inspecting real response headers), so for a Shopify host
+ * that resize is tried first -- skipping a live ImageKit request there just
+ * pays a round trip (or, whenever ImageKit is over its bandwidth quota, a
+ * guaranteed failed one) for no benefit. ImageKit is still tried afterward as
+ * a fallback for that rare case, and stays the *first* candidate for every
+ * non-Shopify host, since those origins serve raw, unresized files on their
+ * own and ImageKit is the only optimization available for them. The original
+ * URL is always the last resort, so a broken ImageKit asset or an unconfigured
+ * endpoint still falls all the way back to exactly what Street served before
+ * ImageKit was added.
  */
 export function catalogImageCandidates(source: string, widthHint: number): string[] {
   const trimmed = source.trim();
@@ -47,15 +52,22 @@ export function catalogImageCandidates(source: string, widthHint: number): strin
     const normalized = original.toString();
     const candidates: string[] = [];
 
-    const imageKit = imageKitUrl(normalized, widthHint);
-    if (imageKit) candidates.push(imageKit);
-
-    if (shopify && Number.isFinite(widthHint) && widthHint > 0) {
+    const shopifyResized = (() => {
+      if (!shopify || !Number.isFinite(widthHint) || widthHint <= 0) return null;
       const resized = new URL(normalized);
       const retinaWidth = Math.round(widthHint) * 2;
       resized.searchParams.set("width", String(Math.min(2400, Math.max(64, retinaWidth))));
       const resizedUrl = resized.toString();
-      if (resizedUrl !== normalized) candidates.push(resizedUrl);
+      return resizedUrl !== normalized ? resizedUrl : null;
+    })();
+
+    const imageKit = imageKitUrl(normalized, widthHint);
+
+    if (shopify) {
+      if (shopifyResized) candidates.push(shopifyResized);
+      if (imageKit) candidates.push(imageKit);
+    } else {
+      if (imageKit) candidates.push(imageKit);
     }
 
     candidates.push(normalized);

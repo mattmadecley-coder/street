@@ -301,10 +301,17 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
     if (query && (sort === "relevance" || sort === "best-sellers")) {
       const tsQuery = buildSearchTsQuery(query);
       if (tsQuery) {
-        const ranked = await searchProductsRanked(tsQuery, filters);
+        // Running on Cloudflare Workers, every Supabase round trip pays real
+        // cross-country latency (the Worker executes near the visitor, the
+        // database sits in us-west-2). The ranked search and the popularity
+        // scores don't depend on each other, so fire them together instead
+        // of paying that round trip twice in a row for a best-sellers sort.
+        const [ranked, scores] = await Promise.all([
+          searchProductsRanked(tsQuery, filters),
+          sort === "best-sellers" ? getProductPopularityScores() : Promise.resolve(null),
+        ]);
         if (ranked) {
-          if (sort === "best-sellers") {
-            const scores = await getProductPopularityScores();
+          if (sort === "best-sellers" && scores) {
             const sorted = [...ranked].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) || b.rank - a.rank);
             return hydrateCandidatePage(sorted, requestedPage);
           }

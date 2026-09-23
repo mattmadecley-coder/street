@@ -16,6 +16,15 @@
 			"service": "street"
 		}
 	],
+	// Runs the Worker near the services it calls (our Supabase database, in
+	// AWS us-west-2) instead of near the visitor. Without this, a visitor on
+	// the US east coast triggers Worker execution on the east coast, and
+	// every Supabase round trip has to cross the whole country to Oregon and
+	// back -- multiplied by however many sequential DB calls one page makes.
+	// Free on every Workers plan. https://developers.cloudflare.com/workers/configuration/smart-placement/
+	"placement": {
+		"mode": "smart"
+	},
 	"observability": {
 		"enabled": true
 	}
