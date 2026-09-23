@@ -106,6 +106,17 @@ export const CATALOG_PAGE_SIZE = 50;
 // re-hit after a catalog sync, so raising this doesn't add live per-request
 // cost.
 const CANDIDATE_SCAN_CAP = 15000;
+// Only reached when the indexed search_products_ranked RPC has already
+// failed (see searchProductsRanked's catch) -- a safety net, not a normal
+// path. It was pulling up to CANDIDATE_SCAN_CAP rows with a heavy field set
+// (title/description/tags/etc, not just an id) on every fallback, which
+// meant a single Supabase hiccup could turn one search into a multi-MB
+// response -- and did, during testing: this is what actually burned through
+// the Supabase free tier's 5GB/month egress allowance in one day. Keeping
+// this narrow makes the fallback a cheap "still return something" path
+// instead of a second expensive query that compounds whatever caused the
+// RPC to fail in the first place.
+const FALLBACK_SEARCH_SCAN_CAP = 1500;
 
 export function normalizeCatalogSort(value?: string): CatalogSort {
   if (value === "best-sellers" || value === "newest" || value === "price-low" || value === "price-high") return value;
@@ -322,7 +333,8 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
 
     if (query || sort === "best-sellers" || sort === "relevance") {
       const select = query ? SEARCH_SELECT : BALANCE_SELECT;
-      const rows = await supabaseRestAll<CandidateRow[]>(productPath({ ...filters, q: undefined, sort }, select), 500, CANDIDATE_SCAN_CAP);
+      const scanCap = query ? FALLBACK_SEARCH_SCAN_CAP : CANDIDATE_SCAN_CAP;
+      const rows = await supabaseRestAll<CandidateRow[]>(productPath({ ...filters, q: undefined, sort }, select), 500, scanCap);
       const candidates = rows.map(toCatalogCandidate);
 
       if (sort === "relevance") {
