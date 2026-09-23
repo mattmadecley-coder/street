@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { after } from "next/server";
 import { Header, Footer, ProductCard } from "@/components/storefront";
@@ -63,6 +64,20 @@ function sizeOptionsForFilter(group?: string, category?: string): string[] | nul
   if (group === "Apparel") return ["XXS", "XS", "S", "M", "L", "XL", "XXL"];
   if (category === "Hats") return ["S/M", "L/XL", "One Size"];
   return ["One Size"];
+}
+
+// Keep in sync with app/robots.ts — these params create effectively
+// unbounded combinations (free text, continuous ranges, pagination) rather
+// than a finite set of taxonomy pages, so they're not worth indexing.
+const NON_INDEXABLE_CATALOG_PARAMS = ["q", "color", "size", "min", "max", "sort", "availability", "page"] as const;
+
+export async function generateMetadata({ searchParams }: { searchParams: Promise<Params> }): Promise<Metadata> {
+  const params = await searchParams;
+  const hasNonIndexableFilter = NON_INDEXABLE_CATALOG_PARAMS.some((key) => Boolean(params[key]));
+  if (hasNonIndexableFilter) {
+    return { robots: { index: false, follow: false } };
+  }
+  return {};
 }
 
 function numberOrUndefined(value: string | undefined) {
