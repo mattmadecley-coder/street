@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Standalone output: Docker runtime only needs the traced node_modules subset,
+  // not the full install. Required for the Coolify/VPS deployment.
+  output: "standalone",
   images: {
     // Next's image optimizer now negotiates AVIF first and WebP as the broadly
     // compatible fallback. The browser still receives JPEG/PNG when needed.
