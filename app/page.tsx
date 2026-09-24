@@ -57,7 +57,7 @@ export default async function HomePage() {
               <Link href={`/brands/${featuredBrand.slug}`} className="link-small">Shop this brand →</Link>
             </div>
             <div className={styles.featuredRail}>
-              {featured.map((product, index) => <div className={styles.featuredRailItem} key={product.id}><ProductCard product={product} priority={index < 4} /></div>)}
+              {featured.map((product, index) => <div className={styles.featuredRailItem} key={product.id}><ProductCard product={product} priority={index < 16} /></div>)}
               <Link href={`/brands/${featuredBrand.slug}`} className={styles.viewBrandCard} aria-label={`View all products from ${featuredBrand.name}`}>
                 <span>Explore the full collection</span>
                 <strong>{featuredBrand.name}</strong>
