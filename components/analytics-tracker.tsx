@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { sendGAEvent } from "@next/third-parties/google";
 
 const VISITOR_KEY = "street-visitor-v1";
 const SESSION_KEY = "street-session-v1";
@@ -63,6 +64,79 @@ function operatingSystem() {
   return "Other";
 }
 
+function compact<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== null && entry !== ""));
+}
+
+function googleItem(details: Record<string, unknown>) {
+  const metadata = details.metadata && typeof details.metadata === "object"
+    ? details.metadata as Record<string, unknown>
+    : {};
+
+  return compact({
+    item_id: details.productId,
+    item_name: metadata.productTitle,
+    item_brand: details.brandSlug,
+    item_category: details.streetGroup,
+    item_category2: details.streetCategory,
+    price: details.price,
+    index: details.position,
+    item_list_name: details.sourceComponent,
+  });
+}
+
+function trackGoogleEvent(eventType: string, details: Record<string, unknown>) {
+  // GA4 automatically records page views, including App Router history changes.
+  // Keep Supabase as Street's detailed event store and mirror the standard
+  // discovery/commerce events into GA4 for acquisition and ecommerce reports.
+  if (eventType === "page_view") return;
+
+  const item = googleItem(details);
+  const commerce = compact({
+    currency: details.price === undefined ? undefined : "USD",
+    value: details.price,
+    items: Object.keys(item).length ? [item] : undefined,
+  });
+
+  if (eventType === "search") {
+    sendGAEvent("event", "search", compact({ search_term: details.query }));
+    return;
+  }
+  if (eventType === "product_impression") {
+    sendGAEvent("event", "view_item_list", compact({ item_list_name: details.sourceComponent, ...commerce }));
+    return;
+  }
+  if (eventType === "product_click" || eventType === "search_click") {
+    sendGAEvent("event", "select_item", compact({ item_list_name: details.sourceComponent, ...commerce }));
+    return;
+  }
+  if (eventType === "product_view") {
+    sendGAEvent("event", "view_item", commerce);
+    return;
+  }
+  if (eventType === "add_to_cart") {
+    sendGAEvent("event", "add_to_cart", commerce);
+    return;
+  }
+  if (eventType === "outbound_click_intent") {
+    sendGAEvent("event", "outbound_click", compact({
+      item_id: details.productId,
+      item_brand: details.brandSlug,
+      source_component: details.sourceComponent,
+    }));
+    return;
+  }
+  if (["filter_applied", "sort_changed", "category_view", "add_to_cart_blocked"].includes(eventType)) {
+    sendGAEvent("event", eventType, compact({
+      item_id: details.productId,
+      item_brand: details.brandSlug,
+      item_category: details.streetCategory ?? details.streetGroup,
+      source_component: details.sourceComponent,
+      metadata: details.metadata ? JSON.stringify(details.metadata) : undefined,
+    }));
+  }
+}
+
 export async function trackStreetEvent(eventType: string, details: Record<string, unknown> = {}) {
   if (typeof window === "undefined" || trackingDisabled()) return;
   const now = Date.now();
@@ -120,6 +194,8 @@ export async function trackStreetEvent(eventType: string, details: Record<string
     utmTerm: attribution.utmTerm,
     ...details,
   };
+
+  trackGoogleEvent(eventType, details);
 
   try {
     await fetch("/api/analytics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), keepalive: true });

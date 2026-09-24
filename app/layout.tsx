@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 import "./commerce.css";
 import "./mobile.css";
@@ -11,6 +12,7 @@ import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { CatalogAnalytics } from "@/components/catalog-analytics";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const googleAnalyticsId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "G-E621RKXPX3";
 const title = "Street — Discover independent streetwear";
 const description = "Search independent streetwear brands in one place, then buy straight from the brand.";
 
@@ -43,6 +45,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </SavedProvider>
         </CartProvider>
       </body>
+      <GoogleAnalytics gaId={googleAnalyticsId} />
     </html>
   );
 }
