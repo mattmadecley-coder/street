@@ -5,21 +5,28 @@ function isShopifyCdnHost(hostname: string) {
   return SHOPIFY_CDN_HOSTS.has(normalized) || normalized.endsWith(".shopifycdn.net");
 }
 
-// ImageKit's free "Web proxy" origin fetches + transforms any publicly
-// reachable image URL on the fly: https://ik.imagekit.io/<id>/tr:<params>/<source-url>.
-// This is what actually resizes and reformats (AVIF/WebP) every catalog
-// image now, for every brand's host, not just Shopify -- Next's own
-// optimizer can't do this here because Render's free/starter plan can't
-// handle the concurrent transform load a catalog grid produces (see
-// components/catalog-image.tsx). NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT is safe
-// to expose client-side -- it's a public delivery URL, not a secret.
-const IMAGEKIT_URL_ENDPOINT = process.env.NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT?.replace(/\/+$/, "");
+// Self-hosted imgproxy instance (img.streetdotcom.com, running on street's own
+// VPS) resizes + converts to WebP any catalog image on the fly. This replaced
+// ImageKit's free "Web proxy" after that account hit its bandwidth quota --
+// see migration notes. It's locked down via IMGPROXY_ALLOWED_SOURCES on the
+// proxy itself to a fixed list of known non-Shopify brand hostnames, so a
+// newly added brand on a host that isn't on that list falls through to the
+// raw-original candidate below until the allowlist is updated for it.
+// NEXT_PUBLIC_IMAGE_PROXY_URL is safe to expose client-side -- it's a public
+// delivery URL, not a secret (the proxy runs unsigned/"insecure" mode, which
+// is why the source-host allowlist is what actually guards it).
+const IMAGE_PROXY_URL_ENDPOINT = process.env.NEXT_PUBLIC_IMAGE_PROXY_URL?.replace(/\/+$/, "");
 
-/** ImageKit-proxied URL requesting 2x the layout width (retina headroom) with auto format + quality 80, or null if ImageKit isn't configured. */
-function imageKitUrl(source: string, widthHint: number): string | null {
-  if (!IMAGEKIT_URL_ENDPOINT) return null;
+function base64UrlEncode(value: string): string {
+  const base64 = typeof Buffer !== "undefined" ? Buffer.from(value, "utf-8").toString("base64") : btoa(value);
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** Self-hosted imgproxy URL requesting 2x the layout width (retina headroom), resized to fit and converted to WebP, or null if the proxy isn't configured. */
+function imageProxyUrl(source: string, widthHint: number): string | null {
+  if (!IMAGE_PROXY_URL_ENDPOINT) return null;
   const width = Math.min(3200, Math.max(64, Math.round((Number.isFinite(widthHint) && widthHint > 0 ? widthHint : 400) * 2)));
-  return `${IMAGEKIT_URL_ENDPOINT}/tr:w-${width},f-auto,q-80/${source}`;
+  return `${IMAGE_PROXY_URL_ENDPOINT}/insecure/rs:fit:${width}:0:0/${base64UrlEncode(source)}.webp`;
 }
 
 /**
@@ -27,15 +34,15 @@ function imageKitUrl(source: string, widthHint: number): string | null {
  *
  * Shopify already resizes and auto-negotiates WebP/AVIF for free on its own
  * CDN (confirmed by inspecting real response headers), so for a Shopify host
- * that resize is tried first -- skipping a live ImageKit request there just
- * pays a round trip (or, whenever ImageKit is over its bandwidth quota, a
- * guaranteed failed one) for no benefit. ImageKit is still tried afterward as
- * a fallback for that rare case, and stays the *first* candidate for every
+ * that resize is tried first -- skipping a live imgproxy request there just
+ * pays a round trip for no benefit. The self-hosted proxy is still tried
+ * afterward as a fallback, and stays the *first* candidate for every
  * non-Shopify host, since those origins serve raw, unresized files on their
- * own and ImageKit is the only optimization available for them. The original
- * URL is always the last resort, so a broken ImageKit asset or an unconfigured
- * endpoint still falls all the way back to exactly what Street served before
- * ImageKit was added.
+ * own and the proxy is the only optimization available for them (subject to
+ * its own source-host allowlist -- see imageProxyUrl above). The original
+ * URL is always the last resort, so a host the proxy doesn't allow yet, or
+ * an unconfigured endpoint, still falls all the way back to exactly what
+ * Street served before any resizing proxy was added.
  */
 export function catalogImageCandidates(source: string, widthHint: number): string[] {
   const trimmed = source.trim();
@@ -61,13 +68,13 @@ export function catalogImageCandidates(source: string, widthHint: number): strin
       return resizedUrl !== normalized ? resizedUrl : null;
     })();
 
-    const imageKit = imageKitUrl(normalized, widthHint);
+    const imageProxy = imageProxyUrl(normalized, widthHint);
 
     if (shopify) {
       if (shopifyResized) candidates.push(shopifyResized);
-      if (imageKit) candidates.push(imageKit);
+      if (imageProxy) candidates.push(imageProxy);
     } else {
-      if (imageKit) candidates.push(imageKit);
+      if (imageProxy) candidates.push(imageProxy);
     }
 
     candidates.push(normalized);
