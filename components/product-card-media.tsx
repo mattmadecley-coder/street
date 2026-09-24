@@ -168,7 +168,7 @@ export function ProductCardMedia({
       <CatalogImage
         src={primaryImage}
         fallbackSrcs={secondImage ? [secondImage] : undefined}
-        widthHint={720}
+        widthHint={400}
         fallback={<UnavailableProductImage />}
         alt={title}
         fill
@@ -185,7 +185,7 @@ export function ProductCardMedia({
       {showAlternate ? (
         <CatalogImage
           src={secondImage!}
-          widthHint={720}
+          widthHint={400}
           fallback={null}
           alt=""
           aria-hidden

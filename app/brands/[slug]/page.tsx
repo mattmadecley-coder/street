@@ -74,7 +74,7 @@ export default async function BrandPage({ params, searchParams }: { params: Prom
             </select>
             <button type="submit">Apply</button>
           </form>
-          {products.length ? <div className="grid">{products.map((product, index) => <ProductCard key={product.id} product={product} position={(currentPage - 1) * CATALOG_PAGE_SIZE + index + 1} sourceComponent="brand_page" />)}</div> : <div className="empty"><p>No products match those filters.</p><Link className="link-small" href={`/brands/${slug}`}>Reset filters</Link></div>}
+          {products.length ? <div className="grid">{products.map((product, index) => <ProductCard key={product.id} product={product} position={(currentPage - 1) * CATALOG_PAGE_SIZE + index + 1} sourceComponent="brand_page" priority={index < 4} />)}</div> : <div className="empty"><p>No products match those filters.</p><Link className="link-small" href={`/brands/${slug}`}>Reset filters</Link></div>}
           {totalPages > 1 ? <nav className={styles.pagination} aria-label="Brand product pages">
             {currentPage > 1 ? <Link className="link-small" href={pageHref(slug, filters, currentPage - 1)}>← Previous</Link> : <span />}
             <span>Page {currentPage} of {totalPages}</span>

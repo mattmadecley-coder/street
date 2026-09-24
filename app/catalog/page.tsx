@@ -272,7 +272,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
             <SizeChips params={params} />
 
             {products.length ? (
-              <div className="grid">{products.map((product, index) => <ProductCard key={product.id} product={product} searchQuery={params.q} position={(currentPage - 1) * CATALOG_PAGE_SIZE + index + 1} />)}</div>
+              <div className="grid">{products.map((product, index) => <ProductCard key={product.id} product={product} searchQuery={params.q} position={(currentPage - 1) * CATALOG_PAGE_SIZE + index + 1} priority={index < 4} />)}</div>
             ) : (
               <div className="empty"><p>No pieces match those filters.</p><a className="link-small" href="/catalog">Reset filters</a></div>
             )}
