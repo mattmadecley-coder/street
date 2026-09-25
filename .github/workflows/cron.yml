@@ -39,6 +39,6 @@ jobs:
           # the container never restarts and never even sees these requests,
           # so it's a momentary routing-layer hiccup, not a real outage).
           # Retry on transient 5xx/timeouts instead of failing the whole job.
-          curl -sS -f --max-time 90 --retry 4 --retry-delay 8 --retry-max-time 300 \
+          curl -sS -f --max-time 90 --retry 10 --retry-delay 12 --retry-max-time 300 \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "${{ secrets.SITE_URL }}/api/cron/${{ steps.pick.outputs.path }}"
