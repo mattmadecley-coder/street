@@ -249,6 +249,24 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
   ]).size;
 
   const intent = summarizePurchaseIntent(outboundClicks);
+  const addToCartEvents = events.filter((event) => event.event_type === "add_to_cart");
+  const addToCartBlockedEvents = events.filter((event) => event.event_type === "add_to_cart_blocked");
+  const checkoutClickEvents = events.filter((event) => event.event_type === "cart_checkout_click");
+  const addToCartSessions = sessionsWith(events, (event) => event.event_type === "add_to_cart");
+  const checkoutClickSessions = sessionsWith(events, (event) => event.event_type === "cart_checkout_click");
+  const checkoutClickShoppers = unique(checkoutClickEvents.map((event) => event.anonymous_user_id));
+  const checkoutValuedIntent = new Set<string>();
+  let checkoutIntentValue = 0;
+  for (const event of checkoutClickEvents) {
+    const subtotal = metadataNumber(event, "subtotal") ?? 0;
+    const key = `${event.session_id ?? event.anonymous_user_id ?? "unknown"}::${event.brand_slug ?? "unknown"}`;
+    if (subtotal > 0 && !checkoutValuedIntent.has(key)) {
+      checkoutValuedIntent.add(key);
+      checkoutIntentValue += subtotal;
+    }
+  }
+  const checkoutByBrand = topCounts(checkoutClickEvents.map((event) => event.brand_slug), 12);
+  const addToCartByBrand = topCounts(addToCartEvents.map((event) => event.brand_slug), 12);
   const trend = buildAnalyticsTrend(rawEvents, rawOutboundClicks, days, audience.likelyHumanIds);
   const topSources = topCounts(events.filter((event) => event.event_type === "page_view").map(sourceLabel), 12);
   const topSearches = topCounts(searches.map((event) => event.query?.toLowerCase().trim()), 12);
@@ -342,6 +360,24 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
             </table>
           </div>
         ) : <p className={styles.rowMeta} style={{ marginTop: 16 }}>No qualified outbound product clicks in this period yet.</p>}
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHead}>
+          <div><h2>StreetBag funnel</h2><p className={styles.rowMeta}>Shoppers who save items to their bag across brands before checking out, separate from a direct "Buy Now" click. Checkout clicks are higher intent than any other action Street measures.</p></div>
+        </div>
+        <div className={styles.analyticsDetailGrid}>
+          <Metric label="Added to StreetBag" value={addToCartEvents.length} note={`${addToCartSessions.toLocaleString()} sessions`} />
+          <Metric label="Blocked (needs variant)" value={addToCartBlockedEvents.length} />
+          <Metric label="Checkout clicks" value={checkoutClickEvents.length} note={`${checkoutClickSessions.toLocaleString()} sessions`} featured />
+          <Metric label="Unique checkout shoppers" value={checkoutClickShoppers} />
+          <Metric label="Bag → checkout rate" value={percent(checkoutClickSessions, addToCartSessions)} note="Sessions that added a bag item and then clicked checkout" />
+          <Metric label="Checkout intent value" value={money.format(checkoutIntentValue)} note="Bag subtotal at click, once per session/brand" />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, marginTop: 18 }}>
+          <CountTable title="Added to StreetBag by brand" rows={addToCartByBrand} first="Brand" second="Add to bag" />
+          <CountTable title="Checkout clicks by brand" rows={checkoutByBrand} first="Brand" second="Checkout clicks" />
+        </div>
       </section>
 
       <div className={styles.section}>

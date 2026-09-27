@@ -118,6 +118,15 @@ function trackGoogleEvent(eventType: string, details: Record<string, unknown>) {
     sendGAEvent("event", "add_to_cart", commerce);
     return;
   }
+  if (eventType === "cart_checkout_click") {
+    const metadata = details.metadata && typeof details.metadata === "object" ? details.metadata as Record<string, unknown> : {};
+    sendGAEvent("event", "begin_checkout", compact({
+      currency: "USD",
+      value: metadata.subtotal,
+      item_brand: details.brandSlug,
+    }));
+    return;
+  }
   if (eventType === "outbound_click_intent") {
     sendGAEvent("event", "outbound_click", compact({
       item_id: details.productId,
