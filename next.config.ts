@@ -35,6 +35,15 @@ const nextConfig: NextConfig = {
     return [
       { source: "/brands/seventy-four-uniform", destination: "/catalog?brand=seventy-four-uniform", permanent: true },
       { source: "/brands/clutch-supply", destination: "/catalog?brand=clutch-supply", permanent: true },
+      // www.streetdotcom.com fully duplicates the site with no canonical
+      // signal, which splits/confuses Google's indexing of the two hosts.
+      // Force everything onto the bare apex domain.
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.streetdotcom.com" }],
+        destination: "https://streetdotcom.com/:path*",
+        permanent: true,
+      },
     ];
   },
 };

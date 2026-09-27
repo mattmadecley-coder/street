@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Header, Footer, ProductCard } from "@/components/storefront";
@@ -10,6 +11,21 @@ export async function generateStaticParams() {
   return brands.map((brand) => ({ slug: brand.slug }));
 }
 import styles from "./brand.module.css";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const brand = (await getBrandDirectory()).find((entry) => entry.slug === slug);
+  if (!brand) return {};
+  const title = brand.name;
+  const description = `Shop ${brand.name} on Street — ${brand.productCount ? `${brand.productCount} pieces ` : ""}independent streetwear, bought straight from the brand.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/brands/${brand.slug}` },
+    openGraph: { title, description, type: "website", images: brand.logoUrl ? [{ url: brand.logoUrl }] : undefined },
+    twitter: { card: "summary_large_image", title, description, images: brand.logoUrl ? [brand.logoUrl] : undefined },
+  };
+}
 
 type Params = { availability?: string; sort?: string; page?: string };
 

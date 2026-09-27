@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "./brands.module.css";
 import { Header, Footer } from "@/components/storefront";
@@ -5,6 +6,12 @@ import { CatalogImage } from "@/components/catalog-image";
 import { getBrandDirectory } from "@/lib/catalog-store";
 
 export const revalidate = 3600;
+
+export const metadata: Metadata = {
+  title: "Independent streetwear brands",
+  description: "Browse every independent streetwear brand on Street and shop directly from the brand's own store.",
+  alternates: { canonical: "/brands" },
+};
 
 function instagramHandle(url: string | null) {
   if (!url) return null;

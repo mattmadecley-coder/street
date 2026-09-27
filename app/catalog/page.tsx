@@ -71,13 +71,48 @@ function sizeOptionsForFilter(group?: string, category?: string): string[] | nul
 // than a finite set of taxonomy pages, so they're not worth indexing.
 const NON_INDEXABLE_CATALOG_PARAMS = ["q", "color", "size", "min", "max", "sort", "availability", "page"] as const;
 
+function indexableCatalogCanonical(params: Params) {
+  const search = new URLSearchParams();
+  for (const key of ["brand", "group", "category", "type", "detail"] as const) {
+    if (params[key]) search.set(key, params[key]!);
+  }
+  const query = search.toString();
+  return query ? `/catalog?${query}` : "/catalog";
+}
+
 export async function generateMetadata({ searchParams }: { searchParams: Promise<Params> }): Promise<Metadata> {
   const params = await searchParams;
   const hasNonIndexableFilter = NON_INDEXABLE_CATALOG_PARAMS.some((key) => Boolean(params[key]));
   if (hasNonIndexableFilter) {
     return { robots: { index: false, follow: false } };
   }
-  return {};
+
+  const canonical = indexableCatalogCanonical(params);
+  const heading = params.detail || params.type || params.category || params.group;
+
+  if (!heading && !params.brand) {
+    return {
+      title: "Shop all",
+      description: "Shop every independent streetwear brand on Street in one catalog — filter by category, size, and price.",
+      alternates: { canonical },
+    };
+  }
+
+  if (params.brand) {
+    const brand = (await getAllBrands()).find((entry) => entry.slug === params.brand);
+    const label = heading ? `${heading} from ${brand?.name ?? params.brand}` : brand?.name ?? params.brand;
+    return {
+      title: label,
+      description: `Shop ${label} on Street — independent streetwear, bought straight from the brand.`,
+      alternates: { canonical },
+    };
+  }
+
+  return {
+    title: heading,
+    description: `Shop ${heading} from independent streetwear brands on Street.`,
+    alternates: { canonical },
+  };
 }
 
 function numberOrUndefined(value: string | undefined) {
