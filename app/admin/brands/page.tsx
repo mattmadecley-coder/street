@@ -129,9 +129,10 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
     <details className={styles.row} data-scroll-id={brand.slug}>
       <summary className={styles.rowSummary}>
         <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          {brand.logoUrl ? <img src={brand.logoUrl} alt="" /> : <span className={styles.pill}>No logo</span>}
+          {brand.logoUrl ? <img src={brand.logoUrl} alt="" style={brand.logoInvert ? { filter: "invert(1)" } : undefined} /> : <span className={styles.pill}>No logo</span>}
           <strong>{brand.name}</strong>
           {brand.featured ? <span className={styles.pill}>Featured</span> : null}
+          {brand.logoInvert ? <span className={styles.pill}>Logo inverted</span> : null}
           {!brand.catalogEnabled ? <span className={styles.pill}>Not in daily sync</span> : null}
           {brand.storefrontStatus === "closed" ? <span className={`${styles.pill} ${styles.pillAlert}`}>Password protected / closed</span> : null}
           {diagnostic?.newProducts ? <span className={styles.pill}>+{diagnostic.newProducts} new</span> : null}
@@ -179,6 +180,10 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
             <label htmlFor={`logo_url_${brand.slug}`}>Or paste a logo URL</label>
             <input id={`logo_url_${brand.slug}`} name="logo_url" type="text" placeholder={brand.logoUrl ?? "https://..."} />
           </div>
+          <label className={styles.checkboxField}>
+            <input type="checkbox" name="logo_invert" defaultChecked={brand.logoInvert} />
+            Invert this logo (use for white/light logos that disappear on our background)
+          </label>
           <label className={styles.checkboxField}>
             <input type="checkbox" name="is_featured" defaultChecked={brand.featured} />
             Feature on homepage spotlight
@@ -276,7 +281,7 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
               <div key={brand.slug} className={styles.row}>
                 <div className={styles.rowSummary} style={{ cursor: "default" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    {brand.logoUrl ? <img src={brand.logoUrl} alt="" /> : <span className={styles.pill}>No logo</span>}
+                    {brand.logoUrl ? <img src={brand.logoUrl} alt="" style={brand.logoInvert ? { filter: "invert(1)" } : undefined} /> : <span className={styles.pill}>No logo</span>}
                     <strong>{brand.name}</strong>
                   </span>
                   <span className={styles.progressPill}>

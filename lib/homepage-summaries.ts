@@ -6,6 +6,7 @@ export type HomepageBrandSummary = {
   name: string;
   storeUrl: string;
   logoUrl: string | null;
+  logoInvert: boolean;
   instagramUrl: string | null;
   productCount: number;
   featured: boolean;
@@ -25,6 +26,7 @@ type BrandSummaryRow = {
   name: string;
   store_url: string;
   logo_url: string | null;
+  logo_invert: boolean | null;
   instagram_url: string | null;
   product_count: number;
   is_featured: boolean;
@@ -50,6 +52,7 @@ export async function getHomepageBrandSummaries(): Promise<HomepageBrandSummary[
     name: brand.name,
     storeUrl: brand.storeUrl,
     logoUrl: brand.logoUrl ?? null,
+    logoInvert: false,
     instagramUrl: null,
     productCount: 0,
     featured: Boolean(brand.featured),
@@ -61,13 +64,14 @@ export async function getHomepageBrandSummaries(): Promise<HomepageBrandSummary[
 
   try {
     const rows = await supabaseRest<BrandSummaryRow[]>(
-      "brands?select=slug,name,store_url,logo_url,instagram_url,product_count,is_featured,catalog_enabled,created_at&is_active=eq.true&order=name.asc"
+      "brands?select=slug,name,store_url,logo_url,logo_invert,instagram_url,product_count,is_featured,catalog_enabled,created_at&is_active=eq.true&order=name.asc"
     );
     return rows.map((row) => ({
       slug: row.slug,
       name: row.name,
       storeUrl: row.store_url,
       logoUrl: row.logo_url,
+      logoInvert: Boolean(row.logo_invert),
       instagramUrl: row.instagram_url,
       productCount: Number(row.product_count ?? 0),
       featured: row.is_featured,

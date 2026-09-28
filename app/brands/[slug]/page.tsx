@@ -68,7 +68,7 @@ export default async function BrandPage({ params, searchParams }: { params: Prom
       <div className="shell">
         <section className={styles.hero}>
           <div className={styles.identity}>
-            <div className={styles.logo}>{brand.logoUrl ? <CatalogImage src={brand.logoUrl} widthHint={720} fallback={<strong>{brand.name}</strong>} alt={brand.name} width={420} height={140} sizes="(max-width: 840px) 70vw, 360px" /> : <strong>{brand.name}</strong>}</div>
+            <div className={styles.logo}>{brand.logoUrl ? <CatalogImage src={brand.logoUrl} widthHint={720} fallback={<strong>{brand.name}</strong>} alt={brand.name} width={420} height={140} sizes="(max-width: 840px) 70vw, 360px" style={brand.logoInvert ? { filter: "invert(1)" } : undefined} /> : <strong>{brand.name}</strong>}</div>
             <div><p className="eyebrow">Independent brand on Street</p><h1>{brand.name}</h1><p>{total.toLocaleString()} piece{total === 1 ? "" : "s"} available to discover.</p></div>
           </div>
           <div className={styles.links}>

@@ -7,7 +7,7 @@ import { inspectStorefront, type StorefrontHealth } from "@/lib/storefront-healt
 import { hasSupabaseCatalog, supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 import type { StreetProduct } from "@/lib/catalog";
 
-type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean; catalog_enabled?: boolean; product_count?: number | string; storefront_status?: "unknown" | "open" | "closed"; storefront_status_reason?: string | null; storefront_checked_at?: string | null };
+type BrandRow = { id: string; slug: string; name: string; store_url: string; logo_url: string | null; logo_invert?: boolean; instagram_url: string | null; metadata_synced_at: string | null; is_active: boolean; is_featured: boolean; catalog_enabled?: boolean; product_count?: number | string; storefront_status?: "unknown" | "open" | "closed"; storefront_status_reason?: string | null; storefront_checked_at?: string | null };
 type ImageRow = { source_url: string; sort_order: number; alt_text?: string | null };
 type VariantRow = { external_id: string; title: string | null; price: string | number; compare_at_price: string | number | null; available: boolean; option1: string | null; option2: string | null; option3: string | null; image_url: string | null };
 type ProductRow = { id: string; brand_id: string; external_id: string; handle: string; title: string; description: string; source_url: string; price: string | number; compare_at_price: string | number | null; stock_status: "in_stock" | "sold_out"; is_preorder: boolean; category: string; tags: string[]; colors: string[]; sizes: string[]; primary_image_url: string | null; last_synced_at: string; is_active: boolean; brands: BrandRow | null; product_images: ImageRow[] | null; product_variants: VariantRow[] | null; street_group: string | null; street_category: string | null; street_type: string | null; street_detail: string | null };
@@ -15,7 +15,7 @@ type PendingClassificationRow = { id: string; title: string; description: string
 type SyncRunRow = { id: string };
 type SyncRunHistoryRow = { brand_id: string; started_at: string; completed_at: string | null; status: "running" | "success" | "failed"; product_count: number; error_message: string | null; brands: { slug: string } | null };
 
-export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; instagramUrl: string | null; productCount: number; featured: boolean; catalogEnabled: boolean; createdAt: string; storefrontStatus: "unknown" | "open" | "closed"; storefrontStatusReason: string | null; storefrontCheckedAt: string | null };
+export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; logoInvert: boolean; instagramUrl: string | null; productCount: number; featured: boolean; catalogEnabled: boolean; createdAt: string; storefrontStatus: "unknown" | "open" | "closed"; storefrontStatusReason: string | null; storefrontCheckedAt: string | null };
 export type CatalogSyncResult = { brand: string; productCount: number; ok: boolean; error?: string };
 export type ClassificationRunResult = { id: string; title: string; status: "classified" | "needs_review" | "error"; group?: string; category?: string; tags?: string[]; error?: string };
 export type BrandSyncStatus = { lastSyncedAt: string | null; lastStatus: "running" | "success" | "failed" | null; lastProductCount: number | null; lastError: string | null };
@@ -140,7 +140,7 @@ export async function findBrandByDomain(url: string): Promise<StreetBrand | null
 
 export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
   const brands = await getAllBrands();
-  const fallback = new Map<string, StreetBrandProfile>(brands.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured), catalogEnabled: brand.catalogEnabled ?? true, createdAt: new Date(0).toISOString(), storefrontStatus: "unknown", storefrontStatusReason: null, storefrontCheckedAt: null }]));
+  const fallback = new Map<string, StreetBrandProfile>(brands.map((brand) => [brand.slug, { slug: brand.slug, name: brand.name, storeUrl: brand.storeUrl, logoUrl: brand.logoUrl ?? null, logoInvert: false, instagramUrl: null, productCount: 0, featured: Boolean(brand.featured), catalogEnabled: brand.catalogEnabled ?? true, createdAt: new Date(0).toISOString(), storefrontStatus: "unknown", storefrontStatusReason: null, storefrontCheckedAt: null }]));
   if (!hasSupabaseCatalog()) return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   try {
     // product_count lives right on the brands row (kept in sync by the
@@ -149,7 +149,7 @@ export async function getBrandDirectory(): Promise<StreetBrandProfile[]> {
     // product's brand_id just to re-derive the same number in memory. One
     // small query instead of a full catalog scan on every admin page load.
     const rows = await supabaseRest<(BrandRow & { created_at: string })[]>("brands?select=*&is_active=eq.true&order=name.asc");
-    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, instagramUrl: row.instagram_url, productCount: Number(row.product_count ?? 0), featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true, createdAt: row.created_at, storefrontStatus: row.storefront_status ?? "unknown", storefrontStatusReason: row.storefront_status_reason ?? null, storefrontCheckedAt: row.storefront_checked_at ?? null });
+    for (const row of rows) fallback.set(row.slug, { slug: row.slug, name: row.name, storeUrl: row.store_url, logoUrl: row.logo_url, logoInvert: Boolean(row.logo_invert), instagramUrl: row.instagram_url, productCount: Number(row.product_count ?? 0), featured: row.is_featured, catalogEnabled: row.catalog_enabled ?? true, createdAt: row.created_at, storefrontStatus: row.storefront_status ?? "unknown", storefrontStatusReason: row.storefront_status_reason ?? null, storefrontCheckedAt: row.storefront_checked_at ?? null });
     return [...fallback.values()].sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error("Street brand directory read failed", error);
@@ -286,6 +286,7 @@ async function upsertBrand(brand: StreetBrand, metadata?: BrandMetadata) {
       name: brand.name,
       store_url: brand.storeUrl,
       logo_url: metadata?.logoUrl ?? brand.logoUrl ?? existing?.logo_url ?? null,
+      logo_invert: existing?.logo_invert ?? false,
       instagram_url: metadata?.instagramUrl ?? existing?.instagram_url ?? null,
       metadata_synced_at: metadata ? new Date().toISOString() : existing?.metadata_synced_at ?? null,
       is_active: true,

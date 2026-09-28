@@ -15,6 +15,7 @@ export async function updateBrand(formData: FormData) {
   const logoUrlInput = String(formData.get("logo_url") ?? "").trim();
   const featured = formData.get("is_featured") === "on";
   const catalogEnabled = formData.get("catalog_enabled") === "on";
+  const logoInvert = formData.get("logo_invert") === "on";
   const logoFile = formData.get("logo_file");
 
   let logoUrl = logoUrlInput || null;
@@ -22,7 +23,7 @@ export async function updateBrand(formData: FormData) {
     logoUrl = await uploadSiteAsset(logoFile, `brand-logos/${slug}`);
   }
 
-  const body: Record<string, unknown> = { is_featured: featured, catalog_enabled: catalogEnabled };
+  const body: Record<string, unknown> = { is_featured: featured, catalog_enabled: catalogEnabled, logo_invert: logoInvert };
   if (storeUrl) body.store_url = storeUrl;
   // Only touch logo_url if the admin actually provided one (typed a URL or
   // uploaded a file) — an empty field means "leave the scraped logo alone".
