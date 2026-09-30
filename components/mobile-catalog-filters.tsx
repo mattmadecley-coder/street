@@ -14,8 +14,20 @@ export function MobileCatalogFilters() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [brands, setBrands] = useState<BrandOption[]>([]);
-  const [group, setGroup] = useState(searchParams.get("group") ?? "");
-  const [category, setCategory] = useState(searchParams.get("category") ?? "");
+  const currentGroup = searchParams.get("group") ?? "";
+  const currentCategory = searchParams.get("category") ?? "";
+  const [group, setGroup] = useState(currentGroup);
+  const [category, setCategory] = useState(currentCategory);
+
+  // This component lives in catalog/layout.tsx, so it mounts once and
+  // persists across client-side navigations between category pages (e.g.
+  // Shop All -> Apparel -> Tops via the sidebar's <Link>s). Its group/
+  // category state above only reflected the URL at that first mount, so
+  // drilling into a specific category afterward left the filter panel (and
+  // whatever it submitted on Apply) stuck showing/using the group-level
+  // "All <group>" state instead of the category actually being browsed.
+  // Resync whenever the URL's own group/category actually changes.
+  useEffect(() => { setGroup(currentGroup); setCategory(currentCategory); }, [currentGroup, currentCategory]);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => { fetch("/api/filter-options").then((response) => response.ok ? response.json() : { brands: [] }).then((data) => setBrands(data.brands ?? [])).catch(() => setBrands([])); }, []);
