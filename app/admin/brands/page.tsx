@@ -9,7 +9,8 @@ import { PendingStatus } from "@/components/admin/pending-status";
 import { ScrollMemory } from "@/components/admin/scroll-memory";
 import { getBrandDirectory, getBrandSyncStatuses, getBrandClassificationProgress, type StreetBrandProfile, type BrandSyncStatus } from "@/lib/catalog-store";
 import { getRecentCatalogDiagnostics, type BrandSyncDiagnostic } from "@/lib/recent-catalog-diagnostics";
-import { updateBrand, syncBrandNow } from "./actions";
+import { LogoInvertPreview } from "@/components/admin/logo-invert-preview";
+import { updateBrand, syncBrandNow, findLogoForBrand, approveFoundLogo } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -124,9 +125,9 @@ function SyncDiagnostics({ diagnostic, pending }: { diagnostic: BrandSyncDiagnos
   );
 }
 
-function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: StreetBrandProfile; status: BrandSyncStatus | undefined; pending: number; progress: Progress; diagnostic?: BrandSyncDiagnostic }) {
+function BrandRow({ brand, status, pending, progress, diagnostic, logoCandidate, logoNotFound }: { brand: StreetBrandProfile; status: BrandSyncStatus | undefined; pending: number; progress: Progress; diagnostic?: BrandSyncDiagnostic; logoCandidate?: { url: string; source: string }; logoNotFound?: boolean }) {
   return (
-    <details className={styles.row} data-scroll-id={brand.slug}>
+    <details className={styles.row} data-scroll-id={brand.slug} id={brand.slug} open={logoCandidate || logoNotFound ? true : undefined}>
       <summary className={styles.rowSummary}>
         <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           {brand.logoUrl ? <img src={brand.logoUrl} alt="" style={brand.logoInvert ? { filter: "invert(1)" } : undefined} /> : <span className={styles.pill}>No logo</span>}
@@ -166,6 +167,36 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
             <ClassifyRunner brandSlug={brand.slug} pendingCount={pending} />
           </div>
         ) : null}
+
+        <div style={{ marginBottom: 16 }}>
+          {logoCandidate ? (
+            <div style={{ marginBottom: 12 }}>
+              <p className={styles.rowMeta} style={{ marginBottom: 8 }}>Found this {logoCandidate.source === "ai" ? "(AI pick from the page's images)" : "(from the site header)"}:</p>
+              <img src={logoCandidate.url} alt="Logo candidate" style={{ maxWidth: 280, maxHeight: 100, objectFit: "contain", border: "1px solid rgba(16,16,16,.16)", padding: 10, background: "#fafaf8", display: "block", marginBottom: 12 }} />
+              <form action={approveFoundLogo}>
+                <input type="hidden" name="slug" value={brand.slug} />
+                <input type="hidden" name="candidate" value={logoCandidate.url} />
+                <LogoInvertPreview initialSrc={logoCandidate.url} defaultChecked={brand.logoInvert} />
+                <div className={styles.actions}>
+                  <SubmitButton pendingText="Saving…" className={styles.button}>Use this logo</SubmitButton>
+                </div>
+              </form>
+              <form action={findLogoForBrand} style={{ marginTop: 8 }}>
+                <input type="hidden" name="slug" value={brand.slug} />
+                <SubmitButton pendingText="Searching…" className={styles.buttonSecondary}>Try again</SubmitButton>
+              </form>
+            </div>
+          ) : null}
+          {logoNotFound ? <p className={styles.notice} style={{ marginBottom: 12 }}>Couldn&rsquo;t confidently find a logo on that site. Paste one below, or upload it.</p> : null}
+          {!logoCandidate ? (
+            <form action={findLogoForBrand}>
+              <input type="hidden" name="slug" value={brand.slug} />
+              <SubmitButton pendingText="Searching…" className={styles.buttonSecondary}>Find logo automatically</SubmitButton>
+              <PendingStatus label="Checking the brand's site for a logo — this can take a few seconds" />
+            </form>
+          ) : null}
+        </div>
+
         <form action={updateBrand} className={styles.form} encType="multipart/form-data">
           <input type="hidden" name="slug" value={brand.slug} />
           <div className={styles.field}>
@@ -200,8 +231,8 @@ function BrandRow({ brand, status, pending, progress, diagnostic }: { brand: Str
   );
 }
 
-export default async function AdminBrandsPage({ searchParams }: { searchParams: Promise<{ saved?: string; synced?: string; syncError?: string; justAdded?: string; classifying?: string; sort?: string }> }) {
-  const { saved, synced, syncError, justAdded, classifying, sort: sortParam } = await searchParams;
+export default async function AdminBrandsPage({ searchParams }: { searchParams: Promise<{ saved?: string; synced?: string; syncError?: string; justAdded?: string; classifying?: string; sort?: string; logoCandidateSlug?: string; logoCandidate?: string; logoCandidateSource?: string; logoNotFoundSlug?: string }> }) {
+  const { saved, synced, syncError, justAdded, classifying, sort: sortParam, logoCandidateSlug, logoCandidate, logoCandidateSource, logoNotFoundSlug } = await searchParams;
   const sort: SortKey = SORT_OPTIONS.some((option) => option.value === sortParam) ? (sortParam as SortKey) : "name";
   const [brands, syncStatuses, pendingByBrand, diagnostics] = await Promise.all([
     getBrandDirectory(),
@@ -305,7 +336,7 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
           <div className={styles.sectionHead}><h2>Recently finished</h2></div>
           <div className={styles.rowList}>
             {recentlyFinished.map(({ brand, status, pending, progress, diagnostic }) => (
-              <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} />
+              <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} logoCandidate={logoCandidateSlug === brand.slug && logoCandidate ? { url: logoCandidate, source: logoCandidateSource ?? "" } : undefined} logoNotFound={logoNotFoundSlug === brand.slug} />
             ))}
           </div>
         </div>
@@ -317,7 +348,7 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
         <ScrollMemory>
         <div className={styles.rowList}>
           {allSorted.map(({ brand, status, pending, progress, diagnostic }) => (
-            <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} />
+            <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} logoCandidate={logoCandidateSlug === brand.slug && logoCandidate ? { url: logoCandidate, source: logoCandidateSource ?? "" } : undefined} logoNotFound={logoNotFoundSlug === brand.slug} />
           ))}
         </div>
         </ScrollMemory>

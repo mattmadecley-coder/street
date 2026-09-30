@@ -6,6 +6,7 @@ import { supabaseRest, CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/l
 import { uploadSiteAsset } from "@/lib/supabase-storage";
 import { getBrandBySlug, syncSingleBrand } from "@/lib/catalog-store";
 import { triggerClassificationDrain } from "@/lib/classification-trigger";
+import { findBrandLogo } from "@/lib/brand-logo-finder";
 
 export async function updateBrand(formData: FormData) {
   const slug = String(formData.get("slug") ?? "").trim();
@@ -36,6 +37,47 @@ export async function updateBrand(formData: FormData) {
   // busting it here, the admin brands list redirect below re-renders from
   // a stale cached read (up to an hour old) and a just-saved change (like
   // the logo-invert checkbox) appears to silently revert.
+  revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+  revalidatePath("/admin/brands");
+  revalidatePath("/brands");
+  revalidatePath("/");
+  redirect(`/admin/brands?saved=${encodeURIComponent(slug)}`);
+}
+
+/**
+ * Re-runs the same heuristic-then-AI-fallback logo finder used by the "add
+ * new brand" wizard, but for a brand that's already been onboarded — for
+ * when the scraped/manually-set logo is wrong, missing, or the brand's site
+ * has since redesigned. Shows the result inline on this row for approval
+ * rather than saving it immediately.
+ */
+export async function findLogoForBrand(formData: FormData) {
+  const slug = String(formData.get("slug") ?? "").trim();
+  if (!slug) throw new Error("Missing brand slug.");
+  const brand = await getBrandBySlug(slug);
+  if (!brand) throw new Error("Brand not found.");
+
+  const candidate = await findBrandLogo(brand.storeUrl);
+  const params = new URLSearchParams();
+  if (candidate) {
+    params.set("logoCandidateSlug", slug);
+    params.set("logoCandidate", candidate.url);
+    params.set("logoCandidateSource", candidate.source);
+  } else {
+    params.set("logoNotFoundSlug", slug);
+  }
+  redirect(`/admin/brands?${params.toString()}#${encodeURIComponent(slug)}`);
+}
+
+/** Admin approved a logo candidate found via findLogoForBrand above. */
+export async function approveFoundLogo(formData: FormData) {
+  const slug = String(formData.get("slug") ?? "").trim();
+  const candidate = String(formData.get("candidate") ?? "").trim();
+  const logoInvert = formData.get("logo_invert") === "on";
+  if (!slug || !candidate) throw new Error("Missing logo candidate.");
+
+  await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body: { logo_url: candidate, logo_invert: logoInvert }, prefer: "return=minimal" });
+
   revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
   revalidatePath("/admin/brands");
   revalidatePath("/brands");
