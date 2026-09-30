@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getRecentOutboundClicks, getRecentSiteEvents, type SiteEventRow } from "@/lib/analytics";
+import { resolveAnalyticsRange } from "@/lib/date-range";
 
 function csvCell(value: unknown) {
   const text = value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
@@ -16,11 +17,18 @@ function metadataString(event: SiteEventRow, key: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const requestedDays = Number(request.nextUrl.searchParams.get("days"));
-  const days = [1, 7, 30, 90].includes(requestedDays) ? requestedDays : 30;
+  const legacyDays = Number(request.nextUrl.searchParams.get("days"));
+  const range = request.nextUrl.searchParams.get("range") ?? (Number.isFinite(legacyDays) && legacyDays > 0 ? String(legacyDays === 1 ? "today" : legacyDays) : undefined);
+  const rangeInfo = resolveAnalyticsRange({
+    range,
+    start: request.nextUrl.searchParams.get("start") ?? undefined,
+    end: request.nextUrl.searchParams.get("end") ?? undefined,
+  });
   const dataset = request.nextUrl.searchParams.get("dataset") ?? "events";
-  const since = new Date(Date.now() - days * 86400000).toISOString();
-  const [events, outbound] = await Promise.all([getRecentSiteEvents(50000, since), getRecentOutboundClicks(50000, since)]);
+  const since = new Date(rangeInfo.startMs).toISOString();
+  const [rawEvents, rawOutbound] = await Promise.all([getRecentSiteEvents(50000, since), getRecentOutboundClicks(50000, since)]);
+  const events = rawEvents.filter((event) => new Date(event.created_at).getTime() < rangeInfo.endMs);
+  const outbound = rawOutbound.filter((click) => new Date(click.created_at).getTime() < rangeInfo.endMs);
 
   let output: string;
   if (dataset === "products") {
@@ -58,7 +66,7 @@ export async function GET(request: NextRequest) {
   return new Response(output, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="street-analytics-${dataset}-${days}d.csv"`,
+      "Content-Disposition": `attachment; filename="street-analytics-${dataset}-${rangeInfo.startDateInput}_to_${rangeInfo.endDateInput}.csv"`,
       "Cache-Control": "no-store",
     },
   });

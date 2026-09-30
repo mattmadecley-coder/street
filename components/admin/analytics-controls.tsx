@@ -15,7 +15,7 @@ function setBrowserExclusion(excluded: boolean) {
   }
 }
 
-export function AnalyticsControls({ days }: { days: number }) {
+export function AnalyticsControls({ range, start, end }: { range: string; start: string; end: string }) {
   const [excluded, setExcluded] = useState(true);
 
   useEffect(() => {
@@ -39,9 +39,9 @@ export function AnalyticsControls({ days }: { days: number }) {
         {excluded ? "This admin browser is excluded" : "Include this browser"}
       </button>
       <span style={{ fontSize: 11, color: "rgba(16,16,16,.58)" }}>Admin browsers are excluded by default from page views and outbound intent.</span>
-      <a href={`/admin/analytics/export?days=${days}&dataset=products`} style={{ height: 34, padding: "8px 12px", border: "1px solid rgba(16,16,16,.25)", color: "inherit", textDecoration: "none" }}>Export products CSV</a>
-      <a href={`/admin/analytics/export?days=${days}&dataset=searches`} style={{ height: 34, padding: "8px 12px", border: "1px solid rgba(16,16,16,.25)", color: "inherit", textDecoration: "none" }}>Export searches CSV</a>
-      <a href={`/admin/analytics/export?days=${days}&dataset=events`} style={{ height: 34, padding: "8px 12px", border: "1px solid rgba(16,16,16,.25)", color: "inherit", textDecoration: "none" }}>Export events CSV</a>
+      <a href={`/admin/analytics/export?range=${range}&start=${start}&end=${end}&dataset=products`} style={{ height: 34, padding: "8px 12px", border: "1px solid rgba(16,16,16,.25)", color: "inherit", textDecoration: "none" }}>Export products CSV</a>
+      <a href={`/admin/analytics/export?range=${range}&start=${start}&end=${end}&dataset=searches`} style={{ height: 34, padding: "8px 12px", border: "1px solid rgba(16,16,16,.25)", color: "inherit", textDecoration: "none" }}>Export searches CSV</a>
+      <a href={`/admin/analytics/export?range=${range}&start=${start}&end=${end}&dataset=events`} style={{ height: 34, padding: "8px 12px", border: "1px solid rgba(16,16,16,.25)", color: "inherit", textDecoration: "none" }}>Export events CSV</a>
     </div>
   );
 }

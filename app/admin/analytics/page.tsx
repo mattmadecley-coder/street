@@ -2,8 +2,9 @@ import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AnalyticsControls } from "@/components/admin/analytics-controls";
 import { AnalyticsOverviewChart } from "@/components/admin/analytics-overview-chart";
-import { getRecentSiteEvents, getRecentOutboundClicks, cacheFriendlySince, type SiteEventRow, type OutboundClickRow } from "@/lib/analytics";
+import { getRecentSiteEvents, getRecentOutboundClicks, type SiteEventRow, type OutboundClickRow } from "@/lib/analytics";
 import { analyzeAudience, buildAnalyticsTrend, summarizePurchaseIntent } from "@/lib/analytics-audience";
+import { resolveAnalyticsRange, cacheFriendlySinceMs } from "@/lib/date-range";
 
 export const dynamic = "force-dynamic";
 
@@ -216,17 +217,31 @@ function searchOpportunities(events: SiteEventRow[]) {
     .slice(0, 20);
 }
 
-export default async function AdminAnalyticsPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
+export default async function AdminAnalyticsPage({ searchParams }: { searchParams: Promise<{ range?: string; start?: string; end?: string; days?: string }> }) {
   const params = await searchParams;
-  const days = [1, 7, 30, 90].includes(Number(params.days)) ? Number(params.days) : 30;
-  const since = cacheFriendlySince(Math.max(days, 90));
+  // `days` is kept for old bookmarks/links; `range` (Today/Yesterday/7/30/90/custom) takes over from here.
+  const legacyDays = Number(params.days);
+  const range = params.range ?? (params.days && [1, 7, 30, 90].includes(legacyDays) ? (legacyDays === 1 ? "today" : String(legacyDays)) : undefined);
+  const rangeInfo = resolveAnalyticsRange({ range, start: params.start, end: params.end });
+
+  const now = Date.now();
+  // Retention and "all traffic" comparisons below want at least 90 days of
+  // history regardless of the selected display range, so always pull back
+  // that far and then filter the display-range subset from the same pull.
+  const historyDays = Math.max(90, Math.ceil((now - rangeInfo.startMs) / 86_400_000) + 1);
+  const since = new Date(cacheFriendlySinceMs(now - historyDays * 86_400_000)).toISOString();
   const [allEvents, allOutboundClicks] = await Promise.all([
     getRecentSiteEvents(100000, since),
     getRecentOutboundClicks(100000, since),
   ]);
-  const rangeStart = new Date(Date.now() - days * 86400000).toISOString();
-  const rawEvents = allEvents.filter((event) => event.created_at >= rangeStart);
-  const rawOutboundClicks = allOutboundClicks.filter((click) => click.created_at >= rangeStart);
+  const rawEvents = allEvents.filter((event) => {
+    const at = new Date(event.created_at).getTime();
+    return at >= rangeInfo.startMs && at < rangeInfo.endMs;
+  });
+  const rawOutboundClicks = allOutboundClicks.filter((click) => {
+    const at = new Date(click.created_at).getTime();
+    return at >= rangeInfo.startMs && at < rangeInfo.endMs;
+  });
 
   const audience = analyzeAudience(rawEvents, rawOutboundClicks);
   const allAudience = analyzeAudience(allEvents, allOutboundClicks);
@@ -267,7 +282,7 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
   }
   const checkoutByBrand = topCounts(checkoutClickEvents.map((event) => event.brand_slug), 12);
   const addToCartByBrand = topCounts(addToCartEvents.map((event) => event.brand_slug), 12);
-  const trend = buildAnalyticsTrend(rawEvents, rawOutboundClicks, days, audience.likelyHumanIds);
+  const trend = buildAnalyticsTrend(rawEvents, rawOutboundClicks, { startMs: rangeInfo.startMs, endMs: rangeInfo.endMs, hourly: rangeInfo.hourly }, audience.likelyHumanIds);
   const topSources = topCounts(events.filter((event) => event.event_type === "page_view").map(sourceLabel), 12);
   const topSearches = topCounts(searches.map((event) => event.query?.toLowerCase().trim()), 12);
   const zeroSearches = topCounts(searches.filter((event) => event.results_count === 0).map((event) => event.query?.toLowerCase().trim()), 12);
@@ -298,18 +313,27 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
         </div>
         <form className={styles.analyticsRangeForm}>
           <label>Date range
-            <select name="days" defaultValue={String(days)}>
-              <option value="1">Last 24 hours</option>
+            <select name="range" defaultValue={rangeInfo.key}>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
+              <option value="custom">Custom range…</option>
             </select>
+          </label>
+          <label>From
+            <input type="date" name="start" defaultValue={rangeInfo.startDateInput} />
+          </label>
+          <label>To
+            <input type="date" name="end" defaultValue={rangeInfo.endDateInput} />
           </label>
           <button className={styles.buttonSecondary} type="submit">Apply</button>
         </form>
+        <p className={styles.rowMeta} style={{ marginTop: 6 }}>Showing {rangeInfo.label} · Eastern Time</p>
       </div>
 
-      <div style={{ marginTop: 14 }}><AnalyticsControls days={days} /></div>
+      <div style={{ marginTop: 14 }}><AnalyticsControls range={rangeInfo.key} start={rangeInfo.startDateInput} end={rangeInfo.endDateInput} /></div>
 
       <div className={styles.analyticsHeroGrid}>
         <Metric label="Likely human visitors" value={visitors.toLocaleString()} note={`${audience.recordedVisitors.toLocaleString()} raw browser IDs`} />

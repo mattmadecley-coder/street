@@ -89,8 +89,9 @@ export async function runLogoFinder(formData: FormData) {
 export async function approveLogo(formData: FormData) {
   const slug = String(formData.get("slug") ?? "");
   const candidate = String(formData.get("candidate") ?? "");
+  const logoInvert = formData.get("logo_invert") === "on";
   if (slug && candidate) {
-    await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body: { logo_url: candidate }, prefer: "return=minimal" });
+    await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body: { logo_url: candidate, logo_invert: logoInvert }, prefer: "return=minimal" });
   }
   redirect(`/admin/brands/new?step=import&slug=${encodeURIComponent(slug)}`);
 }
@@ -100,11 +101,12 @@ export async function saveManualLogo(formData: FormData) {
   const slug = String(formData.get("slug") ?? "");
   const logoUrlInput = String(formData.get("logo_url") ?? "").trim();
   const logoFile = formData.get("logo_file");
+  const logoInvert = formData.get("logo_invert") === "on";
 
   let logoUrl = logoUrlInput || null;
   if (logoFile instanceof File && logoFile.size > 0) logoUrl = await uploadSiteAsset(logoFile, `brand-logos/${slug}`);
   if (slug && logoUrl) {
-    await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body: { logo_url: logoUrl }, prefer: "return=minimal" });
+    await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body: { logo_url: logoUrl, logo_invert: logoInvert }, prefer: "return=minimal" });
   }
   redirect(`/admin/brands/new?step=import&slug=${encodeURIComponent(slug)}`);
 }

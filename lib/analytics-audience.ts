@@ -1,4 +1,5 @@
 import type { OutboundClickRow, SiteEventRow } from "@/lib/analytics";
+import { easternYmdOf, zonedMidnightToUtcMs, addDaysToYmd } from "@/lib/date-range";
 
 const EASTERN_TIME_ZONE = "America/New_York";
 const MEANINGFUL_EVENTS = new Set([
@@ -263,10 +264,10 @@ function dayKey(date: Date) {
 export function buildAnalyticsTrend(
   events: SiteEventRow[],
   clicks: OutboundClickRow[],
-  days: number,
+  window: { startMs: number; endMs: number; hourly: boolean },
   likelyHumanIds: Set<string>,
 ): AnalyticsTrendPoint[] {
-  const hourly = days === 1;
+  const { startMs, endMs, hourly } = window;
   const rows = new Map<string, {
     label: string;
     visitors: Set<string>;
@@ -278,17 +279,23 @@ export function buildAnalyticsTrend(
   }>();
 
   if (hourly) {
-    const currentHour = Math.floor(Date.now() / 3_600_000) * 3_600_000;
-    for (let offset = 23; offset >= 0; offset -= 1) {
-      const at = new Date(currentHour - offset * 3_600_000);
-      const key = String(at.getTime());
+    const startHour = Math.floor(startMs / 3_600_000) * 3_600_000;
+    const lastHour = Math.floor((Math.max(endMs, startMs + 1) - 1) / 3_600_000) * 3_600_000;
+    for (let t = startHour; t <= lastHour; t += 3_600_000) {
+      const at = new Date(t);
+      const key = String(t);
       rows.set(key, { label: easternHourLabel.format(at), visitors: new Set(), recordedVisitors: new Set(), sessions: new Set(), outboundClicks: 0, intentValue: 0, valuedIntentKeys: new Set() });
     }
   } else {
-    for (let offset = days - 1; offset >= 0; offset -= 1) {
-      const at = new Date(Date.now() - offset * 86_400_000);
+    let dayYmd = easternYmdOf(startMs);
+    const lastDayYmd = easternYmdOf(Math.max(endMs, startMs + 1) - 1);
+    // Cap iterations defensively so a malformed window can't hang the request.
+    for (let guard = 0; guard < 400; guard += 1) {
+      const at = new Date(zonedMidnightToUtcMs(dayYmd));
       const key = dayKey(at);
       rows.set(key, { label: easternDayLabel.format(at), visitors: new Set(), recordedVisitors: new Set(), sessions: new Set(), outboundClicks: 0, intentValue: 0, valuedIntentKeys: new Set() });
+      if (dayYmd.year === lastDayYmd.year && dayYmd.month === lastDayYmd.month && dayYmd.day === lastDayYmd.day) break;
+      dayYmd = addDaysToYmd(dayYmd, 1);
     }
   }
 

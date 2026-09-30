@@ -1,6 +1,7 @@
 import Link from "next/link";
 import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { LogoInvertPreview } from "@/components/admin/logo-invert-preview";
 import { getBrandBySlug } from "@/lib/catalog-store";
 import { startBrandOnboarding, runLogoFinder, approveLogo, saveManualLogo, skipLogo, runImport } from "./actions";
 
@@ -95,6 +96,7 @@ async function LogoStep({ slug, candidate, source, notfound }: { slug: string; c
             <form action={approveLogo}>
               <input type="hidden" name="slug" value={slug} />
               <input type="hidden" name="candidate" value={candidate} />
+              <LogoInvertPreview initialSrc={candidate} />
               <button type="submit" className={styles.button}>Use this logo</button>
             </form>
             <form action={runLogoFinder}>
@@ -116,6 +118,7 @@ async function LogoStep({ slug, candidate, source, notfound }: { slug: string; c
           <label htmlFor="logo_url">Or paste a logo URL</label>
           <input id="logo_url" name="logo_url" type="text" placeholder="https://..." />
         </div>
+        <LogoInvertPreview watchUrlInputId="logo_url" watchFileInputId="logo_file" />
         <button type="submit" className={styles.button}>Save and continue</button>
       </form>
 
