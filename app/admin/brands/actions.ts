@@ -31,6 +31,13 @@ export async function updateBrand(formData: FormData) {
 
   await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body, prefer: "return=minimal" });
 
+  // getBrandDirectory's brand read is cached under CATALOG_CACHE_TAG (see
+  // lib/supabase-rest.ts), same as every other catalog read -- without
+  // busting it here, the admin brands list redirect below re-renders from
+  // a stale cached read (up to an hour old) and a just-saved change (like
+  // the logo-invert checkbox) appears to silently revert.
+  revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
+  revalidatePath("/admin/brands");
   revalidatePath("/brands");
   revalidatePath("/");
   redirect(`/admin/brands?saved=${encodeURIComponent(slug)}`);
