@@ -28,7 +28,13 @@ export default async function AdminOverviewPage() {
     getActiveHomepageFeatureSchedule(new Date(), true),
   ]);
 
-  const interruptedSyncs = [...syncStatuses.values()].filter((status) => status.lastStatus === "failed").length;
+  // A brand whose store is password-protected or not yet live (mid-drop,
+  // pre-launch) gets a status='failed' sync run too, but it's an expected
+  // skip, not a broken import -- see lastFailureKind in lib/catalog-store.ts.
+  // Counting those here made this alert fire for completely normal brands
+  // and trained admins to ignore it; only count genuine scrape/classify
+  // failures as "interrupted".
+  const interruptedSyncs = [...syncStatuses.values()].filter((status) => status.lastStatus === "failed" && status.lastFailureKind !== "protected_storefront").length;
   const now = Date.now();
   const upcomingSchedules = schedules.filter((item) => new Date(item.startsAt).getTime() > now).length;
 

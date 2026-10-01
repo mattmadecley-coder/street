@@ -59,6 +59,7 @@ type Progress =
   | { state: "waiting"; done: number; total: number; pending: number }
   | { state: "finished" }
   | { state: "failed"; error: string | null }
+  | { state: "skipped"; reason: string | null }
   | { state: "idle" };
 
 function progressFor(brand: StreetBrandProfile, status: BrandSyncStatus | undefined, pending: number, classificationWasStarted: boolean): Progress {
@@ -76,7 +77,15 @@ function progressFor(brand: StreetBrandProfile, status: BrandSyncStatus | undefi
     };
   }
 
-  if (status?.lastStatus === "failed") return { state: "failed", error: status.lastError };
+  if (status?.lastStatus === "failed") {
+    // Closed/password-protected storefronts are an expected, self-describing
+    // skip (lib/catalog-store.ts's syncSingleBrand), not a broken import --
+    // they already get their own notice below via brand.storefrontStatus, so
+    // don't also flag them with the "Import interrupted" pill and a red
+    // error box meant for genuine scrape/classification failures.
+    if (status.lastFailureKind === "protected_storefront") return { state: "skipped", reason: status.lastError };
+    return { state: "failed", error: status.lastError };
+  }
 
   if (pending > 0) {
     const done = Math.max(0, brand.productCount - pending);
@@ -140,7 +149,10 @@ function BrandRow({ brand, status, pending, progress, diagnostic, logoCandidate,
           {progress.state === "failed" ? <span className={styles.pill}>Import interrupted</span> : null}
           {progress.state === "waiting" ? <span className={styles.pill}>{progress.pending} waiting to classify</span> : null}
         </span>
-        <span className={styles.rowMeta}>{brand.productCount} pieces · {timeAgo(status?.lastSyncedAt ?? null)}</span>
+        <span className={styles.rowMeta}>
+          {brand.productCount} pieces · last updated {timeAgo(status?.lastSuccessAt ?? null)}
+          {progress.state === "failed" ? ` (last attempt ${timeAgo(status?.lastSyncedAt ?? null)} failed)` : ""}
+        </span>
       </summary>
       <div className={styles.rowBody}>
         {brand.storefrontStatus === "closed" ? (
@@ -256,7 +268,7 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
   // the wizard hands off.
   if (justAdded && !inProgress.some((item) => item.brand.slug === justAdded)) {
     const match = withProgress.find((item) => item.brand.slug === justAdded);
-    if (match && match.progress.state !== "waiting" && match.progress.state !== "failed") {
+    if (match && match.progress.state !== "waiting" && match.progress.state !== "failed" && match.progress.state !== "skipped") {
       inProgress.unshift({ ...match, progress: { state: "importing" } });
     }
   }

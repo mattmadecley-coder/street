@@ -18,7 +18,16 @@ type SyncRunHistoryRow = { brand_id: string; started_at: string; completed_at: s
 export type StreetBrandProfile = { slug: string; name: string; storeUrl: string; logoUrl: string | null; logoInvert: boolean; instagramUrl: string | null; productCount: number; featured: boolean; catalogEnabled: boolean; createdAt: string; storefrontStatus: "unknown" | "open" | "closed"; storefrontStatusReason: string | null; storefrontCheckedAt: string | null };
 export type CatalogSyncResult = { brand: string; productCount: number; ok: boolean; error?: string };
 export type ClassificationRunResult = { id: string; title: string; status: "classified" | "needs_review" | "error"; group?: string; category?: string; tags?: string[]; error?: string };
-export type BrandSyncStatus = { lastSyncedAt: string | null; lastStatus: "running" | "success" | "failed" | null; lastProductCount: number | null; lastError: string | null };
+export type BrandSyncStatus = { lastSyncedAt: string | null; lastStatus: "running" | "success" | "failed" | null; lastProductCount: number | null; lastError: string | null; lastSuccessAt: string | null; lastFailureKind: "protected_storefront" | "error" | null };
+
+// Shared between the "closed storefront" error thrown in syncSingleBrand
+// below and the classification in getBrandSyncStatuses -- a closed/
+// password-gated storefront is an expected "nothing to import right now"
+// skip (mid-drop, pre-launch, etc), not a real scraping/classification
+// failure, so every caller that surfaces sync health (the brands page, the
+// admin overview's "interrupted" count) needs to tell the two apart instead
+// of lumping every status='failed' row together as "something's broken".
+const PROTECTED_STOREFRONT_ERROR_PREFIX = "Storefront appears password-protected or not yet live";
 
 // The classifier is text-only now (see lib/ai-product-classifier.ts) — no
 // images to fetch/send, so each call is fast and this can run a much bigger
@@ -259,10 +268,30 @@ export async function getBrandSyncStatuses(): Promise<Map<string, BrandSyncStatu
   try {
     const rows = await supabaseRest<SyncRunHistoryRow[]>("catalog_sync_runs?select=brand_id,started_at,completed_at,status,product_count,error_message,brands(slug)&order=started_at.desc&limit=300");
     const map = new Map<string, BrandSyncStatus>();
+    const successSeen = new Set<string>();
     for (const row of rows) {
       const slug = row.brands?.slug;
-      if (!slug || map.has(slug)) continue; // rows are newest-first, so the first hit per slug is the latest run
-      map.set(slug, { lastSyncedAt: row.completed_at ?? row.started_at, lastStatus: row.status, lastProductCount: row.product_count, lastError: row.error_message });
+      if (!slug) continue;
+      if (!map.has(slug)) {
+        // rows are newest-first, so the first hit per slug is the latest attempt
+        map.set(slug, {
+          lastSyncedAt: row.completed_at ?? row.started_at,
+          lastStatus: row.status,
+          lastProductCount: row.product_count,
+          lastError: row.error_message,
+          lastSuccessAt: null,
+          lastFailureKind: row.status === "failed" ? (row.error_message?.startsWith(PROTECTED_STOREFRONT_ERROR_PREFIX) ? "protected_storefront" : "error") : null,
+        });
+      }
+      // Separately, the first success per slug (still newest-first) is the
+      // most recent run that actually refreshed the catalog -- distinct from
+      // "latest attempt" above whenever the newest run failed or was skipped,
+      // so a brand's real catalog freshness never hides behind a more recent
+      // no-op attempt.
+      if (row.status === "success" && !successSeen.has(slug)) {
+        successSeen.add(slug);
+        map.get(slug)!.lastSuccessAt = row.completed_at ?? row.started_at;
+      }
     }
     return map;
   } catch (error) {
@@ -433,7 +462,7 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
     // instead of the generic "did not return any products" message so it
     // reads correctly in the sync history and doesn't get mistaken for a bug.
     if (health.status === "closed") {
-      throw new Error(`Storefront appears password-protected or not yet live${health.reason ? ` (${health.reason})` : ""} -- skipped this sync, nothing was changed.`);
+      throw new Error(`${PROTECTED_STOREFRONT_ERROR_PREFIX}${health.reason ? ` (${health.reason})` : ""} -- skipped this sync, nothing was changed.`);
     }
     if (!imported.length) throw new Error("The brand source did not return any products.");
 
