@@ -49,5 +49,19 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // Street sends brands real shoppers, but without its own attribution on
+  // the outgoing link, that traffic is invisible in the brand's own store
+  // analytics (Shopify/Squarespace/GA) -- indistinguishable from direct
+  // traffic. The 2026-10-01 Codex review flagged inconsistent/missing
+  // campaign-link labeling; this is the one outbound path every "Buy Now" /
+  // "Shop at <brand>" link funnels through, so tagging it here covers all of
+  // them consistently. Only set when absent, so a destination URL that
+  // already carries its own utm_* (unlikely, but possible via a brand's own
+  // marketing link) is never overwritten.
+  const campaign = (sourceComponent ?? "product_discovery").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40) || "product_discovery";
+  if (!destination.searchParams.has("utm_source")) destination.searchParams.set("utm_source", "streetdotcom");
+  if (!destination.searchParams.has("utm_medium")) destination.searchParams.set("utm_medium", "referral");
+  if (!destination.searchParams.has("utm_campaign")) destination.searchParams.set("utm_campaign", campaign);
+
   return NextResponse.redirect(destination, 307);
 }

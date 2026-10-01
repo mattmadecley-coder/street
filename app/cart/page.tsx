@@ -7,11 +7,29 @@ import { useCart, type CartItem } from "@/components/cart-context";
 
 type BrandGroup = { brandName: string; brandSlug: string; items: CartItem[]; subtotal: number; checkoutUrl: string; transfersCart: boolean };
 
+// This cart-transfer link goes straight to the brand's Shopify cart permalink
+// rather than through /api/out (that redirect can't carry a Shopify cart
+// permalink's path segment), so it needs its own copy of the same Street
+// attribution /api/out adds -- otherwise this one checkout path would be the
+// only outbound link on the site invisible in a brand's own store analytics.
+function withStreetAttribution(url: string, campaign: string) {
+  try {
+    const withParams = new URL(url);
+    if (!withParams.searchParams.has("utm_source")) withParams.searchParams.set("utm_source", "streetdotcom");
+    if (!withParams.searchParams.has("utm_medium")) withParams.searchParams.set("utm_medium", "referral");
+    if (!withParams.searchParams.has("utm_campaign")) withParams.searchParams.set("utm_campaign", campaign);
+    return withParams.toString();
+  } catch {
+    return url;
+  }
+}
+
 function brandCheckout(items: CartItem[]) {
   const origin = (() => { try { return new URL(items[0].sourceUrl).origin; } catch { return items[0].sourceUrl; } })();
   const variants = items.map((item) => ({ id: item.variantId?.match(/\d+$/)?.[0], quantity: item.quantity }));
   const transfersCart = variants.every((variant) => Boolean(variant.id));
-  return { checkoutUrl: transfersCart ? `${origin}/cart/${variants.map((variant) => `${variant.id}:${variant.quantity}`).join(",")}` : origin, transfersCart };
+  const checkoutUrl = transfersCart ? `${origin}/cart/${variants.map((variant) => `${variant.id}:${variant.quantity}`).join(",")}` : origin;
+  return { checkoutUrl: withStreetAttribution(checkoutUrl, "cart_checkout"), transfersCart };
 }
 
 function CartImageFallback() {
