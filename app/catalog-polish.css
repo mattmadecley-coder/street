@@ -62,11 +62,24 @@
 .search-overlay-panel .search-overlay-close:hover,
 .search-overlay-panel .search-overlay-close:focus-visible { background: #101010; color: #f4f3ee; outline: none; transform: rotate(5deg); }
 .search-overlay-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+.search-overlay-field { position: relative; min-width: 0; }
 .search-overlay-panel .search-overlay-form input { min-width: 0; width: 100%; height: 58px; padding: 0 16px; border: 1px solid rgba(16,16,16,.3); border-radius: 0; background: #fff; color: #101010; font-size: 16px; outline: none; }
 .search-overlay-panel .search-overlay-form input:focus { border-color: #101010; box-shadow: 0 0 0 1px #101010; }
 .search-overlay-panel .search-overlay-submit { height: 58px; padding: 0 26px; border: 0; border-radius: 0; background: #101010; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
 .search-overlay-panel .search-overlay-submit:hover,
 .search-overlay-panel .search-overlay-submit:focus-visible { background: #2a2a2a; outline: 2px solid #f4f3ee; outline-offset: -4px; }
+
+/* Brand typeahead: a short dropdown of matching brands under the search
+   input, positioned to sit just below the input regardless of the submit
+   button beside it (the field wrapper, not the whole grid row, anchors it). */
+.search-brand-suggestions { position: absolute; z-index: 2; top: calc(100% + 6px); left: 0; right: 0; margin: 0; padding: 6px; list-style: none; background: #fff; border: 1px solid rgba(16,16,16,.3); box-shadow: 0 18px 40px rgba(0,0,0,.18); max-height: 280px; overflow-y: auto; }
+.search-brand-suggestions li { margin: 0; }
+.search-brand-suggestions a { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; color: #101010; text-decoration: none; font-size: 14px; }
+.search-brand-suggestions a:hover,
+.search-brand-suggestions a.is-highlighted,
+.search-brand-suggestions a:focus-visible { background: rgba(16,16,16,.06); outline: none; }
+.search-brand-suggestion-label { font-weight: 600; }
+.search-brand-suggestion-hint { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: rgba(16,16,16,.45); }
 
 @media (max-width: 840px) {
   .desktop-cart-link { display: none; }
