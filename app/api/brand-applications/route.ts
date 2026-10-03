@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseRest } from "@/lib/supabase-rest";
+import { notifyNewBrandApplication } from "@/lib/application-notify";
 
 const clean = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, max);
 
@@ -29,6 +30,14 @@ export async function POST(request: Request) {
     }
 
     await supabaseRest("brand_applications", { method: "POST", body: application, prefer: "return=minimal" });
+
+    // The application is already saved, so a failed notification must never
+    // turn into a failed submission for the brand.
+    try {
+      await notifyNewBrandApplication(application);
+    } catch (notifyError) {
+      console.error("Brand application saved but notification email failed", notifyError);
+    }
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
     console.error("Brand application submission failed", error);
