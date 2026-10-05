@@ -67,31 +67,32 @@ export async function computeBrandReportStats(brandSlug: string, date: string): 
   const { start, end } = easternDayRange(date);
   const slug = encodeURIComponent(brandSlug);
 
-  const clicks = await supabaseRest<Array<{ product_slug: string | null; product_title: string | null; product_price: number | null; anonymous_user_id: string | null }>>(
-    `outbound_clicks?select=product_slug,product_title,product_price,anonymous_user_id&brand_slug=eq.${slug}&created_at=gte.${start}&created_at=lt.${end}`,
+  const clicks = await supabaseRest<Array<{ product_id: string | null; product_slug: string | null; product_title: string | null; product_price: number | null; anonymous_user_id: string | null }>>(
+    `outbound_clicks?select=product_id,product_slug,product_title,product_price,anonymous_user_id&brand_slug=eq.${slug}&created_at=gte.${start}&created_at=lt.${end}`,
     { noStore: true },
   );
 
-  const byProduct = new Map<string, ReportProduct>();
+  const byProduct = new Map<string, ReportProduct & { productId: string | null }>();
   for (const click of clicks) {
     const key = click.product_slug ?? "store";
-    const entry = byProduct.get(key) ?? { slug: key, title: click.product_title ?? "Store homepage", price: click.product_price, imageUrl: null, clicks: 0 };
+    const entry = byProduct.get(key) ?? { slug: key, productId: click.product_id, title: click.product_title ?? "Store homepage", price: click.product_price, imageUrl: null, clicks: 0 };
     entry.clicks += 1;
     byProduct.set(key, entry);
   }
 
-  const productSlugs = [...byProduct.keys()].filter((key) => key !== "store");
-  if (productSlugs.length) {
-    const rows = await supabaseRest<Array<{ slug: string; title: string; primary_image_url: string | null }>>(
-      `products?select=slug,title,primary_image_url&slug=in.(${productSlugs.map((s) => `"${s.replace(/"/g, "")}"`).join(",")})`,
+  const productIds = [...new Set([...byProduct.values()].map((entry) => entry.productId).filter((id): id is string => Boolean(id)))];
+  if (productIds.length) {
+    const rows = await supabaseRest<Array<{ id: string; title: string; price: number | null; primary_image_url: string | null }>>(
+      `products?select=id,title,price,primary_image_url&id=in.(${productIds.join(",")})`,
       { noStore: true },
     );
-    for (const row of rows) {
-      const entry = byProduct.get(row.slug);
-      if (entry) {
-        entry.imageUrl = row.primary_image_url;
-        if (!entry.title || entry.title === "Store homepage") entry.title = row.title;
-      }
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    for (const entry of byProduct.values()) {
+      const row = entry.productId ? byId.get(entry.productId) : undefined;
+      if (!row) continue;
+      entry.imageUrl = row.primary_image_url;
+      if (!entry.title || entry.title === "Store homepage") entry.title = row.title;
+      if (entry.price == null) entry.price = row.price;
     }
   }
 
@@ -108,7 +109,7 @@ export async function computeBrandReportStats(brandSlug: string, date: string): 
     productViews,
     impressions,
     allTimeClicks: allTime.total,
-    products: [...byProduct.values()].sort((a, b) => b.clicks - a.clicks).slice(0, 6),
+    products: [...byProduct.values()].sort((a, b) => b.clicks - a.clicks).slice(0, 6).map(({ productId: _productId, ...product }) => product),
   };
 }
 
@@ -125,8 +126,13 @@ function thumb(url: string | null) {
 
 export type RenderInput = { brand: BrandRow; stats: ReportStats; isFirst: boolean; unsubscribeUrl: string; mailingAddress: string | null };
 
+/** "yesterday" when it really was yesterday (Eastern), otherwise "on Tuesday, September 29". */
+function whenLabel(date: string) {
+  return date === easternYesterday() ? "yesterday" : `on ${prettyDate(date)}`;
+}
+
 export function reportSubject({ brand, stats }: Pick<RenderInput, "brand" | "stats">) {
-  return `${brand.name} got ${plural(stats.shoppers, "shopper")} from Street yesterday`;
+  return `${brand.name} got ${plural(stats.shoppers, "shopper")} from Street ${whenLabel(stats.date)}`;
 }
 
 export function renderBrandReport(input: RenderInput): { subject: string; html: string; text: string } {
@@ -136,10 +142,11 @@ export function renderBrandReport(input: RenderInput): { subject: string; html: 
   const name = esc(brand.name);
   const subject = reportSubject(input);
 
-  const headline = `We sent ${plural(stats.shoppers, "shopper")} to ${name} yesterday.`;
+  const when = whenLabel(stats.date);
+  const headline = `We sent ${plural(stats.shoppers, "shopper")} to ${name} ${when}.`;
   const intro = isFirst
-    ? `Hi ${name} team — we're Street (streetdotcom.com), a place where people discover independent streetwear brands and then buy straight from the brand. ${name} is listed on Street, and yesterday shoppers found you there and clicked through to your store. Here's what caught their eye.`
-    : `Here's what shoppers on Street were checking out from ${name} yesterday.`;
+    ? `Hi ${name} team — we're Street (streetdotcom.com), a place where people discover independent streetwear brands and then buy straight from the brand. ${name} is listed on Street, and ${when} shoppers found you there and clicked through to your store. Here's what caught their eye.`
+    : `Here's what shoppers on Street were checking out from ${name} ${when}.`;
 
   const stat = (value: number, label: string) => `
     <td width="33%" valign="top" style="padding:14px 12px;border:1px solid #dddbd3;background:#ffffff;">
@@ -209,7 +216,7 @@ export function renderBrandReport(input: RenderInput): { subject: string; html: 
   const text = [
     `STREET — Daily report, ${prettyDate(stats.date)}`,
     "",
-    `We sent ${plural(stats.shoppers, "shopper")} to ${brand.name} yesterday.`,
+    `We sent ${plural(stats.shoppers, "shopper")} to ${brand.name} ${when}.`,
     "",
     intro.replace(/&amp;/g, "&"),
     "",
