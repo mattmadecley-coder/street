@@ -9,7 +9,9 @@ import { supabaseRest, supabaseRestPage } from "@/lib/supabase-rest";
 const SITE = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://streetdotcom.com").replace(/\/$/, "");
 const TZ = "America/New_York";
 
-export type ReportProduct = { slug: string; title: string; price: number | null; imageUrl: string | null; clicks: number };
+// clicks = raw outbound clicks; shoppers = distinct people. One person often
+// clicks twice (product page, then cart), so emails show shoppers, not clicks.
+export type ReportProduct = { slug: string; title: string; price: number | null; imageUrl: string | null; clicks: number; shoppers?: number };
 export type ReportStats = {
   date: string; // YYYY-MM-DD (Eastern)
   clicks: number;
@@ -17,6 +19,7 @@ export type ReportStats = {
   productViews: number;
   impressions: number;
   allTimeClicks: number;
+  allTimeShoppers?: number;
   products: ReportProduct[];
 };
 
@@ -72,13 +75,14 @@ export async function computeBrandReportStats(brandSlug: string, date: string): 
     { noStore: true },
   );
 
-  const byProduct = new Map<string, ReportProduct & { productId: string | null }>();
-  for (const click of clicks) {
+  const byProduct = new Map<string, ReportProduct & { productId: string | null; people: Set<string> }>();
+  clicks.forEach((click, index) => {
     const key = click.product_slug ?? "store";
-    const entry = byProduct.get(key) ?? { slug: key, productId: click.product_id, title: click.product_title ?? "Store homepage", price: click.product_price, imageUrl: null, clicks: 0 };
+    const entry = byProduct.get(key) ?? { slug: key, productId: click.product_id, title: click.product_title ?? "Store homepage", price: click.product_price, imageUrl: null, clicks: 0, people: new Set<string>() };
     entry.clicks += 1;
+    entry.people.add(click.anonymous_user_id ?? `unknown-${index}`);
     byProduct.set(key, entry);
-  }
+  });
 
   const productIds = [...new Set([...byProduct.values()].map((entry) => entry.productId).filter((id): id is string => Boolean(id)))];
   if (productIds.length) {
@@ -99,7 +103,7 @@ export async function computeBrandReportStats(brandSlug: string, date: string): 
   const [productViews, impressions, allTime] = await Promise.all([
     countEvents("product_view", brandSlug, start, end),
     countEvents("product_impression", brandSlug, start, end),
-    supabaseRestPage<{ id: string }>(`outbound_clicks?select=id&brand_slug=eq.${slug}`, { from: 0, to: 0 }, { noStore: true }),
+    supabaseRest<Array<{ anonymous_user_id: string | null }>>(`outbound_clicks?select=anonymous_user_id&brand_slug=eq.${slug}&created_at=lt.${end}`, { noStore: true }),
   ]);
 
   return {
@@ -108,8 +112,12 @@ export async function computeBrandReportStats(brandSlug: string, date: string): 
     shoppers: new Set(clicks.map((click) => click.anonymous_user_id).filter(Boolean)).size || clicks.length,
     productViews,
     impressions,
-    allTimeClicks: allTime.total,
-    products: [...byProduct.values()].sort((a, b) => b.clicks - a.clicks).slice(0, 6).map(({ productId: _productId, ...product }) => product),
+    allTimeClicks: allTime.length,
+    allTimeShoppers: new Set(allTime.map((row, index) => row.anonymous_user_id ?? `unknown-${index}`)).size,
+    products: [...byProduct.values()]
+      .map(({ productId: _productId, people, ...product }) => ({ ...product, shoppers: people.size }))
+      .sort((a, b) => b.shoppers - a.shoppers || b.clicks - a.clicks)
+      .slice(0, 6),
   };
 }
 
@@ -153,8 +161,10 @@ function renderFullReport(input: RenderInput): { subject: string; html: string; 
     ? `Hi ${name} team — we're Street (streetdotcom.com), a place where people discover independent streetwear brands and then buy straight from the brand. ${name} is listed on Street, and ${when} shoppers found you there and clicked through to your store. Here's what caught their eye.`
     : `Here's what shoppers on Street were checking out from ${name} ${when}.`;
 
-  const stat = (value: number, label: string) => `
-    <td width="33%" valign="top" style="padding:14px 12px;border:1px solid #dddbd3;background:#ffffff;">
+  // "Times shown" only counts the browse grid; hide it when 0 (e.g. a shopper who came straight from Google).
+  const boxWidth = stats.impressions > 0 ? "33%" : "50%";
+  const stat = (value: number, label: string, width: string) => `
+    <td width="${width}" valign="top" style="padding:14px 12px;border:1px solid #dddbd3;background:#ffffff;">
       <div style="font-size:26px;line-height:30px;font-weight:700;letter-spacing:-0.5px;color:#101010;">${value.toLocaleString("en-US")}</div>
       <div style="font-size:10px;line-height:14px;letter-spacing:1.2px;text-transform:uppercase;color:#6b6a65;padding-top:4px;">${label}</div>
     </td>`;
@@ -172,7 +182,7 @@ function renderFullReport(input: RenderInput): { subject: string; html: string; 
           ${product.price != null ? `<div style="font-size:13px;line-height:18px;color:#6b6a65;">$${Number(product.price).toFixed(2)}</div>` : ""}
         </td>
         <td align="right" valign="middle" style="padding:10px 0 10px 12px;border-top:1px solid #e4e2da;font-size:13px;line-height:18px;color:#101010;white-space:nowrap;">
-          ${plural(product.clicks, "click")}
+          ${plural(product.shoppers ?? product.clicks, "shopper")}
         </td>
       </tr>`;
   }).join("");
@@ -180,7 +190,7 @@ function renderFullReport(input: RenderInput): { subject: string; html: string; 
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(subject)}</title></head>
 <body style="margin:0;padding:0;background:#f4f3ee;">
-<div style="display:none;max-height:0;overflow:hidden;color:#f4f3ee;">${plural(stats.clicks, "click")} from Street shoppers to your store on ${esc(prettyDate(stats.date))}.</div>
+<div style="display:none;max-height:0;overflow:hidden;color:#f4f3ee;">${plural(stats.shoppers, "shopper")} from Street visited your store on ${esc(prettyDate(stats.date))}.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f3ee;">
 <tr><td align="center" style="padding:28px 16px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;font-family:Arial,Helvetica,sans-serif;color:#101010;">
@@ -194,7 +204,7 @@ function renderFullReport(input: RenderInput): { subject: string; html: string; 
   <tr><td style="padding:0 0 22px;font-size:15px;line-height:23px;color:#2b2a27;">${intro}</td></tr>
   <tr><td style="padding:0 0 26px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
-      ${stat(stats.clicks, "Clicks to your store")}${stat(stats.productViews, "Product views")}${stat(stats.impressions, "Times shown")}
+      ${stat(stats.shoppers, "Shoppers sent to your store", boxWidth)}${stat(stats.productViews, "Product views", boxWidth)}${stats.impressions > 0 ? stat(stats.impressions, "Times shown in browse", boxWidth) : ""}
     </tr></table>
   </td></tr>
   ${stats.products.length ? `
@@ -204,7 +214,7 @@ function renderFullReport(input: RenderInput): { subject: string; html: string; 
     We know these numbers are small right now. Street is new and growing every week, so give us a little time and they'll get bigger. We built Street to connect real customers with brands the world deserves to know about, and ${name} is one of them.
   </td></tr>
   <tr><td style="padding:0 0 22px;font-size:13px;line-height:20px;color:#6b6a65;">
-    These visits show up in your Shopify analytics under the source <strong style="color:#101010;">streetdotcom</strong>.${stats.allTimeClicks > stats.clicks ? ` That's ${plural(stats.allTimeClicks, "click")} to your store from Street so far.` : ""}
+    These visits show up in your Shopify analytics under the source <strong style="color:#101010;">streetdotcom</strong>.${(stats.allTimeShoppers ?? 0) > stats.shoppers ? ` That's ${plural(stats.allTimeShoppers ?? 0, "shopper")} sent to your store from Street so far.` : ""}
   </td></tr>
   <tr><td style="padding:0 0 28px;"><a href="${esc(brandUrl)}" style="display:inline-block;background:#101010;color:#ffffff;text-decoration:none;font-size:11px;line-height:14px;letter-spacing:1.4px;text-transform:uppercase;font-weight:700;padding:13px 18px;">See ${name} on Street &rarr;</a></td></tr>
   <tr><td style="padding:0 0 28px;font-size:15px;line-height:23px;color:#2b2a27;">
@@ -225,11 +235,11 @@ function renderFullReport(input: RenderInput): { subject: string; html: string; 
     "",
     intro.replace(/&amp;/g, "&"),
     "",
-    `Clicks to your store: ${stats.clicks}`,
+    `Shoppers sent to your store: ${stats.shoppers}`,
     `Product views: ${stats.productViews}`,
-    `Times shown: ${stats.impressions}`,
+    ...(stats.impressions > 0 ? [`Times shown in browse: ${stats.impressions}`] : []),
     "",
-    ...(stats.products.length ? ["What they clicked:", ...stats.products.map((p) => `- ${p.title}${p.price != null ? ` ($${Number(p.price).toFixed(2)})` : ""}: ${plural(p.clicks, "click")}`), ""] : []),
+    ...(stats.products.length ? ["What they clicked:", ...stats.products.map((p) => `- ${p.title}${p.price != null ? ` ($${Number(p.price).toFixed(2)})` : ""}: ${plural(p.shoppers ?? p.clicks, "shopper")}`), ""] : []),
     `We know these numbers are small right now. Street is new and growing every week, so give us a little time and they'll get bigger. We built Street to connect real customers with brands the world deserves to know about, and ${brand.name} is one of them.`,
     "",
     "These visits show up in your Shopify analytics under the source \"streetdotcom\".",
@@ -256,7 +266,8 @@ function renderShortReport(input: RenderInput): { subject: string; html: string;
   const when = whenLabel(stats.date);
   const headline = `${plural(stats.shoppers, "shopper")} clicked through to ${name} ${when}.`;
   const intro = isFirst ? "We're Street, a discovery site for independent streetwear. Shoppers find you here, then buy from your store." : "";
-  const summary = `${plural(stats.clicks, "click")} to your store &middot; ${plural(stats.productViews, "product view")} &middot; shown ${plural(stats.impressions, "time")}`;
+  // Shoppers (people), not raw clicks; "shown in browse" only when the browse grid actually showed them.
+  const summary = `${plural(stats.shoppers, "shopper")} sent to your store &middot; ${plural(stats.productViews, "product view")}${stats.impressions > 0 ? ` &middot; shown ${plural(stats.impressions, "time")} in browse` : ""}`;
   const products = stats.products.slice(0, 3);
 
   const productRows = products.map((product) => {
@@ -266,7 +277,7 @@ function renderShortReport(input: RenderInput): { subject: string; html: string;
       <tr>
         <td width="56" valign="middle" style="padding:8px 12px 8px 0;">${image ? `<img src="${esc(image)}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;object-fit:cover;background:#ebe9e2;border:0;">` : ""}</td>
         <td valign="middle" style="padding:8px 0;font-size:14px;line-height:19px;"><a href="${esc(link)}" style="color:#101010;text-decoration:none;font-weight:700;">${esc(product.title)}</a></td>
-        <td align="right" valign="middle" style="padding:8px 0 8px 12px;font-size:13px;color:#6b6a65;white-space:nowrap;">${plural(product.clicks, "click")}</td>
+        <td align="right" valign="middle" style="padding:8px 0 8px 12px;font-size:13px;color:#6b6a65;white-space:nowrap;">${plural(product.shoppers ?? product.clicks, "shopper")}</td>
       </tr>`;
   }).join("");
 
@@ -294,7 +305,7 @@ function renderShortReport(input: RenderInput): { subject: string; html: string;
     `${plural(stats.shoppers, "shopper")} clicked through to ${brand.name} ${when}.`,
     ...(isFirst ? ["", "We're Street, a discovery site for independent streetwear. Shoppers find you here, then buy from your store."] : []),
     "",
-    ...products.map((p) => `- ${p.title}: ${plural(p.clicks, "click")}`),
+    ...products.map((p) => `- ${p.title}: ${plural(p.shoppers ?? p.clicks, "shopper")}`),
     "",
     summary.replace(/&middot;/g, "·"),
     `Your Street page: ${brandUrl}`,
