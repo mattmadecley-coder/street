@@ -26,7 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const brandRoutes: MetadataRoute.Sitemap = brands
     .filter((brand) => brand.productCount > 0)
     .map((brand) => ({
-      url: `${siteUrl}/catalog?brand=${brand.slug}`,
+      url: `${siteUrl}/brands/${brand.slug}`,
       changeFrequency: "daily",
       priority: 0.5,
     }));

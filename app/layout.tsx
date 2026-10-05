@@ -18,11 +18,47 @@ const googleAnalyticsId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "G-E621RK
 // It's meant to be public (it ships in every page's HTML), so no fallback secret to worry about here.
 const cloudflareBeaconToken = process.env.NEXT_PUBLIC_CF_BEACON_TOKEN;
 const title = "Street — Discover independent streetwear";
-const description = "Search independent streetwear brands in one place, then buy straight from the brand.";
+// Homepage <title> also carries "streetdotcom" so a search for the domain-style
+// name matches the page text exactly, not just the URL.
+const homeTitle = "Street (streetdotcom) — Discover independent streetwear";
+const description = "Street (streetdotcom) is a search engine for independent streetwear brands — browse them all in one place, then buy straight from the brand.";
+
+// Structured data: tells Google the site's name is "Street" (also known as
+// "streetdotcom"), which is what shows as the site name in search results,
+// and links the official Instagram account to the site.
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${siteUrl}/#website`,
+      url: `${siteUrl}/`,
+      name: "Street",
+      alternateName: ["streetdotcom", "Street.com", "streetdotcom.com"],
+      description,
+      publisher: { "@id": `${siteUrl}/#organization` },
+      potentialAction: {
+        "@type": "SearchAction",
+        target: { "@type": "EntryPoint", urlTemplate: `${siteUrl}/catalog?q={search_term_string}` },
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@type": "Organization",
+      "@id": `${siteUrl}/#organization`,
+      name: "Street",
+      alternateName: "streetdotcom",
+      url: `${siteUrl}/`,
+      logo: `${siteUrl}/icon.png`,
+      sameAs: ["https://www.instagram.com/streetdotcomstreetwear/"],
+    },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: title, template: "%s · Street" },
+  applicationName: "Street",
+  title: { default: homeTitle, template: "%s · Street" },
   description,
   // Routes below override this with their own path; this default covers
   // the homepage and any route that doesn't set its own canonical.
@@ -41,6 +77,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+        />
         <CartProvider>
           <SavedProvider>
             {children}

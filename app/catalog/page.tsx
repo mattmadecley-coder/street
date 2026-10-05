@@ -76,6 +76,9 @@ function indexableCatalogCanonical(params: Params) {
   for (const key of ["brand", "group", "category", "type", "detail"] as const) {
     if (params[key]) search.set(key, params[key]!);
   }
+  // A brand-only filter is the same listing as the brand's own page, so point
+  // search engines at /brands/{slug} instead of indexing both.
+  if (params.brand && search.size === 1) return `/brands/${encodeURIComponent(params.brand)}`;
   const query = search.toString();
   return query ? `/catalog?${query}` : "/catalog";
 }
@@ -84,7 +87,13 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   const params = await searchParams;
   const hasNonIndexableFilter = NON_INDEXABLE_CATALOG_PARAMS.some((key) => Boolean(params[key]));
   if (hasNonIndexableFilter) {
-    return { robots: { index: false, follow: false } };
+    // Without its own canonical this inherited the root layout's "/" — so
+    // every filtered catalog URL told Google it was a copy of the homepage
+    // (GSC: homepage "Duplicate without user-selected canonical").
+    return {
+      robots: { index: false, follow: true },
+      alternates: { canonical: indexableCatalogCanonical(params) },
+    };
   }
 
   const canonical = indexableCatalogCanonical(params);
