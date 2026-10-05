@@ -2,12 +2,12 @@ import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { SubmitButton } from "@/components/admin/submit-button";
 import { supabaseRest } from "@/lib/supabase-rest";
-import { easternYesterday, reportsConfig, type ReportRow } from "@/lib/brand-report";
+import { easternYesterday, renderBrandReport, reportsConfig, type ReportRow } from "@/lib/brand-report";
 import { findContactsAction, generateReportsAction, saveContactAction, sendAllDraftsAction, sendReportAction, skipReportAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-type ReportWithBrand = ReportRow & { brands: { slug: string; name: string } | null };
+type ReportWithBrand = ReportRow & { brands: { id: string; slug: string; name: string } | null };
 type BrandContact = {
   id: string; slug: string; name: string; store_url: string;
   brand_contacts: { contact_email: string | null; contact_email_source: string | null; contact_email_checked_at: string | null; reports_opted_out_at: string | null } | null;
@@ -19,7 +19,7 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
   const params = await searchParams;
   const config = reportsConfig();
   const [reports, brands] = await Promise.all([
-    supabaseRest<ReportWithBrand[]>("brand_report_emails?select=*,brands(slug,name)&order=report_date.desc,created_at.desc&limit=60", { noStore: true }),
+    supabaseRest<ReportWithBrand[]>("brand_report_emails?select=*,brands(id,slug,name)&order=report_date.desc,created_at.desc&limit=60", { noStore: true }),
     supabaseRest<BrandContact[]>("brands?select=id,slug,name,store_url,brand_contacts(contact_email,contact_email_source,contact_email_checked_at,reports_opted_out_at)&is_active=eq.true&order=name.asc", { noStore: true }),
   ]);
 
@@ -80,19 +80,34 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
                   </summary>
                   <div className={styles.rowBody}>
                     <p className={styles.rowMeta}>Subject: <strong>{row.subject}</strong></p>
-                    <iframe title={`Preview for ${row.brands?.name}`} srcDoc={row.html} style={{ width: "100%", maxWidth: 640, height: 900, border: "1px solid rgba(16,16,16,.16)", background: "#f4f3ee" }} />
-                    {row.status !== "sent" ? (
-                      <div className={styles.actions} style={{ display: "flex", gap: 10, marginTop: 12 }}>
-                        <form action={sendReportAction}><input type="hidden" name="id" value={row.id} />
-                          <SubmitButton pendingText="Sending…" className={styles.button} disabled={blockers.length > 0 || !row.to_email}>Approve &amp; send</SubmitButton>
-                        </form>
+                    {row.status === "sent" ? (
+                      <>
+                        <iframe title={`Sent email for ${row.brands?.name}`} srcDoc={row.html} style={{ width: "100%", maxWidth: 640, height: 900, border: "1px solid rgba(16,16,16,.16)", background: "#f4f3ee" }} />
+                        <p className={styles.rowMeta}>Sent {row.sent_at ? new Date(row.sent_at).toLocaleString("en-US", { timeZone: "America/New_York" }) : ""} ET</p>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+                          {(["short", "full"] as const).map((variant) => {
+                            const preview = row.brands ? renderBrandReport({ brand: row.brands, stats: row.stats, isFirst: row.is_first, unsubscribeUrl: "#unsubscribe-preview", mailingAddress: config.mailingAddress, variant }) : null;
+                            return (
+                              <div key={variant} style={{ flex: "1 1 360px", maxWidth: 640 }}>
+                                <p className={styles.rowMeta}><strong>{variant === "short" ? "Short version" : "Full version"}</strong>{variant === config.template ? " · default" : ""}</p>
+                                {preview ? <iframe title={`${variant} preview for ${row.brands?.name}`} srcDoc={preview.html} style={{ width: "100%", height: variant === "short" ? 560 : 900, border: "1px solid rgba(16,16,16,.16)", background: "#f4f3ee" }} /> : null}
+                                <form action={sendReportAction} style={{ marginTop: 10 }}><input type="hidden" name="id" value={row.id} /><input type="hidden" name="variant" value={variant} />
+                                  <SubmitButton pendingText="Sending…" className={styles.button} disabled={blockers.length > 0 || !row.to_email}>Approve &amp; send {variant} version</SubmitButton>
+                                </form>
+                              </div>
+                            );
+                          })}
+                        </div>
                         {row.status !== "skipped" ? (
-                          <form action={skipReportAction}><input type="hidden" name="id" value={row.id} />
+                          <form action={skipReportAction} style={{ marginTop: 12 }}><input type="hidden" name="id" value={row.id} />
                             <SubmitButton pendingText="…" className={styles.buttonSecondary}>Skip</SubmitButton>
                           </form>
                         ) : null}
-                      </div>
-                    ) : <p className={styles.rowMeta}>Sent {row.sent_at ? new Date(row.sent_at).toLocaleString("en-US", { timeZone: "America/New_York" }) : ""} ET</p>}
+                      </>
+                    )}
                   </div>
                 </details>
               ))}

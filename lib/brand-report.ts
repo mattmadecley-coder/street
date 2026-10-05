@@ -124,7 +124,8 @@ function thumb(url: string | null) {
   return url;
 }
 
-export type RenderInput = { brand: BrandRow; stats: ReportStats; isFirst: boolean; unsubscribeUrl: string; mailingAddress: string | null };
+export type ReportVariant = "full" | "short";
+export type RenderInput = { brand: BrandRow; stats: ReportStats; isFirst: boolean; unsubscribeUrl: string; mailingAddress: string | null; variant?: ReportVariant };
 
 /** "yesterday" when it really was yesterday (Eastern), otherwise "on Tuesday, September 29". */
 function whenLabel(date: string) {
@@ -136,6 +137,10 @@ export function reportSubject({ brand, stats }: Pick<RenderInput, "brand" | "sta
 }
 
 export function renderBrandReport(input: RenderInput): { subject: string; html: string; text: string } {
+  return (input.variant ?? reportsConfig().template) === "short" ? renderShortReport(input) : renderFullReport(input);
+}
+
+function renderFullReport(input: RenderInput): { subject: string; html: string; text: string } {
   const { brand, stats, isFirst, unsubscribeUrl } = input;
   const address = input.mailingAddress?.trim() || "[MAILING ADDRESS NOT SET]";
   const brandUrl = `${SITE}/brands/${brand.slug}`;
@@ -203,7 +208,7 @@ export function renderBrandReport(input: RenderInput): { subject: string; html: 
   </td></tr>
   <tr><td style="padding:0 0 28px;"><a href="${esc(brandUrl)}" style="display:inline-block;background:#101010;color:#ffffff;text-decoration:none;font-size:11px;line-height:14px;letter-spacing:1.4px;text-transform:uppercase;font-weight:700;padding:13px 18px;">See ${name} on Street &rarr;</a></td></tr>
   <tr><td style="padding:0 0 28px;font-size:15px;line-height:23px;color:#2b2a27;">
-    Questions, or something about your listing you'd like changed? Just reply to this email — we read every one.<br><br>— Matthew, Street
+    Questions, or something about your listing you'd like changed? Just reply to this email — we read every one.<br><br>— Matthew from Street
   </td></tr>
   <tr><td style="padding:18px 0 0;border-top:1px solid #dddbd3;font-size:11px;line-height:17px;color:#8a8983;">
     You're getting this because ${name} is listed on Street (<a href="${SITE}" style="color:#8a8983;">streetdotcom.com</a>). We only email on days Street sends you traffic.
@@ -232,7 +237,70 @@ export function renderBrandReport(input: RenderInput): { subject: string; html: 
     `See ${brand.name} on Street: ${brandUrl}`,
     "",
     "Questions, or something about your listing you'd like changed? Just reply to this email.",
-    "— Matthew, Street",
+    "— Matthew from Street",
+    "",
+    `Unsubscribe: ${unsubscribeUrl}`,
+    `Street · ${address}`,
+  ].join("\n");
+
+  return { subject, html, text };
+}
+
+/** Shorter version for cold inboxes: one headline, what they clicked, one line about Street, sign-off. */
+function renderShortReport(input: RenderInput): { subject: string; html: string; text: string } {
+  const { brand, stats, isFirst, unsubscribeUrl } = input;
+  const address = input.mailingAddress?.trim() || "[MAILING ADDRESS NOT SET]";
+  const brandUrl = `${SITE}/brands/${brand.slug}`;
+  const name = esc(brand.name);
+  const subject = reportSubject(input);
+  const when = whenLabel(stats.date);
+  const headline = `${plural(stats.shoppers, "shopper")} clicked through to ${name} ${when}.`;
+  const intro = isFirst ? "We're Street, a discovery site for independent streetwear. Shoppers find you here, then buy from your store." : "";
+  const summary = `${plural(stats.clicks, "click")} to your store &middot; ${plural(stats.productViews, "product view")} &middot; shown ${plural(stats.impressions, "time")}`;
+  const products = stats.products.slice(0, 3);
+
+  const productRows = products.map((product) => {
+    const image = thumb(product.imageUrl);
+    const link = product.slug === "store" ? brandUrl : `${SITE}/products/${product.slug}`;
+    return `
+      <tr>
+        <td width="56" valign="middle" style="padding:8px 12px 8px 0;">${image ? `<img src="${esc(image)}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;object-fit:cover;background:#ebe9e2;border:0;">` : ""}</td>
+        <td valign="middle" style="padding:8px 0;font-size:14px;line-height:19px;"><a href="${esc(link)}" style="color:#101010;text-decoration:none;font-weight:700;">${esc(product.title)}</a></td>
+        <td align="right" valign="middle" style="padding:8px 0 8px 12px;font-size:13px;color:#6b6a65;white-space:nowrap;">${plural(product.clicks, "click")}</td>
+      </tr>`;
+  }).join("");
+
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f4f3ee;">
+<div style="display:none;max-height:0;overflow:hidden;color:#f4f3ee;">${summary.replace(/&middot;/g, "·")}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f3ee;">
+<tr><td align="center" style="padding:28px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;font-family:Arial,Helvetica,sans-serif;color:#101010;">
+  <tr><td style="padding:0 0 22px;font-size:20px;line-height:22px;font-weight:700;letter-spacing:-1.4px;"><a href="${SITE}" style="color:#101010;text-decoration:none;">STREET</a></td></tr>
+  <tr><td style="padding:0 0 10px;font-size:24px;line-height:29px;font-weight:700;letter-spacing:-0.8px;">${headline}</td></tr>
+  ${intro ? `<tr><td style="padding:0 0 18px;font-size:15px;line-height:22px;color:#2b2a27;">${intro}</td></tr>` : ""}
+  ${productRows ? `<tr><td style="padding:0 0 14px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #dddbd3;border-bottom:1px solid #dddbd3;">${productRows}</table></td></tr>` : ""}
+  <tr><td style="padding:0 0 22px;font-size:12px;line-height:18px;color:#6b6a65;">${summary} &middot; <a href="${esc(brandUrl)}" style="color:#6b6a65;">your Street page</a></td></tr>
+  <tr><td style="padding:0 0 26px;font-size:15px;line-height:22px;color:#2b2a27;">Small numbers for now, but we're growing. Reply anytime.<br><br>— Matthew from Street</td></tr>
+  <tr><td style="padding:16px 0 0;border-top:1px solid #dddbd3;font-size:11px;line-height:17px;color:#8a8983;">
+    You're getting this because ${name} is listed on <a href="${SITE}" style="color:#8a8983;">Street</a>. We only email on days we send you traffic. <a href="${esc(unsubscribeUrl)}" style="color:#8a8983;">Unsubscribe</a>.<br>Street &middot; ${esc(address)}
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+
+  const text = [
+    `${plural(stats.shoppers, "shopper")} clicked through to ${brand.name} ${when}.`,
+    ...(isFirst ? ["", "We're Street, a discovery site for independent streetwear. Shoppers find you here, then buy from your store."] : []),
+    "",
+    ...products.map((p) => `- ${p.title}: ${plural(p.clicks, "click")}`),
+    "",
+    summary.replace(/&middot;/g, "·"),
+    `Your Street page: ${brandUrl}`,
+    "",
+    "Small numbers for now, but we're growing. Reply anytime.",
+    "— Matthew from Street",
     "",
     `Unsubscribe: ${unsubscribeUrl}`,
     `Street · ${address}`,
@@ -256,6 +324,7 @@ export function reportsConfig() {
     replyTo: process.env.BRAND_REPORTS_REPLY_TO ?? "hello@streetdotcom.com",
     mailingAddress: process.env.BRAND_REPORTS_MAILING_ADDRESS ?? "",
     autoSend: process.env.BRAND_REPORTS_AUTO_SEND === "1",
+    template: (process.env.BRAND_REPORTS_TEMPLATE === "short" ? "short" : "full") as ReportVariant,
   };
 }
 
@@ -305,7 +374,7 @@ export async function buildBrandReport(brand: BrandRow, date: string): Promise<R
 }
 
 /** Sends one draft through Resend. Re-renders first so the latest address/contact/opt-out are used. */
-export async function sendBrandReport(reportId: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendBrandReport(reportId: string, variant?: ReportVariant): Promise<{ ok: boolean; error?: string }> {
   const config = reportsConfig();
   const rows = await supabaseRest<Array<ReportRow & { brands: BrandRow }>>(`brand_report_emails?id=eq.${reportId}&select=*,brands(id,slug,name)`, { noStore: true });
   const row = rows[0];
@@ -326,7 +395,7 @@ export async function sendBrandReport(reportId: string): Promise<{ ok: boolean; 
 
   const sentBefore = await hasBeenSentBefore(row.brand_id);
   const unsubscribeUrl = unsubscribeUrlFor(contact.report_token);
-  const rendered = renderBrandReport({ brand: row.brands, stats: row.stats, isFirst: !sentBefore, unsubscribeUrl, mailingAddress: config.mailingAddress });
+  const rendered = renderBrandReport({ brand: row.brands, stats: row.stats, isFirst: !sentBefore, unsubscribeUrl, mailingAddress: config.mailingAddress, variant: variant ?? config.template });
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",

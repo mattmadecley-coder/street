@@ -11,7 +11,8 @@ const back = (params: Record<string, string>) => redirect(`/admin/reports?${new 
 
 export async function sendReportAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
-  const result = await sendBrandReport(id);
+  const variant = formData.get("variant") === "short" ? "short" : formData.get("variant") === "full" ? "full" : undefined;
+  const result = await sendBrandReport(id, variant);
   revalidatePath("/admin/reports");
   back(result.ok ? { sent: "1" } : { error: result.error ?? "Send failed" });
 }
