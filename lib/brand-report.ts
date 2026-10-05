@@ -282,7 +282,7 @@ function renderShortReport(input: RenderInput): { subject: string; html: string;
   ${intro ? `<tr><td style="padding:0 0 18px;font-size:15px;line-height:22px;color:#2b2a27;">${intro}</td></tr>` : ""}
   ${productRows ? `<tr><td style="padding:0 0 14px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #dddbd3;border-bottom:1px solid #dddbd3;">${productRows}</table></td></tr>` : ""}
   <tr><td style="padding:0 0 22px;font-size:12px;line-height:18px;color:#6b6a65;">${summary} &middot; <a href="${esc(brandUrl)}" style="color:#6b6a65;">your Street page</a></td></tr>
-  <tr><td style="padding:0 0 26px;font-size:15px;line-height:22px;color:#2b2a27;">Small numbers for now, but we're growing. Reply anytime.<br><br>— Matthew from Street</td></tr>
+  <tr><td style="padding:0 0 26px;font-size:15px;line-height:22px;color:#2b2a27;">We know these numbers are small right now. Street is new and growing every week, so give us a little time and they'll get bigger. We built Street to connect real customers with brands the world deserves to know about, and ${name} is one of them.<br><br>Reply anytime.<br><br>— Matthew from Street</td></tr>
   <tr><td style="padding:16px 0 0;border-top:1px solid #dddbd3;font-size:11px;line-height:17px;color:#8a8983;">
     You're getting this because ${name} is listed on <a href="${SITE}" style="color:#8a8983;">Street</a>. We only email on days we send you traffic. <a href="${esc(unsubscribeUrl)}" style="color:#8a8983;">Unsubscribe</a>.<br>Street &middot; ${esc(address)}
   </td></tr>
@@ -299,7 +299,9 @@ function renderShortReport(input: RenderInput): { subject: string; html: string;
     summary.replace(/&middot;/g, "·"),
     `Your Street page: ${brandUrl}`,
     "",
-    "Small numbers for now, but we're growing. Reply anytime.",
+    `We know these numbers are small right now. Street is new and growing every week, so give us a little time and they'll get bigger. We built Street to connect real customers with brands the world deserves to know about, and ${brand.name} is one of them.`,
+    "",
+    "Reply anytime.",
     "— Matthew from Street",
     "",
     `Unsubscribe: ${unsubscribeUrl}`,
