@@ -6,6 +6,7 @@ on:
     - cron: "0 5 * * *"   # catalog sync
     - cron: "30 6 * * *"  # storefront health check
     - cron: "0 7 * * *"   # classify
+    - cron: "50 12 * * *" # brand report emails (~9 AM Eastern; GitHub often runs late)
   workflow_dispatch:
     inputs:
       job:
@@ -13,7 +14,7 @@ on:
         required: true
         default: catalog
         type: choice
-        options: [catalog, storefront-health, classify]
+        options: [catalog, storefront-health, classify, brand-reports]
 
 jobs:
   run-cron:
@@ -29,6 +30,7 @@ jobs:
               "0 5 * * *") echo "path=catalog" >> "$GITHUB_OUTPUT" ;;
               "30 6 * * *") echo "path=storefront-health" >> "$GITHUB_OUTPUT" ;;
               "0 7 * * *") echo "path=classify" >> "$GITHUB_OUTPUT" ;;
+              "50 12 * * *") echo "path=brand-reports" >> "$GITHUB_OUTPUT" ;;
             esac
           fi
 

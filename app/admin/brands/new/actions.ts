@@ -7,6 +7,7 @@ import { createBrandDraft, findBrandByDomain, syncSingleBrand, setBrandCatalogEn
 import { runClassificationWorkerBatch } from "@/lib/classification-recovery";
 import { triggerClassificationDrain } from "@/lib/classification-trigger";
 import { findBrandLogo } from "@/lib/brand-logo-finder";
+import { refreshBrandContact } from "@/lib/brand-contact-finder";
 import { uploadSiteAsset } from "@/lib/supabase-storage";
 import { supabaseRest, CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
 import { slugify, slugFromUrl } from "@/lib/slug";
@@ -126,6 +127,9 @@ export async function runImport(formData: FormData) {
   }
 
   await setBrandCatalogEnabled(slug, true);
+
+  // Look up the brand's public contact email for the daily brand reports.
+  after(() => refreshBrandContact({ slug, storeUrl: brand.storeUrl }).then(() => undefined).catch((error) => console.error("Street contact finder failed", slug, error)));
 
   after(async () => {
     const result = await syncSingleBrand(brand);
