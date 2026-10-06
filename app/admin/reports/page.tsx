@@ -2,8 +2,8 @@ import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { SubmitButton } from "@/components/admin/submit-button";
 import { supabaseRest } from "@/lib/supabase-rest";
-import { easternYesterday, renderBrandReport, reportsConfig, type ReportRow } from "@/lib/brand-report";
-import { findContactsAction, generateReportsAction, saveContactAction, sendAllDraftsAction, sendReportAction, skipReportAction } from "./actions";
+import { easternYesterday, reportsConfig, type ReportRow } from "@/lib/brand-report";
+import { findContactsAction, generateRecapAction, generateReportsAction, saveContactAction, sendAllDraftsAction, sendReportAction, sendTestAction, skipReportAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,17 +14,25 @@ type BrandContact = {
 };
 
 const STATUS_LABEL: Record<ReportRow["status"], string> = { draft: "Waiting for approval", sent: "Sent", skipped: "Skipped", failed: "Failed" };
+// Click tracking (outbound_clicks) only has complete data from this day on.
+const TRACKING_START = "2026-09-26";
 
 export default async function AdminReportsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
   const config = reportsConfig();
   const [reports, brands] = await Promise.all([
-    supabaseRest<ReportWithBrand[]>("brand_report_emails?select=*,brands(id,slug,name)&order=report_date.desc,created_at.desc&limit=60", { noStore: true }),
+    supabaseRest<ReportWithBrand[]>("brand_report_emails?select=*,brands(id,slug,name)&order=report_date.desc,kind.asc,created_at.desc&limit=80", { noStore: true }),
     supabaseRest<BrandContact[]>("brands?select=id,slug,name,store_url,brand_contacts(contact_email,contact_email_source,contact_email_checked_at,reports_opted_out_at)&is_active=eq.true&order=name.asc", { noStore: true }),
   ]);
 
-  const byDate = new Map<string, ReportWithBrand[]>();
-  for (const report of reports) byDate.set(report.report_date, [...(byDate.get(report.report_date) ?? []), report]);
+  // Group by kind + day: recaps first, then daily reports newest first.
+  const groups = new Map<string, { kind: "daily" | "recap"; date: string; periodStart: string | null; rows: ReportWithBrand[] }>();
+  for (const report of [...reports].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "recap" ? -1 : 1))) {
+    const key = `${report.kind}|${report.report_date}|${report.period_start ?? ""}`;
+    const group = groups.get(key) ?? { kind: report.kind, date: report.report_date, periodStart: report.period_start, rows: [] };
+    group.rows.push(report);
+    groups.set(key, group);
+  }
   const withEmail = brands.filter((brand) => brand.brand_contacts?.contact_email).length;
   const checked = brands.filter((brand) => brand.brand_contacts?.contact_email_checked_at).length;
   const blockers = [
@@ -37,76 +45,77 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
       <AdminNav active="/admin/reports" />
       <h1 className={styles.title}>Brand reports</h1>
       <p className={styles.subtitle}>
-        Every morning (~9 AM ET) Street builds a report for each brand that got outbound clicks the day before.
-        {config.autoSend ? " Auto-send is ON — reports go out automatically." : " Auto-send is OFF — reports wait here for your approval."}
-        {" "}From <strong>{config.from}</strong>, replies to <strong>{config.replyTo}</strong>.
+        Every morning (~9 AM ET) Street builds a report for each brand it sent shoppers to the day before.
+        {config.autoSend ? " Auto-send is ON — daily reports go out automatically." : " Auto-send is OFF — reports wait here for your approval."}
+        {" "}From <strong>{config.from}</strong>, replies to <strong>{config.replyTo}</strong>. Test copies go to <strong>{config.testTo}</strong>.
       </p>
 
       {blockers.map((message) => <p key={message} className={styles.noticeError}>{message}</p>)}
       {params.error ? <p className={styles.noticeError}>{params.error}</p> : null}
       {params.sent ? <p className={styles.notice}>Sent {params.sent === "1" ? "the report" : `${params.sent} report(s)`}.</p> : null}
+      {params.tested ? <p className={styles.notice}>Test copy sent to {config.testTo}.</p> : null}
       {params.skipped ? <p className={styles.notice}>Report skipped.</p> : null}
-      {params.generated ? <p className={styles.notice}>Generated {params.generated}.</p> : null}
+      {params.generated ? <p className={styles.notice}>Built {params.generated}.</p> : null}
       {params.contact ? <p className={styles.notice}>Contact saved.</p> : null}
       {params.finding ? <p className={styles.notice}>Looking up contact emails for {params.finding} brand(s) in the background — refresh in a minute or two.</p> : null}
 
       <section className={styles.section}>
-        <div className={styles.sectionHead}><div><h2>Build reports</h2><p className={styles.rowMeta}>Re-running a day rebuilds its drafts with fresh numbers. Already-sent reports are never touched.</p></div></div>
-        <form action={generateReportsAction} className={styles.form} style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
-          <div className={styles.field}><label htmlFor="date">Day (Eastern)</label><input id="date" name="date" type="date" defaultValue={easternYesterday()} /></div>
-          <SubmitButton pendingText="Building…" className={styles.button}>Build reports for this day</SubmitButton>
-        </form>
+        <div className={styles.sectionHead}><div><h2>Build reports</h2><p className={styles.rowMeta}>Re-building rebuilds drafts with fresh numbers. Already-sent reports are never touched. Recaps are never sent automatically.</p></div></div>
+        <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+          <form action={generateReportsAction} className={styles.form} style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+            <div className={styles.field}><label htmlFor="date">Daily report — day (Eastern)</label><input id="date" name="date" type="date" defaultValue={easternYesterday()} /></div>
+            <SubmitButton pendingText="Building…" className={styles.button}>Build daily reports</SubmitButton>
+          </form>
+          <form action={generateRecapAction} className={styles.form} style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+            <div className={styles.field}><label htmlFor="from">Recap — from</label><input id="from" name="from" type="date" defaultValue={TRACKING_START} min={TRACKING_START} /></div>
+            <div className={styles.field}><label htmlFor="to">to</label><input id="to" name="to" type="date" defaultValue={easternYesterday()} /></div>
+            <SubmitButton pendingText="Building…" className={styles.button}>Build recaps</SubmitButton>
+          </form>
+        </div>
       </section>
 
-      {[...byDate.entries()].map(([date, rows]) => {
-        const drafts = rows.filter((row) => row.status === "draft").length;
+      {[...groups.values()].map((group) => {
+        const drafts = group.rows.filter((row) => row.status === "draft").length;
+        const title = group.kind === "recap" ? `Recap · ${group.periodStart} → ${group.date}` : `Daily · ${group.date}`;
         return (
-          <section key={date} className={styles.section}>
+          <section key={`${group.kind}-${group.date}-${group.periodStart}`} className={styles.section}>
             <div className={styles.sectionHead}>
-              <div><h2>{date}</h2><p className={styles.rowMeta}>{rows.length} brand(s) · {drafts} waiting</p></div>
+              <div><h2>{title}</h2><p className={styles.rowMeta}>{group.rows.length} brand(s) · {drafts} waiting</p></div>
               {drafts ? (
-                <form action={sendAllDraftsAction}><input type="hidden" name="date" value={date} />
+                <form action={sendAllDraftsAction}><input type="hidden" name="date" value={group.date} /><input type="hidden" name="kind" value={group.kind} />
                   <SubmitButton pendingText="Sending…" className={styles.button} disabled={blockers.length > 0}>Approve &amp; send all {drafts}</SubmitButton>
                 </form>
               ) : null}
             </div>
             <div className={styles.rowList}>
-              {rows.map((row) => (
+              {group.rows.map((row) => (
                 <details key={row.id} className={styles.row}>
                   <summary className={styles.rowSummary}>
                     <strong>{row.brands?.name ?? "Unknown brand"}</strong>
                     <span className={styles.pill}>{STATUS_LABEL[row.status]}</span>
-                    <span className={styles.rowMeta}>{row.stats.clicks} click(s) · {row.to_email ?? "no email"}{row.is_first ? " · first email" : ""}{row.error ? ` · ${row.error}` : ""}</span>
+                    <span className={styles.rowMeta}>
+                      {row.stats.shoppers} shopper(s){row.stats.bagShoppers ? ` · ${row.stats.bagShoppers} bagged` : ""}{row.stats.checkoutShoppers ? ` · ${row.stats.checkoutShoppers} checkout` : ""} · {row.to_email ?? "no email"}{row.is_first ? " · first email" : ""}{row.error ? ` · ${row.error}` : ""}
+                    </span>
                   </summary>
                   <div className={styles.rowBody}>
                     <p className={styles.rowMeta}>Subject: <strong>{row.subject}</strong></p>
+                    <iframe title={`Email for ${row.brands?.name}`} srcDoc={row.html} style={{ width: "100%", maxWidth: 640, height: 1000, border: "1px solid rgba(16,16,16,.16)", background: "#f4f3ee" }} />
                     {row.status === "sent" ? (
-                      <>
-                        <iframe title={`Sent email for ${row.brands?.name}`} srcDoc={row.html} style={{ width: "100%", maxWidth: 640, height: 900, border: "1px solid rgba(16,16,16,.16)", background: "#f4f3ee" }} />
-                        <p className={styles.rowMeta}>Sent {row.sent_at ? new Date(row.sent_at).toLocaleString("en-US", { timeZone: "America/New_York" }) : ""} ET</p>
-                      </>
+                      <p className={styles.rowMeta}>Sent {row.sent_at ? new Date(row.sent_at).toLocaleString("en-US", { timeZone: "America/New_York" }) : ""} ET</p>
                     ) : (
-                      <>
-                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-                          {(["short", "full"] as const).map((variant) => {
-                            const preview = row.brands ? renderBrandReport({ brand: row.brands, stats: row.stats, isFirst: row.is_first, unsubscribeUrl: "#unsubscribe-preview", mailingAddress: config.mailingAddress, variant }) : null;
-                            return (
-                              <div key={variant} style={{ flex: "1 1 360px", maxWidth: 640 }}>
-                                <p className={styles.rowMeta}><strong>{variant === "short" ? "Short version" : "Full version"}</strong>{variant === config.template ? " · default" : ""}</p>
-                                {preview ? <iframe title={`${variant} preview for ${row.brands?.name}`} srcDoc={preview.html} style={{ width: "100%", height: variant === "short" ? 560 : 900, border: "1px solid rgba(16,16,16,.16)", background: "#f4f3ee" }} /> : null}
-                                <form action={sendReportAction} style={{ marginTop: 10 }}><input type="hidden" name="id" value={row.id} /><input type="hidden" name="variant" value={variant} />
-                                  <SubmitButton pendingText="Sending…" className={styles.button} disabled={blockers.length > 0 || !row.to_email}>Approve &amp; send {variant} version</SubmitButton>
-                                </form>
-                              </div>
-                            );
-                          })}
-                        </div>
+                      <div className={styles.actions} style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                        <form action={sendReportAction}><input type="hidden" name="id" value={row.id} />
+                          <SubmitButton pendingText="Sending…" className={styles.button} disabled={blockers.length > 0 || !row.to_email}>Approve &amp; send</SubmitButton>
+                        </form>
+                        <form action={sendTestAction}><input type="hidden" name="id" value={row.id} />
+                          <SubmitButton pendingText="Sending test…" className={styles.buttonSecondary} disabled={!config.apiKey}>Send test to me</SubmitButton>
+                        </form>
                         {row.status !== "skipped" ? (
-                          <form action={skipReportAction} style={{ marginTop: 12 }}><input type="hidden" name="id" value={row.id} />
+                          <form action={skipReportAction}><input type="hidden" name="id" value={row.id} />
                             <SubmitButton pendingText="…" className={styles.buttonSecondary}>Skip</SubmitButton>
                           </form>
                         ) : null}
-                      </>
+                      </div>
                     )}
                   </div>
                 </details>

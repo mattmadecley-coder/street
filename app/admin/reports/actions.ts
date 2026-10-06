@@ -4,22 +4,28 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseRest } from "@/lib/supabase-rest";
-import { runDailyBrandReports, sendBrandReport, easternYesterday } from "@/lib/brand-report";
+import { runDailyBrandReports, runBrandRecaps, sendBrandReport, sendTestBrandReport, easternYesterday } from "@/lib/brand-report";
 import { refreshBrandContact } from "@/lib/brand-contact-finder";
 
 const back = (params: Record<string, string>) => redirect(`/admin/reports?${new URLSearchParams(params).toString()}`);
+const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 export async function sendReportAction(formData: FormData) {
-  const id = String(formData.get("id") ?? "");
-  const variant = formData.get("variant") === "short" ? "short" : formData.get("variant") === "full" ? "full" : undefined;
-  const result = await sendBrandReport(id, variant);
+  const result = await sendBrandReport(String(formData.get("id") ?? ""));
   revalidatePath("/admin/reports");
   back(result.ok ? { sent: "1" } : { error: result.error ?? "Send failed" });
 }
 
+export async function sendTestAction(formData: FormData) {
+  const result = await sendTestBrandReport(String(formData.get("id") ?? ""));
+  back(result.ok ? { tested: "1" } : { error: result.error ?? "Test send failed" });
+}
+
+/** Sends every draft in one group (same day + kind). */
 export async function sendAllDraftsAction(formData: FormData) {
   const date = String(formData.get("date") ?? "");
-  const drafts = await supabaseRest<Array<{ id: string }>>(`brand_report_emails?status=eq.draft&report_date=eq.${date}&select=id`, { noStore: true });
+  const kind = formData.get("kind") === "recap" ? "recap" : "daily";
+  const drafts = await supabaseRest<Array<{ id: string }>>(`brand_report_emails?status=eq.draft&report_date=eq.${date}&kind=eq.${kind}&select=id`, { noStore: true });
   const errors: string[] = [];
   let sent = 0;
   for (const draft of drafts) {
@@ -39,11 +45,23 @@ export async function skipReportAction(formData: FormData) {
 
 export async function generateReportsAction(formData: FormData) {
   const date = String(formData.get("date") ?? "") || easternYesterday();
+  if (!isDate(date)) back({ error: "Pick a valid date" });
   const result = await runDailyBrandReports(date);
   revalidatePath("/admin/reports");
   back(result.errors.length
     ? { error: `${result.errors.length} problem(s): ${result.errors[0]}` }
-    : { generated: `${date}: ${result.drafts} draft(s), ${result.sent} sent, ${result.skipped} skipped` });
+    : { generated: `daily ${date}: ${result.drafts} draft(s), ${result.sent} sent, ${result.skipped} skipped` });
+}
+
+export async function generateRecapAction(formData: FormData) {
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "") || easternYesterday();
+  if (!isDate(from) || !isDate(to) || from > to) back({ error: "Pick a valid date range" });
+  const result = await runBrandRecaps(from, to);
+  revalidatePath("/admin/reports");
+  back(result.errors.length
+    ? { error: `${result.errors.length} problem(s): ${result.errors[0]}` }
+    : { generated: `recap ${from} to ${to}: ${result.drafts} draft(s), ${result.skipped} skipped (no email / unsubscribed)` });
 }
 
 /** Set a brand's contact email by hand (wins over the automatic finder from then on). Blank clears it. */
@@ -57,7 +75,6 @@ export async function saveContactAction(formData: FormData) {
     body: { brand_id: brandId, contact_email: email || null, contact_email_source: email ? "manual" : null, contact_email_checked_at: now, updated_at: now },
     prefer: "resolution=merge-duplicates,return=minimal",
   });
-  // Un-skip drafts that were only skipped for lack of an address.
   if (email) {
     await supabaseRest(`brand_report_emails?brand_id=eq.${brandId}&status=eq.skipped&error=eq.No%20contact%20email%20on%20file`, {
       method: "PATCH", body: { status: "draft", error: null, to_email: email }, prefer: "return=minimal",

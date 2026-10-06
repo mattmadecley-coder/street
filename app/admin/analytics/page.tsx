@@ -1,3 +1,4 @@
+import { estimateWeightedValue, ESTIMATE_WEIGHTS } from "@/lib/analytics-estimated-value";
 import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { AnalyticsControls } from "@/components/admin/analytics-controls";
@@ -264,6 +265,8 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
   ]).size;
 
   const intent = summarizePurchaseIntent(outboundClicks);
+  const estimatedValue = estimateWeightedValue(events, outboundClicks);
+  const weightsNote = `Weighted: click ${ESTIMATE_WEIGHTS.click * 100}% · bag ${ESTIMATE_WEIGHTS.bag * 100}% · checkout ${ESTIMATE_WEIGHTS.checkout * 100}%`;
   const addToCartEvents = events.filter((event) => event.event_type === "add_to_cart");
   const addToCartBlockedEvents = events.filter((event) => event.event_type === "add_to_cart_blocked");
   const checkoutClickEvents = events.filter((event) => event.event_type === "cart_checkout_click");
@@ -340,7 +343,8 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
         <Metric label="Sessions" value={sessions.toLocaleString()} note={`${percent(engagedSessions, sessions)} engaged`} />
         <Metric label="Outbound clicks" value={intent.outboundClicks.toLocaleString()} note="North Star action" featured />
         <Metric label="Outbound shoppers" value={intent.uniqueShoppers.toLocaleString()} note="Unique likely-human visitors" />
-        <Metric label="Intent value" value={money.format(intent.intentValue)} note="Potential revenue proxy, not sales" />
+        <Metric label="Intent value" value={money.format(intent.intentValue)} note="Full listed price of clicked items, not sales" />
+        <Metric label="Estimated value" value={money.format(estimatedValue)} note={weightsNote} />
         <Metric label="Visitor → outbound" value={percent(intent.uniqueShoppers, visitors)} note={`${intent.uniqueProducts} products received intent`} />
       </div>
 
@@ -375,7 +379,9 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
           <Metric label="Products with intent" value={intent.uniqueProducts} />
           <Metric label="Priced intent clicks" value={intent.pricedClicks} />
           <Metric label="Intent value" value={money.format(intent.intentValue)} />
+          <Metric label="Estimated value" value={money.format(estimatedValue)} note={weightsNote} />
         </div>
+        <p className={styles.rowMeta} style={{ marginTop: 10 }}>Estimated value weights each shopper + product by the furthest step they reached (clicked through, added to StreetBag, clicked checkout). The percentages are rough industry rules of thumb, not measured Street conversion rates — adjust them in lib/analytics-estimated-value.ts once brands share real sales.</p>
         {intent.topProducts.length ? (
           <div style={{ overflowX: "auto", marginTop: 18 }}>
             <table className={styles.table}>
