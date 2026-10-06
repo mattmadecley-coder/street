@@ -218,7 +218,7 @@ function renderFullReport(input: RenderInput): { subject: string; html: string; 
   </td></tr>
   <tr><td style="padding:0 0 28px;"><a href="${esc(brandUrl)}" style="display:inline-block;background:#101010;color:#ffffff;text-decoration:none;font-size:11px;line-height:14px;letter-spacing:1.4px;text-transform:uppercase;font-weight:700;padding:13px 18px;">See ${name} on Street &rarr;</a></td></tr>
   <tr><td style="padding:0 0 28px;font-size:15px;line-height:23px;color:#2b2a27;">
-    Questions, or something about your listing you'd like changed? Just reply to this email — we read every one.<br><br>— Matthew from Street
+    Questions, or something about your listing you'd like changed? Feel free to reach out to us anytime.<br><br>— Matthew from Street
   </td></tr>
   <tr><td style="padding:18px 0 0;border-top:1px solid #dddbd3;font-size:11px;line-height:17px;color:#8a8983;">
     You're getting this because ${name} is listed on Street (<a href="${SITE}" style="color:#8a8983;">streetdotcom.com</a>). We only email on days Street sends you traffic.
@@ -246,7 +246,7 @@ function renderFullReport(input: RenderInput): { subject: string; html: string; 
     "",
     `See ${brand.name} on Street: ${brandUrl}`,
     "",
-    "Questions, or something about your listing you'd like changed? Just reply to this email.",
+    "Questions, or something about your listing you'd like changed? Feel free to reach out to us anytime.",
     "— Matthew from Street",
     "",
     `Unsubscribe: ${unsubscribeUrl}`,
