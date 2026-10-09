@@ -4,9 +4,11 @@ import {
   balanceProductsForRelevance,
   balanceRankedEntriesForRelevance,
   buildSearchTsQuery,
+  correctSearchQuery,
   filterProductsForSearch,
   rankProductsForSearch,
   type RankedSearchEntry,
+  type SearchBrand,
 } from "@/lib/catalog-ranking";
 import { hasSupabaseCatalog, supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 
@@ -254,6 +256,26 @@ async function searchProductsRanked(tsQuery: string, filters: CatalogPageFilters
   }
 }
 
+// Brand names/slugs feed search's brand matching ("revice" -> Revicedenim).
+// The list is tiny and changes rarely, so memoize it per server instance for
+// a few minutes on top of the fetch cache. Any failure just disables brand
+// matching for that request -- search itself must never depend on it.
+const SEARCH_BRANDS_TTL_MS = 10 * 60 * 1000;
+let searchBrandsCache: { at: number; brands: SearchBrand[] } | null = null;
+
+async function getSearchBrands(): Promise<SearchBrand[]> {
+  if (searchBrandsCache && Date.now() - searchBrandsCache.at < SEARCH_BRANDS_TTL_MS) return searchBrandsCache.brands;
+  try {
+    const rows = await supabaseRest<Array<{ slug: string; name: string }>>("brands?select=slug,name&is_active=eq.true&limit=1000");
+    const brands = rows.filter((row) => row.slug && row.name).map((row) => ({ slug: row.slug, name: row.name }));
+    searchBrandsCache = { at: Date.now(), brands };
+    return brands;
+  } catch (error) {
+    console.error("Street search brand list read failed; searching without brand matching", error);
+    return searchBrandsCache?.brands ?? [];
+  }
+}
+
 async function getProductPopularityScores() {
   try {
     const rows = await supabaseRestAll<PopularityRow[]>("catalog_product_popularity?select=product_id,popularity_score");
@@ -310,17 +332,26 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
     // failure, and for query-less browsing / explicit Newest / price sorts,
     // which the RPC doesn't cover.
     if (query && (sort === "relevance" || sort === "best-sellers")) {
-      const tsQuery = buildSearchTsQuery(query);
+      const searchBrands = await getSearchBrands();
+      const tsQuery = buildSearchTsQuery(query, searchBrands);
       if (tsQuery) {
         // Running on Cloudflare Workers, every Supabase round trip pays real
         // cross-country latency (the Worker executes near the visitor, the
         // database sits in us-west-2). The ranked search and the popularity
         // scores don't depend on each other, so fire them together instead
         // of paying that round trip twice in a row for a best-sellers sort.
-        const [ranked, scores] = await Promise.all([
+        const [firstRanked, scores] = await Promise.all([
           searchProductsRanked(tsQuery, filters),
           sort === "best-sellers" ? getProductPopularityScores() : Promise.resolve(null),
         ]);
+        let ranked = firstRanked;
+        // Nothing matched: retry once with obvious typos fixed ("hoddie" ->
+        // "hoodie"). Only runs on an empty result, so normal searches pay nothing.
+        if (ranked && ranked.length === 0) {
+          const corrected = correctSearchQuery(query, searchBrands);
+          const correctedTsQuery = corrected ? buildSearchTsQuery(corrected, searchBrands) : null;
+          if (correctedTsQuery && correctedTsQuery !== tsQuery) ranked = (await searchProductsRanked(correctedTsQuery, filters)) ?? ranked;
+        }
         if (ranked) {
           if (sort === "best-sellers" && scores) {
             const sorted = [...ranked].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) || b.rank - a.rank);

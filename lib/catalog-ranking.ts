@@ -1,3 +1,7 @@
+import { brandSearchPhrase, correctQueryTypos, matchBrandsForTerm, type SearchBrand } from "@/lib/brand-match";
+
+export type { SearchBrand } from "@/lib/brand-match";
+
 type SearchableCatalogProduct = {
   brandSlug: string;
   title: string;
@@ -154,8 +158,8 @@ function searchTermVariants(term: string) {
  * meaningful terms (all stop words / empty) -- callers should fall back to
  * the in-memory path in that case rather than sending an empty tsquery.
  */
-export function buildSearchTsQuery(query: string): string | null {
-  const terms = meaningfulSearchTerms(query);
+export function buildSearchTsQuery(query: string, brands: readonly SearchBrand[] = []): string | null {
+  const terms = meaningfulSearchTerms(query, brands);
   if (!terms.length) return null;
 
   const groups = terms.map(({ variants }) => {
@@ -170,18 +174,66 @@ export function buildSearchTsQuery(query: string): string | null {
   return groups.length ? groups.join(" & ") : null;
 }
 
-function meaningfulSearchTerms(query: string) {
+// Ordinary product words. A typo-ish match of one of these must never be
+// pulled toward a brand ("shorts" is not a misspelling of a brand called
+// "Shortcut"), though it can still hit a brand named exactly that.
+const GENERIC_PRODUCT_TERMS = [
+  "tee", "tshirt", "shirt", "short", "skirt", "dress", "top", "hat", "cap", "bag", "belt", "sock", "scarf", "vest",
+  "jean", "denim", "jersey", "hoodie", "crewneck", "sweatshirt", "sweatpant", "jogger", "cargo", "knit", "knitwear",
+  "beanie", "jacket", "coat", "pant", "trouser", "shoe", "sneaker", "boot", "sandal", "slide", "accessory", "jewelry",
+  "black", "white", "red", "blue", "green", "grey", "gray", "brown", "pink", "purple", "orange", "yellow", "cream", "beige", "navy",
+];
+
+function reservedSearchTerms() {
+  const terms = new Set<string>(GENERIC_PRODUCT_TERMS);
+  for (const group of SEARCH_EQUIVALENCE_GROUPS) {
+    for (const item of [...group.broad, ...group.specific]) terms.add(singularizeSearchTerm(item));
+  }
+  return terms;
+}
+
+const RESERVED_SEARCH_TERMS = reservedSearchTerms();
+
+function isReservedSearchTerm(term: string) {
+  return RESERVED_SEARCH_TERMS.has(term) || RESERVED_SEARCH_TERMS.has(singularizeSearchTerm(term));
+}
+
+/** Extra search variants for a typed word: the real names of any brands it plausibly means. */
+function brandSearchVariants(raw: string, term: string, brands: readonly SearchBrand[]) {
+  if (!brands.length) return [];
+  const matched = new Map<string, SearchBrand>();
+  for (const brand of [...matchBrandsForTerm(raw, brands, isReservedSearchTerm), ...matchBrandsForTerm(term, brands, isReservedSearchTerm)]) {
+    matched.set(brand.slug, brand);
+  }
+  return [...matched.values()].map(brandSearchPhrase).filter(Boolean);
+}
+
+/**
+ * Spelling-corrected version of a query ("hoddie revicedenim" -> "hoodie
+ * revicedenim"), or null when nothing needed fixing. Meant as a retry after a
+ * search came back empty, not a replacement for the original query.
+ */
+export function correctSearchQuery(query: string, brands: readonly SearchBrand[] = []): string | null {
+  const vocabulary = new Set<string>(RESERVED_SEARCH_TERMS);
+  for (const brand of brands) {
+    for (const word of normalizeSearchText(brand.name).split(" ")) vocabulary.add(word);
+    vocabulary.add(normalizeSearchText(brand.name).replace(/ /g, ""));
+  }
+  return correctQueryTypos(query, vocabulary);
+}
+
+function meaningfulSearchTerms(query: string, brands: readonly SearchBrand[] = []) {
   const seen = new Set<string>();
   return normalizeSearchText(query)
     .split(" ")
-    .map(singularizeSearchTerm)
-    .filter((term) => term.length > 1 && !SEARCH_STOP_WORDS.has(term))
-    .filter((term) => {
+    .map((raw) => ({ raw, term: singularizeSearchTerm(raw) }))
+    .filter(({ term }) => term.length > 1 && !SEARCH_STOP_WORDS.has(term))
+    .filter(({ term }) => {
       if (seen.has(term)) return false;
       seen.add(term);
       return true;
     })
-    .map((term) => ({ term, variants: searchTermVariants(term) }));
+    .map(({ raw, term }) => ({ term, variants: [...searchTermVariants(term), ...brandSearchVariants(raw, term, brands)] }));
 }
 
 function matchStrength(text: string, variants: string[]) {
