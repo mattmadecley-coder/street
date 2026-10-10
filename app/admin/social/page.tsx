@@ -42,7 +42,15 @@ export default async function SocialOverviewPage() {
   for (const [series, count] of Object.entries(hooks)) if (n(count) < 10) alerts.push({ level: "warn", text: `TikTok "${series}" is down to ${count} hook photos. Add more so hooks don't repeat.` });
   if (jobs.length && queued.pinterest === 0) alerts.push({ level: "warn", text: "Pinterest: no pins are lined up. The 5 AM run schedules the next batch." });
   const igFailed = by("instagram").filter((x) => x.status === "failed" && x.scheduled_for && now - new Date(x.scheduled_for).getTime() < 7 * 86400000);
-  if (igFailed.length) alerts.push({ level: "bad", text: `Instagram: ${igFailed.length} post(s) failed in the last 7 days (Postiz: "${String(igFailed[0].meta.error ?? "unknown error")}").` });
+  if (igFailed.length) {
+    const finished = by("instagram").filter((x) => (x.status === "posted" || x.status === "failed") && x.scheduled_for).sort((a, b) => +new Date(b.scheduled_for!) - +new Date(a.scheduled_for!));
+    const latestFailed = finished[0]?.status === "failed";
+    const sporadic = igFailed.length <= 3 && !latestFailed;
+    alerts.push({
+      level: sporadic ? "warn" : "bad",
+      text: `Instagram: ${igFailed.length} post(s) failed in the last 7 days (Postiz: "${String(igFailed[0].meta.error ?? "unknown error")}").${sporadic ? " The latest posts went out fine, so this looks like a one-off Instagram error." : " The most recent post failed too. Check Postiz."}`,
+    });
+  }
   if (jobs.length && queued.instagram === 0) alerts.push({ level: "warn", text: "Instagram: nothing is queued in Postiz." });
 
   // ---- today
