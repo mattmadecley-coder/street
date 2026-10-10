@@ -184,6 +184,16 @@ const GENERIC_PRODUCT_TERMS = [
   "black", "white", "red", "blue", "green", "grey", "gray", "brown", "pink", "purple", "orange", "yellow", "cream", "beige", "navy",
 ];
 
+// Extra words only used as spelling-correction targets (never as brand-blocking terms).
+const SPELLING_EXTRA_WORDS = [
+  "balaclava", "bomber", "windbreaker", "puffer", "fleece", "flannel", "cardigan", "sweater", "hoodies", "leggings", "overshirt",
+  "waistcoat", "tracksuit", "shorts", "pants", "trousers", "shirts", "jackets", "sneakers", "boots", "sandals", "slippers",
+  "gloves", "wallet", "backpack", "tote", "necklace", "bracelet", "earrings", "ring", "chain", "pendant", "sunglasses", "glasses",
+  "carpenter", "baggy", "oversized", "graphic", "vintage", "distressed", "washed", "striped", "plaid", "camo", "leather", "denim",
+  "corduroy", "mesh", "zip", "quarter", "polo", "tank", "longsleeve", "crop", "bikini", "swim", "trunks", "boxers", "headband",
+  "bandana", "balaclavas", "trucker", "snapback", "bucket", "fitted", "pullover", "windbreakers", "varsity", "parka", "anorak",
+];
+
 function reservedSearchTerms() {
   const terms = new Set<string>(GENERIC_PRODUCT_TERMS);
   for (const group of SEARCH_EQUIVALENCE_GROUPS) {
@@ -214,7 +224,7 @@ function brandSearchVariants(raw: string, term: string, brands: readonly SearchB
  * search came back empty, not a replacement for the original query.
  */
 export function correctSearchQuery(query: string, brands: readonly SearchBrand[] = []): string | null {
-  const vocabulary = new Set<string>(RESERVED_SEARCH_TERMS);
+  const vocabulary = new Set<string>([...RESERVED_SEARCH_TERMS, ...SPELLING_EXTRA_WORDS]);
   for (const brand of brands) {
     for (const word of normalizeSearchText(brand.name).split(" ")) vocabulary.add(word);
     vocabulary.add(normalizeSearchText(brand.name).replace(/ /g, ""));

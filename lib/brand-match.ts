@@ -117,7 +117,8 @@ export function correctQueryTypos(query: string, vocabulary: Iterable<string>): 
     let best: { term: string; distance: number } | null = null;
     for (const term of vocab) {
       if (term[0] !== word[0]) continue;
-      const distance = editDistance(word, term, typos);
+      // also compare with the plural "s" dropped ("pnats" -> "pant"), so plurals of singular vocabulary resolve
+      const distance = Math.min(editDistance(word, term, typos), word.endsWith("s") ? editDistance(word.slice(0, -1), term, typos) : typos + 1);
       if (distance <= typos && (!best || distance < best.distance)) best = { term, distance };
     }
     if (!best) return word;

@@ -347,10 +347,15 @@ export async function getCatalogPage(filters: CatalogPageFilters): Promise<Catal
         let ranked = firstRanked;
         // Nothing matched: retry once with obvious typos fixed ("hoddie" ->
         // "hoodie"). Only runs on an empty result, so normal searches pay nothing.
-        if (ranked && ranked.length === 0) {
+        // Also runs when the result is thin (< 24) and a word looks misspelled
+        // ("black hoddie"); the corrected results are used only if there are more.
+        if (ranked && ranked.length < 24) {
           const corrected = correctSearchQuery(query, searchBrands);
           const correctedTsQuery = corrected ? buildSearchTsQuery(corrected, searchBrands) : null;
-          if (correctedTsQuery && correctedTsQuery !== tsQuery) ranked = (await searchProductsRanked(correctedTsQuery, filters)) ?? ranked;
+          if (correctedTsQuery && correctedTsQuery !== tsQuery) {
+            const retry = await searchProductsRanked(correctedTsQuery, filters);
+            if (retry && retry.length > ranked.length) ranked = retry;
+          }
         }
         if (ranked) {
           if (sort === "best-sellers" && scores) {
