@@ -93,6 +93,13 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
                   <summary className={styles.rowSummary}>
                     <strong>{row.brands?.name ?? "Unknown brand"}</strong>
                     <span className={styles.pill}>{STATUS_LABEL[row.status]}</span>
+                    {row.status === "sent" ? (
+                      row.complained_at ? <span className={styles.pillAlert}>Marked as spam</span>
+                      : row.bounced_at ? <span className={styles.pillAlert}>Bounced</span>
+                      : row.open_count ? <span className={styles.pill} title={`First opened ${row.first_opened_at ? new Date(row.first_opened_at).toLocaleString("en-US", { timeZone: "America/New_York" }) : ""} ET`}>Opened{row.open_count > 1 ? ` x${row.open_count}` : ""}</span>
+                      : row.delivered_at ? <span className={styles.rowMeta}>Delivered, not opened</span>
+                      : <span className={styles.rowMeta}>Sent</span>
+                    ) : null}
                     <span className={styles.rowMeta}>
                       {row.stats.shoppers} shopper(s){row.stats.bagShoppers ? ` · ${row.stats.bagShoppers} bagged` : ""}{row.stats.checkoutShoppers ? ` · ${row.stats.checkoutShoppers} checkout` : ""} · {row.to_email ?? "no email"}{row.is_first ? " · first email" : ""}{row.error ? ` · ${row.error}` : ""}
                     </span>

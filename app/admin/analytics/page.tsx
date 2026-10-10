@@ -159,6 +159,45 @@ function filterDemand(events: SiteEventRow[]) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20);
 }
 
+function RetentionChart({ daily }: { daily: Array<{ day: string; newVisitors: number; returningVisitors: number }> }) {
+  const W = 760, H = 220, L = 36, R = 12, T = 12, B = 26;
+  const max = Math.max(4, ...daily.map((d) => Math.max(d.newVisitors, d.returningVisitors)));
+  const x = (i: number) => L + (i / Math.max(1, daily.length - 1)) * (W - L - R);
+  const y = (v: number) => T + (1 - v / max) * (H - T - B);
+  const line = (key: "newVisitors" | "returningVisitors") => daily.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join(" ");
+  const ticks = [0, Math.round(max / 2), max];
+  const NEW = "#2a78d6", BACK = "#1baf7a";
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ display: "flex", gap: 18, fontSize: 13, marginBottom: 6 }}>
+        <span><span style={{ display: "inline-block", width: 12, height: 3, background: NEW, marginRight: 6, verticalAlign: "middle" }} />First-time visitors</span>
+        <span><span style={{ display: "inline-block", width: 12, height: 3, background: BACK, marginRight: 6, verticalAlign: "middle" }} />Coming back</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Daily visitors, first-time versus returning, last 30 days" style={{ width: "100%", maxWidth: 820, height: "auto" }}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="currentColor" strokeOpacity={0.12} />
+            <text x={L - 6} y={y(t) + 4} textAnchor="end" fontSize={11} fill="currentColor" fillOpacity={0.6}>{t}</text>
+          </g>
+        ))}
+        {[0, 7, 14, 21, 29].map((i) => <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize={11} fill="currentColor" fillOpacity={0.6}>{daily[i].day.slice(5)}</text>)}
+        <path d={line("newVisitors")} fill="none" stroke={NEW} strokeWidth={2} strokeLinejoin="round" />
+        <path d={line("returningVisitors")} fill="none" stroke={BACK} strokeWidth={2} strokeLinejoin="round" />
+        {daily.map((d, i) => (
+          <g key={d.day}>
+            <circle cx={x(i)} cy={y(d.newVisitors)} r={4} fill={NEW} fillOpacity={0}><title>{`${d.day}: ${d.newVisitors} first-time, ${d.returningVisitors} coming back`}</title></circle>
+            <circle cx={x(i)} cy={y(d.returningVisitors)} r={4} fill={BACK} fillOpacity={0}><title>{`${d.day}: ${d.newVisitors} first-time, ${d.returningVisitors} coming back`}</title></circle>
+          </g>
+        ))}
+      </svg>
+      <details style={{ marginTop: 6 }}>
+        <summary style={{ cursor: "pointer", fontSize: 13 }}>Show as table</summary>
+        <table className={styles.table}><thead><tr><th>Day</th><th>First-time</th><th>Coming back</th></tr></thead><tbody>{[...daily].reverse().map((d) => <tr key={d.day}><td>{d.day}</td><td>{d.newVisitors}</td><td>{d.returningVisitors}</td></tr>)}</tbody></table>
+      </details>
+    </div>
+  );
+}
+
 function retentionSummary(events: SiteEventRow[]) {
   const visitors = new Map<string, { sessions: Set<string>; days: Set<string>; first: string; last: string }>();
   for (const event of [...events].reverse()) {
@@ -190,6 +229,24 @@ function retentionSummary(events: SiteEventRow[]) {
     cohorts.set(row.first, cohort);
   }
 
+  // Daily active visitors split into first-time vs coming back, last 30 days (UTC days).
+  const dailyActive = new Map<string, Set<string>>();
+  for (const event of events) {
+    if (!event.anonymous_user_id) continue;
+    const day = event.created_at.slice(0, 10);
+    const set = dailyActive.get(day) ?? new Set<string>();
+    set.add(event.anonymous_user_id);
+    dailyActive.set(day, set);
+  }
+  const daily: Array<{ day: string; newVisitors: number; returningVisitors: number }> = [];
+  for (let i = 29; i >= 0; i -= 1) {
+    const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const active = dailyActive.get(day) ?? new Set<string>();
+    let newVisitors = 0;
+    for (const id of active) if (visitors.get(id)?.first === day) newVisitors += 1;
+    daily.push({ day, newVisitors, returningVisitors: active.size - newVisitors });
+  }
+
   return {
     total: visitors.size,
     returning,
@@ -197,6 +254,7 @@ function retentionSummary(events: SiteEventRow[]) {
     day7,
     day30,
     cohorts: [...cohorts.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 14),
+    daily,
   };
 }
 
@@ -411,14 +469,20 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
       </section>
 
       <div className={styles.section}>
-        <div className={styles.sectionHead}><h2>Retention</h2></div>
-        <div className={styles.analyticsDetailGrid}>
-          <Metric label="Returning visitors" value={retention.returning} note={percent(retention.returning, retention.total)} />
-          <Metric label="Returned after 1+ day" value={retention.day1} note={percent(retention.day1, retention.total)} />
-          <Metric label="Returned after 7+ days" value={retention.day7} note={percent(retention.day7, retention.total)} />
-          <Metric label="Returned after 30+ days" value={retention.day30} note={percent(retention.day30, retention.total)} />
+        <div className={styles.sectionHead}>
+          <div>
+            <h2>Returning visitors</h2>
+            <p className={styles.rowMeta}>Always the last 90 days, whatever date range is picked above, because coming back takes time to show up. {retention.total.toLocaleString()} visitors in that window.</p>
+          </div>
         </div>
-        {retention.cohorts.length ? <table className={styles.table} style={{ marginTop: 16 }}><thead><tr><th>First visit</th><th>Visitors</th><th>Returned</th><th>Return rate</th></tr></thead><tbody>{retention.cohorts.map(([date, row]) => <tr key={date}><td>{date}</td><td>{row.visitors}</td><td>{row.returned}</td><td>{percent(row.returned, row.visitors)}</td></tr>)}</tbody></table> : null}
+        <div className={styles.analyticsDetailGrid}>
+          <Metric label="Came back at least once" value={retention.returning} note={`${percent(retention.returning, retention.total)} of visitors - your returning visitor rate`} />
+          <Metric label="Back after 1+ day" value={retention.day1} note={`${percent(retention.day1, retention.total)} of visitors`} />
+          <Metric label="Back after 7+ days" value={retention.day7} note={`${percent(retention.day7, retention.total)} of visitors`} />
+          <Metric label="Back after 30+ days" value={retention.day30} note={`${percent(retention.day30, retention.total)} of visitors`} />
+        </div>
+        <RetentionChart daily={retention.daily} />
+        {retention.cohorts.length ? <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", fontSize: 13 }}>Return rate by first-visit day</summary><table className={styles.table} style={{ marginTop: 8 }}><thead><tr><th>First visit</th><th>Visitors</th><th>Came back</th><th>Return rate</th></tr></thead><tbody>{retention.cohorts.map(([date, row]) => <tr key={date}><td>{date}</td><td>{row.visitors}</td><td>{row.returned}</td><td>{percent(row.returned, row.visitors)}</td></tr>)}</tbody></table></details> : null}
       </div>
 
       <div className={styles.section}>

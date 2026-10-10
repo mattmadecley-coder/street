@@ -322,6 +322,8 @@ export type ReportRow = {
   status: "draft" | "sent" | "skipped" | "failed";
   to_email: string | null; subject: string; html: string; text_body: string; stats: ReportStats; is_first: boolean;
   resend_id: string | null; error: string | null; created_at: string; sent_at: string | null;
+  delivered_at?: string | null; first_opened_at?: string | null; last_opened_at?: string | null; open_count?: number;
+  first_clicked_at?: string | null; bounced_at?: string | null; complained_at?: string | null; last_event?: string | null;
 };
 
 export function reportsConfig() {
