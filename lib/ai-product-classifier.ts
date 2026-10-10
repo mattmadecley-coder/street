@@ -155,11 +155,20 @@ function validateClassification(value: unknown): ProductClassification {
   };
 }
 
-export async function classifyProductWithAI(product: ProductToClassify): Promise<{ classification: ProductClassification; model: string; usage?: { promptTokens?: number; completionTokens?: number } }> {
+/** Cheap vision-capable model used by the image fallback passes (2nd/3rd classifier). */
+export function visionClassifierModels() {
+  const primary = process.env.STREET_VISION_MODEL?.trim() || "google/gemini-2.5-flash-lite";
+  const fallbacks = (process.env.STREET_VISION_FALLBACK_MODELS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  return [...new Set([primary, ...fallbacks])];
+}
+
+/** Text-only pass by default; pass `imageUrl` for a vision pass (uses the vision model list). */
+export async function classifyProductWithAI(product: ProductToClassify, options: { imageUrl?: string } = {}): Promise<{ classification: ProductClassification; model: string; usage?: { promptTokens?: number; completionTokens?: number } }> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("AI classification is not configured. Add OPENROUTER_API_KEY in Vercel before running the classifier.");
 
-  const models = classifierModels();
+  const imageUrl = options.imageUrl;
+  const models = imageUrl ? visionClassifierModels() : classifierModels();
   const productContext = JSON.stringify({
     title: product.title,
     description: product.description.slice(0, 2000),
@@ -206,7 +215,15 @@ ${STREET_COLORS.join(", ")}
 
 Respond with ONLY a single raw JSON object — no markdown code fences, no commentary before or after. It must have exactly these keys: "group" (string), "category" (string), "type" (string, or "none"), "detail" (string, or "none"), "activity" (string, or "none"), "tags" (array of strings, up to 12), "colors" (array of strings, up to 3), "confidence" ("high", "medium", or "low"). Every string value must be copied exactly (case-sensitive) from the approved lists above — never invent a value that isn't in those lists.`,
         },
-        { role: "user", content: productContext },
+        {
+          role: "user",
+          content: imageUrl
+            ? [
+                { type: "text", text: `Product info (JSON). One product photo is attached; use it together with the text, and trust what the photo clearly shows over vague text:\n${productContext}` },
+                { type: "image_url", image_url: { url: imageUrl } },
+              ]
+            : productContext,
+        },
       ],
       // Plain JSON mode rather than a strict json_schema: once type/detail
       // enums cover the full 4-level taxonomy (hundreds of values), some
