@@ -53,10 +53,13 @@ export const n = (v: unknown) => { const x = Number(v); return Number.isFinite(x
 
 // ---------------------------------------------------------------- series + comparisons
 export type Pt = { x: string; y: number };
-export type Series = { key: string; label: string; format?: "int" | "pct"; day: Pt[]; week: Pt[]; month: Pt[] };
+export type Series = { key: string; label: string; color?: string; format?: "int" | "pct"; day: Pt[]; week: Pt[]; month: Pt[] };
+/** Fixed identity colors (validated categorical slots 1-3). A channel is always this color, everywhere. */
+export const CHANNEL_COLOR: Record<Platform, string> = { tiktok: "#2a78d6", instagram: "#eb6834", pinterest: "#1baf7a" };
+export const CHANNEL_LABEL: Record<Platform, string> = { tiktok: "TikTok", instagram: "Instagram", pinterest: "Pinterest" };
 
 /** map: day -> value. agg "sum" adds within a bucket; "last" keeps the latest day's value (for running totals like followers). */
-export function buildSeries(key: string, label: string, map: Record<string, number>, agg: "sum" | "last" = "sum", format: "int" | "pct" = "int"): Series {
+export function buildSeries(key: string, label: string, map: Record<string, number>, agg: "sum" | "last" = "sum", format: "int" | "pct" = "int", color?: string): Series {
   const today = todayET();
   const days: Pt[] = [];
   for (let i = 29; i >= 0; i--) { const d = addDays(today, -i); days.push({ x: shortDay(d), y: n(map[d]) }); }
@@ -85,7 +88,7 @@ export function buildSeries(key: string, label: string, map: Record<string, numb
     }
     months.push({ x: d.toLocaleString("en-US", { month: "short", timeZone: "UTC" }), y });
   }
-  return { key, label, format, day: days, week: weeks, month: months };
+  return { key, label, color, format, day: days, week: weeks, month: months };
 }
 
 export type Comparison = { today: number; yesterday: number; last7: number; prev7: number; last30: number; prev30: number };
@@ -140,45 +143,95 @@ export function channelOfReferrer(referrer: string | null): Platform | null {
   return null;
 }
 
+export type Visit = { ch: Platform; t: number; day: string; session: string; user: string; campaign: string };
+export type Click = { ch: Platform; t: number; day: string; session: string; campaign: string; brand: string | null; product: string | null };
 export type Traffic = {
-  /** per channel: day -> value */
+  visits: Visit[];
+  clicks: Click[];
+  /** per channel: day -> value (Eastern days) */
   visitors: Record<Platform, Record<string, number>>;
   sessions: Record<Platform, Record<string, number>>;
   outbound: Record<Platform, Record<string, number>>;
-  campaigns: Array<CampaignRow & { channel: Platform }>;
 };
 
+const MIN_FMT = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "numeric", hour12: false });
+/** Minutes since local (Eastern) midnight for a timestamp. */
+export function etMinutes(ms: number) {
+  const parts = MIN_FMT.formatToParts(new Date(ms));
+  const h = Number(parts.find((p) => p.type === "hour")?.value) % 24;
+  const m = Number(parts.find((p) => p.type === "minute")?.value);
+  return h * 60 + m;
+}
+export const nowMinutes = () => etMinutes(Date.now());
+
+const SRC_IN = "pinterest,pin,ig,instagram,insta,tiktok,tt";
+
+/**
+ * Social traffic measured on Street itself. A session counts for a channel when its landing event carries that
+ * channel's utm_source, or (no utm) arrives with that site as the referrer. Times are exact, so "today so far"
+ * can be compared with "yesterday at this time".
+ */
 export async function getTraffic(): Promise<Traffic> {
   const empty = () => ({ tiktok: {}, instagram: {}, pinterest: {} }) as Record<Platform, Record<string, number>>;
-  const t: Traffic = { visitors: empty(), sessions: empty(), outbound: empty(), campaigns: [] };
+  const t: Traffic = { visits: [], clicks: [], visitors: empty(), sessions: empty(), outbound: empty() };
   if (!hasSupabaseCatalog()) return t;
-  const since = addDays(todayET(), -400);
-  const rows = await restAll<CampaignRow>(`analytics_campaign_daily?select=*&day=gte.${since}`, 1000, 20000).catch(() => []);
-  const seenSessions = new Set<string>();
-  for (const r of rows) {
-    const ch = channelOfSource(r.utm_source);
-    if (!ch) continue;
-    t.visitors[ch][r.day] = (t.visitors[ch][r.day] ?? 0) + n(r.visitors);
-    t.sessions[ch][r.day] = (t.sessions[ch][r.day] ?? 0) + n(r.sessions);
-    t.outbound[ch][r.day] = (t.outbound[ch][r.day] ?? 0) + n(r.outbound_clicks);
-    t.campaigns.push({ ...r, channel: ch });
-  }
-  // Referrer-based visits (TikTok bios/captions are not tagged links, so these arrive as a plain referrer).
-  const since30 = new Date(Date.now() - 90 * 86400000).toISOString();
-  const events = await restAll<{ created_at: string; session_id: string; referrer: string | null; utm_source: string | null }>(
-    `site_events?select=created_at,session_id,referrer,utm_source&event_type=eq.page_view&created_at=gte.${since30}&referrer=not.is.null&or=(referrer.ilike.*tiktok*,referrer.ilike.*instagram*,referrer.ilike.*pinterest*,referrer.ilike.*pin.it*)`,
-    1000, 20000,
-  ).catch(() => []);
+  const since = new Date(Date.now() - 120 * 86400000).toISOString();
+  type Ev = { created_at: string; session_id: string; anonymous_user_id: string | null; referrer: string | null; utm_source: string | null; utm_campaign: string | null };
+  const events = await restAll<Ev>(
+    `site_events?select=created_at,session_id,anonymous_user_id,referrer,utm_source,utm_campaign&created_at=gte.${since}` +
+    `&or=(utm_source.in.(${SRC_IN}),referrer.ilike.*tiktok*,referrer.ilike.*instagram*,referrer.ilike.*pinterest*,referrer.ilike.*pin.it*)&order=created_at.asc`,
+    1000, 30000,
+  ).catch(() => [] as Ev[]);
+  const bySession = new Map<string, Platform>();
+  const users = new Map<string, Set<string>>();
   for (const e of events) {
-    if (e.utm_source && channelOfSource(e.utm_source)) continue; // already counted via the tagged campaign
-    const ch = channelOfReferrer(e.referrer);
-    if (!ch || seenSessions.has(e.session_id)) continue;
-    seenSessions.add(e.session_id);
-    const d = etDay(e.created_at);
-    t.sessions[ch][d] = (t.sessions[ch][d] ?? 0) + 1;
-    t.visitors[ch][d] = (t.visitors[ch][d] ?? 0) + 1;
+    if (!e.session_id || bySession.has(e.session_id)) continue;
+    const ch = channelOfSource(e.utm_source ?? "") ?? channelOfReferrer(e.referrer);
+    if (!ch) continue;
+    bySession.set(e.session_id, ch);
+    const ms = new Date(e.created_at).getTime();
+    const day = etDay(e.created_at);
+    t.visits.push({ ch, t: ms, day, session: e.session_id, user: e.anonymous_user_id ?? e.session_id, campaign: e.utm_campaign ?? "" });
+    t.sessions[ch][day] = (t.sessions[ch][day] ?? 0) + 1;
+    const key = `${ch}|${day}`;
+    const set = users.get(key) ?? new Set<string>();
+    if (!set.has(e.anonymous_user_id ?? e.session_id)) { set.add(e.anonymous_user_id ?? e.session_id); t.visitors[ch][day] = (t.visitors[ch][day] ?? 0) + 1; }
+    users.set(key, set);
+  }
+  type Oc = { created_at: string; session_id: string | null; referrer: string | null; utm_source: string | null; utm_campaign: string | null; brand_slug: string | null; product_title: string | null };
+  const clicks = await restAll<Oc>(`outbound_clicks?select=created_at,session_id,referrer,utm_source,utm_campaign,brand_slug,product_title&created_at=gte.${since}`, 1000, 20000).catch(() => [] as Oc[]);
+  for (const c of clicks) {
+    const ch = (c.session_id ? bySession.get(c.session_id) : undefined) ?? channelOfSource(c.utm_source ?? "") ?? channelOfReferrer(c.referrer);
+    if (!ch) continue;
+    const day = etDay(c.created_at);
+    t.clicks.push({ ch, t: new Date(c.created_at).getTime(), day, session: c.session_id ?? "", campaign: c.utm_campaign ?? "", brand: c.brand_slug, product: c.product_title });
+    t.outbound[ch][day] = (t.outbound[ch][day] ?? 0) + 1;
   }
   return t;
+}
+
+/** Cumulative count at the end of each hour of `day` (null for hours that haven't happened yet today). */
+export function cumulativeByHour(items: Array<{ t: number; day: string }>, day: string, ch?: Platform, chOf?: (i: never) => Platform): (number | null)[] {
+  void chOf;
+  const per = new Array(24).fill(0);
+  for (const i of items as Array<{ t: number; day: string; ch?: Platform }>) {
+    if (i.day !== day || (ch && i.ch !== ch)) continue;
+    per[Math.floor(etMinutes(i.t) / 60)] += 1;
+  }
+  const isToday = day === todayET();
+  const nowH = Math.floor(nowMinutes() / 60);
+  let run = 0;
+  return per.map((v, h) => { run += v; return isToday && h > nowH ? null : run; });
+}
+/** How many happened on `day` up to the given minute of the day. */
+export function countUpTo(items: Array<{ t: number; day: string; ch?: Platform }>, day: string, minutes: number, ch?: Platform) {
+  let c = 0;
+  for (const i of items) if (i.day === day && (!ch || i.ch === ch) && etMinutes(i.t) <= minutes) c += 1;
+  return c;
+}
+export function lastNDays(map: Record<string, number>, days = 14): number[] {
+  const today = todayET();
+  return Array.from({ length: days }, (_, k) => n(map[addDays(today, -(days - 1 - k))]));
 }
 
 // ---------------------------------------------------------------- health
@@ -231,3 +284,23 @@ export function delta(cur: number, prev: number) {
   const p = (cur - prev) / prev;
   return { text: `${p >= 0 ? "+" : ""}${(p * 100).toFixed(0)}%`, tone: p > 0.005 ? ("up" as const) : p < -0.005 ? ("down" as const) : ("flat" as const) };
 }
+
+// ---------------------------------------------------------------- "today" summary
+export type TodaySummary = {
+  visits: number; prevAtNow: number; yesterday: number;
+  clicks: number; clicksYesterday: number;
+  todayCum: (number | null)[]; yesterdayCum: number[];
+};
+export function todaySummary(t: Traffic, ch?: Platform): TodaySummary {
+  const today = todayET();
+  const yest = addDays(today, -1);
+  const mins = nowMinutes();
+  const v = ch ? t.visits.filter((x) => x.ch === ch) : t.visits;
+  const c = ch ? t.clicks.filter((x) => x.ch === ch) : t.clicks;
+  return {
+    visits: countUpTo(v, today, 24 * 60), prevAtNow: countUpTo(v, yest, mins), yesterday: countUpTo(v, yest, 24 * 60),
+    clicks: countUpTo(c, today, 24 * 60), clicksYesterday: countUpTo(c, yest, 24 * 60),
+    todayCum: cumulativeByHour(v, today), yesterdayCum: cumulativeByHour(v, yest).map((x) => x ?? 0),
+  };
+}
+export const nowStamp = () => new Date().toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
