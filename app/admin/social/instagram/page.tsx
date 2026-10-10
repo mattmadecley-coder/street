@@ -53,7 +53,6 @@ export default async function InstagramDashboard() {
   if (n(d.restarts_7d) >= 3) alerts.push({ level: "warn", text: `The follow bot crashed and was relaunched ${d.restarts_7d} times this week.` });
   if (failed.length) { const lf = [...failed].sort((a, b) => (b.scheduled_for ?? "").localeCompare(a.scheduled_for ?? ""))[0]; alerts.push({ level: "bad", text: `${failed.length} Instagram post(s) failed in Postiz. Latest: ${fmtWhen(lf.scheduled_for)}${lf.meta.error ? ` - "${String(lf.meta.error)}"` : ""}` }); }
   if (!lined.length) alerts.push({ level: "warn", text: "Nothing is queued in Postiz for Instagram." });
-  if (!checked.length) alerts.push({ level: "info", text: "Follow-back rate isn't measurable yet: Instagram blocks reading the follower list from the bot's session, so follow-backs aren't being checked. See the note under Follow-for-follow." });
   if (overallRate !== null && overallRate < 0.03 && checked.length > 100) alerts.push({ level: "warn", text: `Follow-back rate is only ${pct(overallRate)} - consider switching the target accounts.` });
 
   const posted7 = compareWindows(postsMap);
@@ -71,7 +70,7 @@ export default async function InstagramDashboard() {
         <Kpi label="Followed (7d)" value={int(compareWindows(followsMade).last7)} cur={compareWindows(followsMade).last7} prev={compareWindows(followsMade).prev7} vs="prior 7d" />
         <Kpi label="Total followed" value={int(follows.length)} note={`${d.target_accounts ?? "?"} target accounts`} />
         <Kpi label="Follow-back rate" value={overallRate === null ? "n/a" : pct(overallRate)} note={overallRate === null ? "not being measured yet" : `${backs.length} of ${checked.length} checked${matureRate !== null ? ` · ${pct(matureRate)} after 3+ days` : ""}`} />
-        <Kpi label="Followers" value={followers === null ? "n/a" : int(followers)} note={followers === null ? "needs Instagram profile access" : `following ${int(n(latest(followingMap)))}`} />
+        <Kpi label="Followers" value={followers === null ? "n/a" : int(followers)} note={followers === null ? "not read yet" : `following ${int(n(latest(followingMap)))}`} />
         <Kpi label="Unfollowed" value={int(Object.values(unfollows).reduce((a, v) => a + v, 0))} note={d.unfollow_enabled ? `auto-unfollow after ${d.unfollow_after_days} days` : "auto-unfollow off"} />
       </div>
       <div className={s.two} style={{ marginTop: 14 }}>
@@ -80,7 +79,7 @@ export default async function InstagramDashboard() {
         {followers !== null ? <SocialChart title="Followers" series={[buildSeries("fl", "Followers", followersMap, "last")]} line /> : null}
       </div>
       <p className={s.note} style={{ marginTop: 10 }}>
-        Limits: {d.max_per_hour ?? "?"} follows/hour, {d.max_per_day ?? "?"}/day, {d.max_likes_per_day ?? "?"} likes/day. Follow-back and follower numbers need the Instagram follower list; Instagram currently refuses that read from the bot&apos;s session, so those cards stay n/a until a logged-in browser reads them.
+        Limits: {d.max_per_hour ?? "?"} follows/hour, {d.max_per_day ?? "?"}/day, {d.max_likes_per_day ?? "?"} likes/day. Followers and following are read from the public profile every few hours. Follow-back rate stays n/a because Instagram does not show the follower list without a deeper login.
       </p>
 
       <div className={styles.section}>
