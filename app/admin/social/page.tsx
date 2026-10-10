@@ -21,7 +21,10 @@ export default async function SocialOverviewPage() {
 
   const by = (p: Platform) => posts.filter((x) => x.platform === p);
   const whenOf = (x: (typeof posts)[number]) => (x.platform === "pinterest" ? x.scheduled_for ?? x.posted_at : x.posted_at);
-  const posted = (p: Platform) => by(p).filter((x) => (x.status === "posted" || (p === "pinterest" && x.status === "scheduled")) && whenOf(x));
+  // Pinterest publishes scheduled pins on its own, so a pin counts as posted once its time has passed.
+  // Pins scheduled for later today are shown separately as "later today", never as posted.
+  const posted = (p: Platform) => by(p).filter((x) => (x.status === "posted" || (p === "pinterest" && x.status === "scheduled" && x.scheduled_for && new Date(x.scheduled_for).getTime() <= now)) && whenOf(x));
+  const laterToday = (p: Platform) => by(p).filter((x) => x.status === "scheduled" && x.scheduled_for && new Date(x.scheduled_for).getTime() > now && etDay(x.scheduled_for) === today).length;
   const postedMap = (p: Platform) => countByDay(posted(p), (x) => etDay(whenOf(x)!));
   const lined = (p: Platform) => by(p).filter((x) => x.status === "scheduled" && x.scheduled_for && new Date(x.scheduled_for).getTime() > now);
   const tiktokJob = jobs.find((j) => j.job === "tiktok_post");
@@ -101,7 +104,7 @@ export default async function SocialOverviewPage() {
             spark={lastNDays(traffic.sessions[p])}
             facts={[
               ["Clicks out today", String(per[p].clicks)],
-              ["Posted today", TARGET[p] ? `${n(postedMap(p)[today])} of ${TARGET[p]}` : String(n(postedMap(p)[today]))],
+              ["Posted today", `${TARGET[p] ? `${n(postedMap(p)[today])} of ${TARGET[p]}` : String(n(postedMap(p)[today]))}${laterToday(p) ? ` (+${laterToday(p)} later today)` : ""}`],
               ["Lined up", String(queued[p])],
               ["Next up", nextUp(p) ? fmtWhen(nextUp(p)) : "nothing queued"],
             ]}

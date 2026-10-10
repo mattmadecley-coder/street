@@ -20,7 +20,7 @@ export default async function PinterestDashboard() {
   const live = all.filter((p) => p.status === "posted");
   const lined = all.filter((p) => p.status === "scheduled" && p.scheduled_for && new Date(p.scheduled_for).getTime() > Date.now()).sort((a, b) => a.scheduled_for!.localeCompare(b.scheduled_for!));
   const failed = all.filter((p) => p.status === "failed");
-  const publishPerDay = countByDay(all.filter((p) => p.status !== "failed"), (p) => etDay(when(p)!)); // pins by their publish day
+  const publishPerDay = countByDay(all.filter((p) => p.status !== "failed" && when(p) && (p.status === "posted" || new Date(when(p)!).getTime() <= Date.now())), (p) => etDay(when(p)!)); // pins by their publish day; pins still waiting for their time aren't counted yet
   const livePerDay = countByDay(live, (p) => etDay(when(p)!));
   const sessions = traffic.sessions.pinterest;
   const visitors = traffic.visitors.pinterest;
