@@ -2,127 +2,139 @@ import styles from "@/app/admin/admin.module.css";
 import s from "@/app/admin/social/social.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { SocialChart } from "@/components/admin/social-chart";
-import { Alerts, CompareTable, HealthList, Kpi, SocialTabs } from "@/components/admin/social-ui";
+import { TodayChart } from "@/components/admin/social-today-chart";
+import { Alerts, ChannelCard, CompareTable, HealthList, SectionTitle, SocialTabs, TodayHero } from "@/components/admin/social-ui";
 import {
-  PLATFORMS, buildSeries, compareWindows, countByDay, etDay, fmtWhen, getJobs, getSocialPosts, getTraffic, int, jobHealth, n, todayET, addDays,
-  type Platform,
+  CHANNEL_COLOR, CHANNEL_LABEL, PLATFORMS, addDays, buildSeries, compareWindows, countByDay, etDay, fmtWhen, getJobs, getSocialPosts, getTraffic, int, jobHealth, lastNDays,
+  n, nowStamp, todayET, todaySummary, type Platform,
 } from "@/lib/social-dashboard";
 
 export const dynamic = "force-dynamic";
-const LABEL: Record<Platform, string> = { tiktok: "TikTok", instagram: "Instagram", pinterest: "Pinterest" };
+const TARGET: Partial<Record<Platform, number>> = { tiktok: 6, pinterest: 10 };
 
 export default async function SocialOverviewPage() {
   const [posts, jobs, traffic] = await Promise.all([getSocialPosts(), getJobs(), getTraffic()]);
   const today = todayET();
   const yesterday = addDays(today, -1);
   const now = Date.now();
+  const stamp = nowStamp();
 
   const by = (p: Platform) => posts.filter((x) => x.platform === p);
-  const posted = (p: Platform) => by(p).filter((x) => x.status === "posted" && x.posted_at);
+  const whenOf = (x: (typeof posts)[number]) => (x.platform === "pinterest" ? x.scheduled_for ?? x.posted_at : x.posted_at);
+  const posted = (p: Platform) => by(p).filter((x) => (x.status === "posted" || (p === "pinterest" && x.status === "scheduled")) && whenOf(x));
+  const postedMap = (p: Platform) => countByDay(posted(p), (x) => etDay(whenOf(x)!));
   const lined = (p: Platform) => by(p).filter((x) => x.status === "scheduled" && x.scheduled_for && new Date(x.scheduled_for).getTime() > now);
   const tiktokJob = jobs.find((j) => j.job === "tiktok_post");
   const tiktokNext = ((tiktokJob?.details?.next_runs as string[] | undefined) ?? []).filter((d) => new Date(d).getTime() > now && new Date(d).getTime() < now + 36 * 3600000);
   const queued: Record<Platform, number> = { tiktok: tiktokNext.length, instagram: lined("instagram").length, pinterest: lined("pinterest").length };
+  const nextUp = (p: Platform) => (p === "tiktok" ? tiktokNext[0] : lined(p).map((x) => x.scheduled_for!).sort()[0]);
 
+  // ---- attention
   const alerts: Array<{ level: "bad" | "warn" | "info"; text: string }> = [];
   for (const j of jobs) {
     const h = jobHealth(j);
-    if (h.level === "bad") alerts.push({ level: "bad", text: `${j.job.replace(/_/g, " ")}: ${h.label}${j.last_message ? ` - ${j.last_message}` : ""}` });
-    else if (h.level === "warn") alerts.push({ level: "warn", text: `${j.job.replace(/_/g, " ")}: ${h.label}${j.last_message ? ` - ${j.last_message}` : ""}` });
+    if (h.level === "bad" || h.level === "warn") alerts.push({ level: h.level === "bad" ? "bad" : "warn", text: `${j.job.replace(/_/g, " ")}: ${h.label}${j.last_message ? `. ${j.last_message}` : ""}` });
   }
-  const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date()));
-  const ttToday = posted("tiktok").filter((x) => etDay(x.posted_at!) === today).length;
+  const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date())) % 24;
+  const ttToday = n(postedMap("tiktok")[today]);
   if (hour >= 11 && ttToday === 0 && tiktokJob) alerts.push({ level: "bad", text: "TikTok: nothing has been posted yet today." });
   const hooks = (tiktokJob?.details?.hook_photos ?? {}) as Record<string, number>;
-  for (const [series, count] of Object.entries(hooks)) if (n(count) < 10) alerts.push({ level: "warn", text: `TikTok "${series}" is down to ${count} hook photos - add more so hooks don't repeat.` });
-  if (jobs.length && queued.pinterest === 0) alerts.push({ level: "warn", text: "Pinterest: no pins are lined up (the 5 AM run schedules the next batch)." });
+  for (const [series, count] of Object.entries(hooks)) if (n(count) < 10) alerts.push({ level: "warn", text: `TikTok "${series}" is down to ${count} hook photos. Add more so hooks don't repeat.` });
+  if (jobs.length && queued.pinterest === 0) alerts.push({ level: "warn", text: "Pinterest: no pins are lined up. The 5 AM run schedules the next batch." });
   const igFailed = by("instagram").filter((x) => x.status === "failed" && x.scheduled_for && now - new Date(x.scheduled_for).getTime() < 7 * 86400000);
   if (igFailed.length) alerts.push({ level: "bad", text: `Instagram: ${igFailed.length} post(s) failed in the last 7 days (Postiz: "${String(igFailed[0].meta.error ?? "unknown error")}").` });
   if (jobs.length && queued.instagram === 0) alerts.push({ level: "warn", text: "Instagram: nothing is queued in Postiz." });
 
-  const sum = (rec: Record<string, number>[]) => { const o: Record<string, number> = {}; for (const r of rec) for (const [d, v] of Object.entries(r)) o[d] = (o[d] ?? 0) + v; return o; };
+  // ---- today
+  const all = todaySummary(traffic);
+  const per = Object.fromEntries(PLATFORMS.map((p) => [p, todaySummary(traffic, p)])) as Record<Platform, ReturnType<typeof todaySummary>>;
+  const postsToday = PLATFORMS.reduce((a, p) => a + n(postedMap(p)[today]), 0);
+  const postsYesterday = PLATFORMS.reduce((a, p) => a + n(postedMap(p)[yesterday]), 0);
+
+  const sessionSeries = PLATFORMS.map((p) => buildSeries(p, CHANNEL_LABEL[p], traffic.sessions[p], "sum", "int", CHANNEL_COLOR[p]));
+  const outboundSeries = PLATFORMS.map((p) => buildSeries(p, CHANNEL_LABEL[p], traffic.outbound[p], "sum", "int", CHANNEL_COLOR[p]));
+  const postSeries = PLATFORMS.map((p) => buildSeries(p, CHANNEL_LABEL[p], postedMap(p), "sum", "int", CHANNEL_COLOR[p]));
+  const sum = (recs: Record<string, number>[]) => { const o: Record<string, number> = {}; for (const r of recs) for (const [d, v] of Object.entries(r)) o[d] = (o[d] ?? 0) + v; return o; };
   const sessionsAll = sum(PLATFORMS.map((p) => traffic.sessions[p]));
   const outboundAll = sum(PLATFORMS.map((p) => traffic.outbound[p]));
-  const trafficSeries = [
-    buildSeries("all", "All social", sessionsAll), ...PLATFORMS.map((p) => buildSeries(p, LABEL[p], traffic.sessions[p])),
-  ];
-  const postsAll = sum(PLATFORMS.map((p) => countByDay(posted(p), (x) => etDay(x.posted_at!))));
-  const postSeries = [buildSeries("all", "All", postsAll), ...PLATFORMS.map((p) => buildSeries(p, LABEL[p], countByDay(posted(p), (x) => etDay(x.posted_at!))))];
-
+  const postsAll = sum(PLATFORMS.map(postedMap));
   const top = posts.filter((x) => n(x.views) > 0).sort((a, b) => n(b.views) - n(a.views)).slice(0, 8);
 
   return (
     <div className={styles.shell}>
       <AdminNav active="/admin/social" />
       <div className={s.head}>
-        <div><h1 className={styles.title}>Social growth</h1><p className={styles.subtitle}>Everything the TikTok, Instagram and Pinterest automations are doing, and what it sends to Street.</p></div>
+        <div><h1 className={styles.title}>Social growth</h1><p className={styles.subtitle}>What TikTok, Instagram and Pinterest did today, and what they sent to Street.</p></div>
+        <div className={s.stamp}>Eastern time · as of {stamp}</div>
       </div>
       <SocialTabs active="/admin/social" />
 
-      <div className={styles.section}>
-        <div className={styles.sectionHead}><h2>Needs attention</h2></div>
-        <Alerts items={alerts} />
+      <div className={s.todayGrid}>
+        <TodayHero
+          label="Visits from social today"
+          value={all.visits}
+          prevAtNow={all.prevAtNow}
+          yesterdayTotal={all.yesterday}
+          nowLabel={stamp}
+          rows={[["Clicks out to brands", `${all.clicks} (yesterday ${all.clicksYesterday})`], ["Posts published", `${postsToday} (yesterday ${postsYesterday})`], ["Lined up next", `${queued.tiktok + queued.instagram + queued.pinterest} posts`]]}
+        />
+        <TodayChart
+          title="Visits through the day"
+          lines={PLATFORMS.map((p) => ({ key: p, label: CHANNEL_LABEL[p], color: CHANNEL_COLOR[p], today: per[p].todayCum }))}
+          yesterday={all.yesterdayCum}
+        />
       </div>
 
-      <div className={styles.section}>
-        <div className={styles.sectionHead}><h2>Channels at a glance</h2><p className={styles.rowMeta}>Eastern time · today vs yesterday</p></div>
-        <div className={s.two}>
-          {PLATFORMS.map((p) => {
-            const postedMap = countByDay(posted(p), (x) => etDay(x.posted_at!));
-            const sess = traffic.sessions[p];
-            const out = traffic.outbound[p];
-            const c = compareWindows(sess);
-            const outC = compareWindows(out);
-            const next = p === "tiktok" ? tiktokNext[0] : lined(p).map((x) => x.scheduled_for!).sort()[0];
-            return (
-              <div key={p}>
-                <h3 style={{ fontSize: 15, margin: "0 0 8px" }}><a href={`/admin/social/${p}`} style={{ color: "inherit" }}>{LABEL[p]} &rarr;</a></h3>
-                <div className={s.grid}>
-                  <Kpi label="Posted today" value={String(n(postedMap[today]))} cur={n(postedMap[today])} prev={n(postedMap[yesterday])} />
-                  <Kpi label="Lined up" value={String(queued[p])} note={next ? `next: ${fmtWhen(next)}` : "nothing queued"} />
-                  <Kpi label="Visits (7d)" value={int(c.last7)} cur={c.last7} prev={c.prev7} vs="prior 7d" />
-                  <Kpi label="Outbound clicks (7d)" value={int(outC.last7)} cur={outC.last7} prev={outC.prev7} vs="prior 7d" />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <div className={s.chans} style={{ marginTop: 14 }}>
+        {PLATFORMS.map((p) => (
+          <ChannelCard
+            key={p} ch={p} href={`/admin/social/${p}`}
+            visits={per[p].visits} prevAtNow={per[p].prevAtNow} yesterdayTotal={per[p].yesterday}
+            spark={lastNDays(traffic.sessions[p])}
+            facts={[
+              ["Clicks out today", String(per[p].clicks)],
+              ["Posted today", TARGET[p] ? `${n(postedMap(p)[today])} of ${TARGET[p]}` : String(n(postedMap(p)[today]))],
+              ["Lined up", String(queued[p])],
+              ["Next up", nextUp(p) ? fmtWhen(nextUp(p)) : "nothing queued"],
+            ]}
+          />
+        ))}
       </div>
 
-      <div className={styles.section}>
-        <div className={styles.sectionHead}><h2>Traffic sent to Street</h2><p className={styles.rowMeta}>Sessions that arrived from each channel, measured by Street&apos;s own analytics</p></div>
-        <SocialChart title="Social sessions" subtitle="Pinterest + Instagram tagged links, TikTok/other by referrer" series={trafficSeries} />
-        <div style={{ marginTop: 18 }}>
-          <CompareTable rows={[
-            { label: "Social sessions", c: compareWindows(sessionsAll) },
-            { label: "Outbound clicks to brands", c: compareWindows(outboundAll) },
-            { label: "Posts published", c: compareWindows(postsAll) },
-          ]} />
-        </div>
-        {!Object.values(sessionsAll).some((v) => v > 0) ? <p className={s.note} style={{ marginTop: 10 }}>No social traffic recorded yet. Pinterest pins carry utm_source=pinterest; TikTok shows up when the in-app browser sends a referrer. Numbers will appear as soon as the first visits land.</p> : null}
-      </div>
+      <SectionTitle title="Needs attention" hint={alerts.length ? `${alerts.length} item${alerts.length === 1 ? "" : "s"}` : undefined} />
+      <Alerts items={alerts} />
 
-      <div className={styles.section}>
-        <div className={styles.sectionHead}><h2>Output</h2><p className={styles.rowMeta}>Posts published per period (all channels)</p></div>
-        <SocialChart title="Posts published" series={postSeries} />
+      <SectionTitle title="Traffic over time" hint="Visits that arrived from each channel" />
+      <div className={s.two}>
+        <SocialChart title="Visits by channel" series={sessionSeries} layout="stack" />
+        <SocialChart title="Clicks out to brands" subtitle="what social visitors did next" series={outboundSeries} layout="stack" />
       </div>
-
-      <div className={styles.section}>
-        <div className={styles.sectionHead}><h2>Are the bots working?</h2></div>
-        <HealthList jobs={jobs} />
+      <div style={{ marginTop: 14 }}>
+        <CompareTable rows={[
+          { label: "Visits from social", c: compareWindows(sessionsAll) },
+          { label: "Clicks out to brands", c: compareWindows(outboundAll) },
+          { label: "Posts published", c: compareWindows(postsAll) },
+        ]} />
       </div>
+      {!Object.values(sessionsAll).some((v) => v > 0) ? <p className={s.note} style={{ marginTop: 10 }}>No social visits recorded yet. Pinterest pins are tagged utm_source=pinterest; TikTok and Instagram show up when the app passes a referrer.</p> : null}
 
-      <div className={styles.section}>
-        <div className={styles.sectionHead}><h2>Best content so far</h2></div>
-        {top.length ? (
+      <SectionTitle title="Output" hint="Posts published per period" />
+      <SocialChart title="Posts published" series={postSeries} layout="stack" height={200} />
+
+      <SectionTitle title="Are the bots working?" />
+      <HealthList jobs={jobs} />
+
+      <SectionTitle title="Best content so far" />
+      {top.length ? (
+        <div className={s.panel}>
           <table className={styles.table}>
             <thead><tr><th>Channel</th><th>Post</th><th>Series</th><th>Views</th><th>Likes</th><th>Comments</th><th>Posted</th></tr></thead>
             <tbody>{top.map((x) => (
-              <tr key={x.platform + x.external_id}><td>{LABEL[x.platform]}</td><td><div className={s.thumb}>{x.link ? <a href={x.link} target="_blank" rel="noopener noreferrer">{x.hook || x.title}</a> : x.hook || x.title}</div></td><td>{x.series ?? "-"}</td><td>{int(n(x.views))}</td><td>{int(n(x.likes))}</td><td>{int(n(x.comments))}</td><td>{fmtWhen(x.posted_at)}</td></tr>
+              <tr key={x.platform + x.external_id}><td>{CHANNEL_LABEL[x.platform]}</td><td><div className={s.thumb}>{x.link ? <a href={x.link} target="_blank" rel="noopener noreferrer">{x.hook || x.title}</a> : x.hook || x.title}</div></td><td>{x.series ?? "-"}</td><td><b>{int(n(x.views))}</b></td><td>{int(n(x.likes))}</td><td>{int(n(x.comments))}</td><td>{fmtWhen(x.posted_at)}</td></tr>
             ))}</tbody>
           </table>
-        ) : <div className={s.empty}>No post has view data yet. TikTok stats are pulled at 7:15 AM and 11:15 PM; the first numbers appear after the first full day.</div>}
-      </div>
+        </div>
+      ) : <div className={s.empty}>No post has view data yet. TikTok stats are pulled at 7:15 AM and 11:15 PM.</div>}
     </div>
   );
 }
