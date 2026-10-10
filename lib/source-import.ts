@@ -362,10 +362,30 @@ async function importViaGenericScrape(brand: StreetBrand): Promise<ImportedProdu
   return results.filter((product): product is ImportedProduct => product !== null);
 }
 
+// 250 products per page; 40 pages covers a 10,000-product store.
+const MAX_FEED_PAGES = 40;
+
 export async function importBrandCatalog(brand: StreetBrand): Promise<ImportedProduct[]> {
   const base = brand.storeUrl.replace(/\/$/, "");
-  const feed = await json<{ products?: RawProduct[] }>(`${base}/products.json?limit=250`);
-  if (feed?.products?.length) return feed.products.map((product) => normalize(product, brand, false));
+  // Shopify caps products.json at 250 per page, so walk every page. (Reading only the first page
+  // silently capped each brand at 250 products.) Stops on a short/empty page or a repeated page.
+  const feedProducts: RawProduct[] = [];
+  const seenIds = new Set<string>();
+  for (let page = 1; page <= MAX_FEED_PAGES; page++) {
+    const feed = await json<{ products?: RawProduct[] }>(`${base}/products.json?limit=250&page=${page}`);
+    const batch = feed?.products ?? [];
+    if (!batch.length) break;
+    let added = 0;
+    for (const product of batch) {
+      const id = String((product as { id?: unknown }).id ?? (product as { handle?: unknown }).handle ?? "");
+      if (id && seenIds.has(id)) continue;
+      if (id) seenIds.add(id);
+      feedProducts.push(product);
+      added++;
+    }
+    if (batch.length < 250 || added === 0) break;
+  }
+  if (feedProducts.length) return feedProducts.map((product) => normalize(product, brand, false));
 
   const productHandles = await handles(base);
   const products = await Promise.all(productHandles.map(async (handle) => {

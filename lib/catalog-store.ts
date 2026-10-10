@@ -3,6 +3,7 @@ import { STREET_TAXONOMY, categoriesForGroup } from "@/lib/street-taxonomy";
 import { fetchBrandMetadata, type BrandMetadata } from "@/lib/brand-metadata";
 import { classifyProductWithAI } from "@/lib/ai-product-classifier";
 import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
+import { isJunkProduct } from "@/lib/junk-products";
 import { inspectStorefront, type StorefrontHealth } from "@/lib/storefront-health";
 import { hasSupabaseCatalog, supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 import type { StreetProduct } from "@/lib/catalog";
@@ -476,7 +477,7 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
     // product_id's sort_order slots). De-dupe by handle up front -- last
     // occurrence wins, since a later page is never less current than an
     // earlier one for the same product.
-    const dedupedImported = [...new Map(imported.map((product) => [product.handle, product])).values()];
+    const dedupedImported = [...new Map(imported.filter((product) => !isJunkProduct(product)).map((product) => [product.handle, product])).values()];
 
     const existingByExternalId = new Map(existingRows.map((row) => [row.external_id, row]));
     // Some brands' source platforms (seen on Shopify) occasionally reissue a
