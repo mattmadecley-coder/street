@@ -363,6 +363,15 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
   const performanceEvents = events.filter((event) => event.event_type === "page_performance");
   const averageLoad = performanceEvents.length ? Math.round(performanceEvents.reduce((sum, event) => sum + (metadataNumber(event, "loadMs") ?? 0), 0) / performanceEvents.length) : 0;
   const slowPages = performanceEvents.filter((event) => (metadataNumber(event, "loadMs") ?? 0) >= 3000).length;
+  // Shopper funnel: distinct people who reached each step in the selected range.
+  const peopleWho = (type: string) => unique(events.filter((event) => event.event_type === type).map((event) => event.anonymous_user_id));
+  const funnel = [
+    { label: "Visited Street", people: visitors, note: "Likely-human visitors" },
+    { label: "Looked at a product", people: peopleWho("product_view"), note: "Opened a product page" },
+    { label: "Added to StreetBag", people: peopleWho("add_to_cart"), note: "Put an item in the bag" },
+    { label: "Clicked checkout", people: checkoutClickShoppers, note: "Hit checkout in the bag" },
+    { label: "Went to a brand's store", people: intent.uniqueShoppers, note: "Any click out to a brand (product page or checkout)" },
+  ];
 
   return (
     <div className={styles.shell}>
@@ -399,14 +408,37 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
       <div className={styles.analyticsHeroGrid}>
         <Metric label="Likely human visitors" value={visitors.toLocaleString()} note={`${audience.recordedVisitors.toLocaleString()} raw browser IDs`} />
         <Metric label="Sessions" value={sessions.toLocaleString()} note={`${percent(engagedSessions, sessions)} engaged`} />
-        <Metric label="Outbound clicks" value={intent.outboundClicks.toLocaleString()} note="North Star action" featured />
-        <Metric label="Outbound shoppers" value={intent.uniqueShoppers.toLocaleString()} note="Unique likely-human visitors" />
+        <Metric label="Clicks to brand stores" value={intent.outboundClicks.toLocaleString()} note="Your main goal: shoppers sent to brands" featured />
+        <Metric label="Shoppers sent to brands" value={intent.uniqueShoppers.toLocaleString()} note="People, not clicks" />
         <Metric label="Intent value" value={money.format(intent.intentValue)} note="Full listed price of clicked items, not sales" />
         <Metric label="Estimated value" value={money.format(estimatedValue)} note={weightsNote} />
-        <Metric label="Visitor → outbound" value={percent(intent.uniqueShoppers, visitors)} note={`${intent.uniqueProducts} products received intent`} />
+        <Metric label="Visitors who clicked through" value={percent(intent.uniqueShoppers, visitors)} note={`${intent.uniqueProducts} products got a click-out`} />
       </div>
 
       <AnalyticsOverviewChart points={trend} />
+
+      <section className={styles.section}>
+        <div className={styles.sectionHead}>
+          <div>
+            <h2>Shopper funnel</h2>
+            <p className={styles.rowMeta}>How many people reached each step in {rangeInfo.label.toLowerCase()}. Steps aren&apos;t strictly in order: shoppers can go straight to a brand&apos;s store without using the bag.</p>
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+          {funnel.map((step) => {
+            const width = visitors > 0 ? Math.max(1.5, Math.min(100, (step.people / visitors) * 100)) : 0;
+            return (
+              <div key={step.label} style={{ display: "grid", gridTemplateColumns: "minmax(150px,220px) 1fr 140px", gap: 12, alignItems: "center" }}>
+                <div><strong style={{ fontSize: 14 }}>{step.label}</strong><div className={styles.rowMeta}>{step.note}</div></div>
+                <div style={{ background: "rgba(16,16,16,.07)", height: 14 }} role="img" aria-label={`${step.label}: ${step.people} people, ${percent(step.people, visitors)} of visitors`}>
+                  <div style={{ width: `${width}%`, height: "100%", background: "#2a78d6" }} />
+                </div>
+                <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}><strong>{step.people.toLocaleString()}</strong> <span className={styles.rowMeta}>{percent(step.people, visitors)}</span></div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <section className={styles.analyticsQualityCard}>
         <div className={styles.analyticsQualityHead}>
