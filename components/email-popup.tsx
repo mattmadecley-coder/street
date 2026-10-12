@@ -205,7 +205,7 @@ export function EmailPopup({ config }: { config: EmailPopupConfig }) {
         }),
       });
       const data = (await res.json()) as { ok: boolean; token?: string | null; error?: string };
-      if (!data.ok) { setError(data.error ?? "Something went wrong."); return; }
+      if (!data.ok) { setError(data.error ?? "Something went wrong."); track("email_error", window.location.pathname); return; }
       token.current = data.token ?? null;
       suppress(365);
       track("email_submitted", window.location.pathname);
@@ -223,7 +223,7 @@ export function EmailPopup({ config }: { config: EmailPopupConfig }) {
     try {
       const res = await fetch("/api/email/phone", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: token.current, phone }) });
       const data = (await res.json()) as { ok: boolean; error?: string };
-      if (!data.ok) { setError(data.error ?? "Something went wrong."); return; }
+      if (!data.ok) { setError(data.error ?? "Something went wrong."); track("phone_error", window.location.pathname); return; }
       track("phone_submitted", window.location.pathname);
       setStep(3);
     } catch {
@@ -234,8 +234,20 @@ export function EmailPopup({ config }: { config: EmailPopupConfig }) {
   }
 
   function close() {
-    if (step === 1) { suppress(config.suppressDays); track("closed", window.location.pathname); }
+    if (step === 1) { suppress(config.suppressDays); track("closed_email_step", window.location.pathname); }
+    if (step === 2) track("closed_phone_step", window.location.pathname);
     setOpen(false);
+  }
+
+  // "Started" = first keystroke, so the funnel shows who engaged with a field but never finished it.
+  const started = useRef({ email: false, phone: false });
+  function changeEmail(value: string) {
+    if (!started.current.email && value) { started.current.email = true; track("email_started", window.location.pathname); }
+    setEmail(value);
+  }
+  function changePhone(value: string) {
+    if (!started.current.phone && value) { started.current.phone = true; track("phone_started", window.location.pathname); }
+    setPhone(value);
   }
 
   if (!open) return null;
@@ -244,7 +256,7 @@ export function EmailPopup({ config }: { config: EmailPopupConfig }) {
       onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
       <EmailPopupView
         config={config} step={step} mobile={mobile} email={email} phone={phone} error={error} busy={busy}
-        onEmail={setEmail} onPhone={setPhone} onNext={submitEmail} onFinish={submitPhone}
+        onEmail={changeEmail} onPhone={changePhone} onNext={submitEmail} onFinish={submitPhone}
         onSkip={() => { track("skipped_phone", window.location.pathname); setStep(3); }}
         onClose={close}
       />

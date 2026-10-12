@@ -3,6 +3,7 @@ import styles from "@/app/admin/admin.module.css";
 
 const TABS = [
   { href: "/admin/email", label: "Overview" },
+  { href: "/admin/email/analytics", label: "Analytics" },
   { href: "/admin/email/contacts", label: "Customers" },
   { href: "/admin/email/popup", label: "Signup popup" },
   { href: "/admin/reports", label: "Brand outreach" },

@@ -3,7 +3,10 @@ import { clean, clientIp, deviceFromUserAgent, rateLimited } from "@/lib/email-m
 
 export const dynamic = "force-dynamic";
 
-const TYPES = new Set(["shown", "closed", "email_submitted", "phone_submitted", "skipped_phone"]);
+const TYPES = new Set([
+  "shown", "closed", "closed_email_step", "closed_phone_step", "email_started", "email_submitted",
+  "phone_started", "phone_submitted", "skipped_phone", "email_error", "phone_error",
+]);
 
 export async function POST(request: Request) {
   let body: Record<string, unknown>;

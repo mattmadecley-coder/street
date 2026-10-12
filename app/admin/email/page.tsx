@@ -87,12 +87,12 @@ export default async function AdminEmailOverviewPage() {
       </section>
 
       <section className={styles.section}>
-        <div className={styles.sectionHead}><div><h2>Signup popup, last 30 days</h2><p className={styles.rowMeta}>Who saw it, who gave an email, who added a phone.</p></div></div>
+        <div className={styles.sectionHead}><div><h2>Signup popup, last 30 days</h2><p className={styles.rowMeta}>Who saw it, who gave an email, who added a phone. <a href="/admin/email/analytics">Full popup analytics</a></p></div></div>
         <table className={styles.table}>
           <thead><tr><th>Step</th><th>People</th><th>Rate</th></tr></thead>
           <tbody>
             <tr><td>Popup shown</td><td>{shown}</td><td>-</td></tr>
-            <tr><td>Closed without email</td><td>{popupCount("closed")}</td><td>{pct(popupCount("closed"), shown)}</td></tr>
+            <tr><td>Closed without email</td><td>{popupCount("closed") + popupCount("closed_email_step")}</td><td>{pct(popupCount("closed") + popupCount("closed_email_step"), shown)}</td></tr>
             <tr><td>Gave an email</td><td>{emailSubmitted}</td><td>{pct(emailSubmitted, shown)} of shown</td></tr>
             <tr><td>Added a phone</td><td>{phoneSubmitted}</td><td>{pct(phoneSubmitted, emailSubmitted)} of emails</td></tr>
             <tr><td>Skipped phone</td><td>{popupCount("skipped_phone")}</td><td>{pct(popupCount("skipped_phone"), emailSubmitted)} of emails</td></tr>
