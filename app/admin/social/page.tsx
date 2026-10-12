@@ -145,7 +145,7 @@ export default async function SocialOverviewPage() {
             ))}</tbody>
           </table>
         </div>
-      ) : <div className={s.empty}>No post has view data yet. TikTok stats are pulled at 7:15 AM and 11:15 PM.</div>}
+      ) : <div className={s.empty}>No post has view data yet. TikTok stats are pulled every 2 hours.</div>}
     </div>
   );
 }

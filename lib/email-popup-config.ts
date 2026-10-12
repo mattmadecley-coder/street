@@ -4,6 +4,10 @@
 export type EmailPopupConfig = {
   enabled: boolean;
   image: string;
+  /** Crop: which part of the photo stays in frame (0-100 = left/top to right/bottom) and how far it is zoomed (1-3). */
+  imageX: number;
+  imageY: number;
+  imageZoom: number;
   brandLine: string;
   step1Title: string;
   step1Body: string;
@@ -28,6 +32,9 @@ export type EmailPopupConfig = {
 export const EMAIL_POPUP_DEFAULTS: EmailPopupConfig = {
   enabled: false,
   image: "https://cdn.shopify.com/s/files/1/0001/8192/7990/files/BLACKISLANDKNOCKOUTTRACKSUITFRONT_f10bfaca-e672-423d-9a4e-7fd64e7f132e.png?v=1784840211",
+  imageX: 50,
+  imageY: 50,
+  imageZoom: 1,
   brandLine: "Street",
   step1Title: "Be the first to know.",
   step1Body: "New pieces from independent brands drop and sell out fast. Drop your email and we'll tell you first.",
@@ -60,6 +67,9 @@ export function mergePopupConfig(raw: unknown): EmailPopupConfig {
     else if (typeof fallback === "number" && typeof value === "number" && Number.isFinite(value)) (out as Record<string, unknown>)[key] = Math.max(0, Math.min(365, value));
     else if (typeof fallback === "boolean" && typeof value === "boolean") (out as Record<string, unknown>)[key] = value;
   }
+  out.imageX = Math.max(0, Math.min(100, Number(source.imageX ?? out.imageX) || 0));
+  out.imageY = Math.max(0, Math.min(100, Number(source.imageY ?? out.imageY) || 0));
+  out.imageZoom = Math.max(1, Math.min(3, Number(source.imageZoom ?? out.imageZoom) || 1));
   if (!/^#[0-9a-fA-F]{6}$/.test(out.accent)) out.accent = EMAIL_POPUP_DEFAULTS.accent;
   return out;
 }

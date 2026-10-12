@@ -114,9 +114,19 @@ export function EmailPopupDesigner({ initial }: { initial: EmailPopupConfig }) {
           <EmailPopupView
             config={config} step={step} mobile={mobile} email={email} phone={phone}
             onEmail={setEmail} onPhone={setPhone} onNext={() => setStep(2)} onFinish={() => setStep(3)} onSkip={() => setStep(3)} onClose={() => setStep(1)}
+            onImagePosition={(x, y) => setConfig((c) => ({ ...c, imageX: Math.round(x), imageY: Math.round(y) }))}
           />
         </div>
-        <p style={{ fontSize: 12, opacity: 0.65, marginTop: 8 }}>Preview only. Nothing is saved from here until a real visitor uses the live popup.</p>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginTop: 12, fontSize: 12 }}>
+          <span><strong>Photo crop:</strong> drag the photo to move it.</span>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            Zoom
+            <input type="range" min={1} max={3} step={0.05} value={config.imageZoom} onChange={(e) => update("imageZoom", Number(e.target.value))} aria-label="Photo zoom" />
+            {config.imageZoom.toFixed(2)}x
+          </label>
+          <button type="button" onClick={() => setConfig((c) => ({ ...c, imageX: 50, imageY: 50, imageZoom: 1 }))} style={{ border: 0, background: "none", textDecoration: "underline", cursor: "pointer", font: "inherit", padding: 0 }}>Reset crop</button>
+        </div>
+        <p style={{ fontSize: 12, opacity: 0.65, marginTop: 8 }}>Preview only. Click Publish to put your changes on the site.</p>
       </div>
     </div>
   );

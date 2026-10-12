@@ -22,6 +22,8 @@ type ViewProps = {
   onFinish: () => void;
   onSkip: () => void;
   onClose: () => void;
+  /** Admin preview only: dragging the photo repositions the crop. */
+  onImagePosition?: (x: number, y: number) => void;
 };
 
 /** Pure presentation, shared by the live storefront popup and the admin preview. */
@@ -29,6 +31,7 @@ export function EmailPopupView(props: ViewProps) {
   const { config, step, mobile, email, phone, error, busy } = props;
   const ink = config.accent;
   const [imageFailed, setImageFailed] = useState(false);
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number; w: number; h: number } | null>(null);
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
   const validPhone = phone.replace(/\D/g, "").length >= 10;
   const primary = (enabled: boolean): React.CSSProperties => ({
@@ -46,10 +49,27 @@ export function EmailPopupView(props: ViewProps) {
       style={{ display: "flex", flexDirection: mobile ? "column" : "row", width: "100%", maxWidth: mobile ? 360 : 820, margin: "0 auto", background: "#f4f3ee", color: "#101010", boxShadow: "0 24px 70px rgba(0,0,0,.35)", position: "relative", overflow: "hidden" }}>
       <button type="button" aria-label="Close popup" onClick={props.onClose}
         style={{ position: "absolute", top: 10, right: 12, zIndex: 2, border: 0, background: "rgba(244,243,238,.9)", width: 30, height: 30, fontSize: 18, cursor: "pointer" }}>×</button>
-      <div style={{ flex: mobile ? "none" : "0 0 46%", height: mobile ? 180 : "auto", minHeight: mobile ? 0 : 440, background: "#e4e2da", position: "relative" }}>
+      <div
+        style={{ flex: mobile ? "none" : "0 0 46%", height: mobile ? 180 : "auto", minHeight: mobile ? 0 : 440, background: "#e4e2da", position: "relative", overflow: "hidden", cursor: props.onImagePosition ? "grab" : undefined, touchAction: props.onImagePosition ? "none" : undefined }}
+        onPointerDown={props.onImagePosition ? (e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          drag.current = { x: e.clientX, y: e.clientY, ox: config.imageX, oy: config.imageY, w: box.width, h: box.height };
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } : undefined}
+        onPointerMove={props.onImagePosition ? (e) => {
+          const d = drag.current;
+          if (!d) return;
+          // Dragging the photo right reveals more of its left side, so the focus point moves the opposite way.
+          const clamp = (v: number) => Math.max(0, Math.min(100, v));
+          props.onImagePosition?.(clamp(d.ox - ((e.clientX - d.x) / d.w) * 100), clamp(d.oy - ((e.clientY - d.y) / d.h) * 100));
+        } : undefined}
+        onPointerUp={() => { drag.current = null; }}
+        onPointerCancel={() => { drag.current = null; }}
+      >
         {config.image && !imageFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={config.image} alt="" onError={() => setImageFailed(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={config.image} alt="" draggable={false} onError={() => setImageFailed(true)}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: `${config.imageX}% ${config.imageY}%`, transform: config.imageZoom > 1 ? `scale(${config.imageZoom})` : undefined, transformOrigin: `${config.imageX}% ${config.imageY}%`, userSelect: "none", pointerEvents: "none" }} />
         ) : null}
       </div>
       <div style={{ flex: 1, padding: mobile ? "22px 22px 24px" : "40px 40px 32px", display: "flex", flexDirection: "column", justifyContent: "center", minHeight: mobile ? 0 : 440 }}>
