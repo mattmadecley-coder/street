@@ -1,5 +1,6 @@
 import styles from "@/app/admin/admin.module.css";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { EmailTabs } from "@/components/admin/email-tabs";
 import { SubmitButton } from "@/components/admin/submit-button";
 import { supabaseRest } from "@/lib/supabase-rest";
 import { easternYesterday, reportsConfig, type ReportRow } from "@/lib/brand-report";
@@ -43,7 +44,9 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
   return (
     <div className={styles.shell}>
       <AdminNav active="/admin/reports" />
-      <h1 className={styles.title}>Brand reports</h1>
+      <h1 className={styles.title}>Email</h1>
+      <EmailTabs active="/admin/reports" />
+      <h2 style={{ margin: "0 0 8px" }}>Brand outreach</h2>
       <p className={styles.subtitle}>
         Every morning (~9 AM ET) Street builds a report for each brand it sent shoppers to the day before.
         {config.autoSend ? " Auto-send is ON — daily reports go out automatically." : " Auto-send is OFF — reports wait here for your approval."}
