@@ -451,3 +451,7 @@ a.adm-tile:hover { border-color: var(--adm-border-strong); box-shadow: var(--adm
 .adm-version-list li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--adm-border); border-radius: var(--adm-radius-sm); background: var(--adm-surface); }
 .adm-version-list li > div { flex: 1; min-width: 0; }
 .adm-version-thumb { width: 64px; height: 36px; object-fit: cover; border-radius: 4px; background: var(--adm-surface-3); flex-shrink: 0; }
+
+/* Email editor: blocks | preview | settings. Stacks on narrower screens. */
+.email-editor { display: grid; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(260px, 320px); gap: 16px; align-items: start; }
+@media (max-width: 1180px) { .email-editor { grid-template-columns: minmax(0, 1fr); } }

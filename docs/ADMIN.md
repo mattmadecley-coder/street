@@ -18,6 +18,8 @@ roll changes out safely, and what to do when something goes wrong.
 | Trash | `lib/trash.ts` | Deleting a product hides it and keeps it recoverable |
 | Saved views | `lib/saved-filters.ts`, `/admin/products` | Name a set of product filters (brand, status, group, availability, price) and reopen it in one click |
 | Smart collections | `lib/smart-collections.ts`, `lib/product-criteria.ts` | A collection can fill itself from rules (brands, category, tags, price, availability, newness, markdowns). Synced when saved and every morning |
+| Email segments | `lib/email-segments-core.ts`, `/admin/email/segments` | Saved rules over customers (signup date, opens, clicks, tags, source, phone). Live audience count. Only subscribed people are ever counted as emailable |
+| Email templates | `lib/email-blocks.ts`, `/admin/email/templates` | Block-based email layouts (header, text, image, button, image+text, product grid) with drag-and-drop editor, live preview and starter templates. The unsubscribe footer is always added |
 | Daily roll-ups | `lib/analytics-daily.ts`, `/api/cron/daily` | One row per day of headline numbers, so long ranges keep a complete day-by-day chart |
 
 ## Rules that keep the numbers trustworthy
@@ -35,7 +37,8 @@ roll changes out safely, and what to do when something goes wrong.
 |---|---|---|
 | `supabase/migrations/20261014_admin_state.sql` | `admin_state` table (service role only) | Editable alert thresholds, acknowledge/snooze, chart notes, alert digest memory, brand permission records, homepage history |
 | `supabase/migrations/20261015_admin_accounts.sql` | `admin_users`, `admin_sessions`, `audit_log`; `deleted_at` on products and brands | Personal accounts, activity log, product trash |
-| `supabase/migrations/20261016_analytics_daily.sql` | `analytics_daily` (service role only) | Daily roll-ups. Applied to staging; production pending sign-off |
+| `supabase/migrations/20261016_analytics_daily.sql` | `analytics_daily` (service role only) | Daily roll-ups. Applied to production 2026-10-13 |
+| `supabase/migrations/20261017_email_platform.sql` | `email_segments`, `email_templates` (service role only) | Email segments and templates. Applied to staging; production pending sign-off |
 
 **Applied on 2026-10-13**, first to a staging database, then to production. Both are safe to run again.
 The admin degrades gracefully if a table is missing: each feature shows a "switches on after the migration" note.
