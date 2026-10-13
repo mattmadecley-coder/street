@@ -2,11 +2,12 @@ name: Street scheduled jobs
 
 on:
   schedule:
-    # Times are UTC. Matches the old vercel.json schedule.
+    # Times are UTC.
     - cron: "0 5 * * *"   # catalog sync
     - cron: "30 6 * * *"  # storefront health check
     - cron: "0 7 * * *"   # classify
     - cron: "50 12 * * *" # brand report emails (~9 AM Eastern; GitHub often runs late)
+    - cron: "20 13 * * *" # alert digest (only sends when a destination is configured)
   workflow_dispatch:
     inputs:
       job:
@@ -14,7 +15,7 @@ on:
         required: true
         default: catalog
         type: choice
-        options: [catalog, storefront-health, classify, brand-reports]
+        options: [catalog, storefront-health, classify, brand-reports, alerts]
 
 jobs:
   run-cron:
@@ -31,6 +32,7 @@ jobs:
               "30 6 * * *") echo "path=storefront-health" >> "$GITHUB_OUTPUT" ;;
               "0 7 * * *") echo "path=classify" >> "$GITHUB_OUTPUT" ;;
               "50 12 * * *") echo "path=brand-reports" >> "$GITHUB_OUTPUT" ;;
+              "20 13 * * *") echo "path=alerts" >> "$GITHUB_OUTPUT" ;;
             esac
           fi
 

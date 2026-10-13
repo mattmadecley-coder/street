@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import styles from "@/app/admin/admin.module.css";
 
 const DISABLED_KEY = "street-analytics-disabled";
 const ADMIN_INCLUDE_OVERRIDE_KEY = "street-analytics-admin-include";
@@ -33,15 +34,17 @@ export function AnalyticsControls({ range, start, end }: { range: string; start:
     setBrowserExclusion(next);
   }
 
+  const exportHref = (dataset: string) => `/admin/analytics/export?range=${range}&start=${start}&end=${end}&dataset=${dataset}`;
+
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-      <button type="button" onClick={toggleExclusion} style={{ height: 34, padding: "0 12px", border: "1px solid rgba(16,16,16,.25)", background: excluded ? "#101010" : "#fff", color: excluded ? "#fff" : "#101010", cursor: "pointer" }}>
+    <div className={styles.analyticsToolbar}>
+      <button type="button" onClick={toggleExclusion} className={styles.analyticsToggle} aria-pressed={excluded}>
         {excluded ? "This admin browser is excluded" : "Include this browser"}
       </button>
-      <span style={{ fontSize: 11, color: "rgba(16,16,16,.58)" }}>Admin browsers are excluded by default from page views and outbound intent.</span>
-      <a href={`/admin/analytics/export?range=${range}&start=${start}&end=${end}&dataset=products`} style={{ height: 34, padding: "8px 12px", border: "1px solid rgba(16,16,16,.25)", color: "inherit", textDecoration: "none" }}>Export products CSV</a>
-      <a href={`/admin/analytics/export?range=${range}&start=${start}&end=${end}&dataset=searches`} style={{ height: 34, padding: "8px 12px", border: "1px solid rgba(16,16,16,.25)", color: "inherit", textDecoration: "none" }}>Export searches CSV</a>
-      <a href={`/admin/analytics/export?range=${range}&start=${start}&end=${end}&dataset=events`} style={{ height: 34, padding: "8px 12px", border: "1px solid rgba(16,16,16,.25)", color: "inherit", textDecoration: "none" }}>Export events CSV</a>
+      <span className={styles.rowMeta}>Admin browsers are excluded by default from page views and outbound intent.</span>
+      <a href={exportHref("products")} className={styles.analyticsExport}>Export products CSV</a>
+      <a href={exportHref("searches")} className={styles.analyticsExport}>Export searches CSV</a>
+      <a href={exportHref("events")} className={styles.analyticsExport}>Export events CSV</a>
     </div>
   );
 }

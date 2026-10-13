@@ -6,9 +6,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "cf:build": "opennextjs-cloudflare build",
-    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
+    "test": "node --import ./tests/register-alias.mjs --test \"tests/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@next/third-parties": "^16.3.6",
@@ -18,11 +17,9 @@
     "react-dom": "19.2.0"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "^1.20.6",
     "@types/node": "22.10.1",
     "@types/react": "19.0.2",
     "@types/react-dom": "19.0.2",
-    "typescript": "5.7.2",
-    "wrangler": "^4.136.3"
+    "typescript": "5.7.2"
   }
 }

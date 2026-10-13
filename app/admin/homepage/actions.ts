@@ -2,9 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { setSiteSetting } from "@/lib/site-settings";
+import { getSiteSettings, setSiteSetting } from "@/lib/site-settings";
+import { readAdminState, writeAdminState } from "@/lib/admin-state";
+import { recordReplaced, sanitizeHistory, snapshotsEqual, type HomepageSnapshot } from "@/lib/homepage-history";
 import { uploadSiteAsset } from "@/lib/supabase-storage";
 import { createHomepageFeatureSchedule, deleteHomepageFeatureSchedule, updateHomepageFeatureSchedule } from "@/lib/homepage-feature-schedule";
+import { actorOf, requirePermission } from "@/lib/admin-guard";
+import { recordAudit } from "@/lib/audit";
 
 const EASTERN_TIME_ZONE = "America/New_York";
 
@@ -42,7 +46,36 @@ function assertFuture(startsAt: string) {
   if (new Date(startsAt).getTime() <= Date.now()) throw new Error("Start time must be in the future.");
 }
 
+async function applySnapshot(snapshot: HomepageSnapshot) {
+  await Promise.all([
+    setSiteSetting("hero_video_url", snapshot.hero_video_url),
+    setSiteSetting("hero_image_url", snapshot.hero_image_url),
+    setSiteSetting("featured_brand_slug", snapshot.featured_brand_slug),
+    setSiteSetting("featured_brand_cta_label", snapshot.featured_brand_cta_label),
+  ]);
+}
+
+/** Saves what is about to be replaced so it can be restored. Never blocks a save: history is a convenience. */
+async function rememberReplaced(next: HomepageSnapshot, by: string) {
+  try {
+    const current = await getSiteSettings();
+    const replaced: HomepageSnapshot = {
+      hero_image_url: current.hero_image_url,
+      hero_video_url: current.hero_video_url,
+      featured_brand_slug: current.featured_brand_slug,
+      featured_brand_cta_label: current.featured_brand_cta_label,
+    };
+    const { value, available } = await readAdminState<unknown>("homepage_history", { items: [] });
+    if (!available) return;
+    const history = recordReplaced(sanitizeHistory(value), replaced, next, by, new Date().toISOString());
+    await writeAdminState("homepage_history", { items: history });
+  } catch (error) {
+    console.error("Street homepage history write failed", error);
+  }
+}
+
 export async function saveHomepageSettings(formData: FormData) {
+  const actor = await requirePermission("homepage.write");
   const heroVideoUrl = String(formData.get("hero_video_url") ?? "").trim();
   const heroImageUrlInput = String(formData.get("hero_image_url") ?? "").trim();
   const featuredBrandSlug = String(formData.get("featured_brand_slug") ?? "").trim();
@@ -54,18 +87,22 @@ export async function saveHomepageSettings(formData: FormData) {
     heroImageUrl = await uploadSiteAsset(heroFile, "hero");
   }
 
-  await Promise.all([
-    setSiteSetting("hero_video_url", heroVideoUrl),
-    setSiteSetting("hero_image_url", heroImageUrl),
-    setSiteSetting("featured_brand_slug", featuredBrandSlug),
-    setSiteSetting("featured_brand_cta_label", ctaLabel || "Shop this brand"),
-  ]);
+  const next: HomepageSnapshot = {
+    hero_video_url: heroVideoUrl,
+    hero_image_url: heroImageUrl,
+    featured_brand_slug: featuredBrandSlug,
+    featured_brand_cta_label: ctaLabel || "Shop this brand",
+  };
+  await rememberReplaced(next, actor.kind === "legacy" ? "shared password" : actor.email);
+  await applySnapshot(next);
 
+  await recordAudit(actorOf(actor), { action: "homepage.update", summary: `Updated the homepage`, targetType: "homepage", details: { featuredBrandSlug, ctaLabel, heroVideoUrl, heroImageUrl } });
   revalidatePath("/");
   redirect("/admin/homepage?saved=1");
 }
 
 export async function scheduleHomepageFeature(formData: FormData) {
+  const actor = await requirePermission("homepage.write");
   const startsAtInput = String(formData.get("starts_at") ?? "").trim();
   const brandSlug = String(formData.get("scheduled_brand_slug") ?? "").trim();
   const heroVideoUrl = String(formData.get("scheduled_hero_video_url") ?? "").trim();
@@ -93,12 +130,14 @@ export async function scheduleHomepageFeature(formData: FormData) {
     ctaLabel: ctaLabel || "Shop this brand",
   });
 
+  await recordAudit(actorOf(actor), { action: "homepage.schedule", summary: `Scheduled ${brandSlug} on the homepage`, targetType: "homepage", details: { brandSlug, startsAt, ctaLabel } });
   revalidatePath("/");
   revalidatePath("/admin/homepage");
   redirect("/admin/homepage?scheduled=1");
 }
 
 export async function updateScheduledFeatureAction(formData: FormData) {
+  const actor = await requirePermission("homepage.write");
   const id = String(formData.get("schedule_id") ?? "").trim();
   const startsAtInput = String(formData.get("starts_at") ?? "").trim();
   const brandSlug = String(formData.get("scheduled_brand_slug") ?? "").trim();
@@ -128,15 +167,39 @@ export async function updateScheduledFeatureAction(formData: FormData) {
     ctaLabel: ctaLabel || "Shop this brand",
   });
 
+  await recordAudit(actorOf(actor), { action: "homepage.schedule_update", summary: `Changed a scheduled homepage feature (${brandSlug})`, targetType: "homepage", targetId: id, details: { brandSlug, startsAt, ctaLabel } });
   revalidatePath("/");
   revalidatePath("/admin/homepage");
   redirect("/admin/homepage?scheduleUpdated=1");
 }
 
 export async function removeHomepageFeature(formData: FormData) {
+  const actor = await requirePermission("homepage.write");
   const id = String(formData.get("schedule_id") ?? "").trim();
   if (id) await deleteHomepageFeatureSchedule(id);
+  await recordAudit(actorOf(actor), { action: "homepage.schedule_remove", summary: `Removed a scheduled homepage feature`, targetType: "homepage", targetId: id });
   revalidatePath("/");
   revalidatePath("/admin/homepage");
   redirect("/admin/homepage?deleted=1");
+}
+
+/** Puts an earlier fallback homepage back. The settings being replaced are kept in the history too, so a restore can be undone. */
+export async function restoreHomepageVersion(formData: FormData) {
+  const actor = await requirePermission("homepage.write");
+  const at = String(formData.get("at") ?? "");
+  const { value, available } = await readAdminState<unknown>("homepage_history", { items: [] });
+  if (!available) redirect(`/admin/homepage?scheduleError=${encodeURIComponent("Version history is not enabled yet.")}`);
+  const version = sanitizeHistory(value).find((item) => item.at === at);
+  if (!version) redirect(`/admin/homepage?scheduleError=${encodeURIComponent("That version was not found.")}`);
+
+  const current = await getSiteSettings();
+  const replaced: HomepageSnapshot = { hero_image_url: current.hero_image_url, hero_video_url: current.hero_video_url, featured_brand_slug: current.featured_brand_slug, featured_brand_cta_label: current.featured_brand_cta_label };
+  if (!snapshotsEqual(replaced, version.settings)) {
+    await rememberReplaced(version.settings, actor.kind === "legacy" ? "shared password" : actor.email);
+    await applySnapshot(version.settings);
+  }
+  await recordAudit(actorOf(actor), { action: "homepage.restore", targetType: "homepage", summary: `Restored the homepage settings from ${at}`, details: { restored: version.settings } });
+  revalidatePath("/");
+  revalidatePath("/admin/homepage");
+  redirect("/admin/homepage?saved=1");
 }

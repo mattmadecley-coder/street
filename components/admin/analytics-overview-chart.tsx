@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import styles from "@/app/admin/admin.module.css";
 import type { AnalyticsTrendPoint } from "@/lib/analytics-audience";
+import type { Annotation } from "@/lib/analytics-annotations";
 
 type MetricKey = "visitors" | "outboundClicks" | "intentValue";
 
@@ -41,7 +42,7 @@ function smoothPath(points: Array<{ x: number; y: number }>) {
   return path;
 }
 
-export function AnalyticsOverviewChart({ points }: { points: AnalyticsTrendPoint[] }) {
+export function AnalyticsOverviewChart({ points, annotations = [] }: { points: AnalyticsTrendPoint[]; annotations?: Annotation[] }) {
   const [metricKey, setMetricKey] = useState<MetricKey>("visitors");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const metric = METRICS.find((entry) => entry.key === metricKey) ?? METRICS[0];
@@ -69,9 +70,19 @@ export function AnalyticsOverviewChart({ points }: { points: AnalyticsTrendPoint
     return { width, height, left, right, top, bottom, plotWidth, plotHeight, maximum, coordinates, line, area };
   }, [metric, points]);
 
+  // Notes only line up with daily charts: hourly points are keyed by timestamp, not date.
+  const marks = annotations
+    .map((note) => {
+      const index = points.findIndex((point) => point.key === note.date);
+      const coordinate = index >= 0 ? chart.coordinates[index] : undefined;
+      return coordinate ? { ...note, index, x: coordinate.x } : null;
+    })
+    .filter((mark): mark is Annotation & { index: number; x: number } => mark !== null);
+
   const labelEvery = Math.max(1, Math.ceil(points.length / 7));
   const hovered = hoveredIndex === null ? null : points[hoveredIndex];
   const hoveredCoordinate = hoveredIndex === null ? null : chart.coordinates[hoveredIndex];
+  const hoveredNote = hovered ? marks.find((mark) => mark.date === hovered.key) : undefined;
 
   return (
     <section className={styles.analyticsChartCard}>
@@ -118,6 +129,13 @@ export function AnalyticsOverviewChart({ points }: { points: AnalyticsTrendPoint
           {chart.area ? <path d={chart.area} className={styles.analyticsAreaPath} fill="url(#streetAnalyticsArea)" /> : null}
           {chart.line ? <path d={chart.line} className={styles.analyticsLinePath} /> : null}
 
+          {marks.map((mark) => (
+            <g key={mark.id}>
+              <line x1={mark.x} x2={mark.x} y1={chart.top} y2={chart.top + chart.plotHeight} className={styles.analyticsAnnotationLine} />
+              <circle cx={mark.x} cy={chart.top} r="5" className={styles.analyticsAnnotationFlag}><title>{`${mark.date}: ${mark.text}`}</title></circle>
+            </g>
+          ))}
+
           {points.map((point, index) => {
             const coordinate = chart.coordinates[index];
             if (!coordinate) return null;
@@ -149,9 +167,10 @@ export function AnalyticsOverviewChart({ points }: { points: AnalyticsTrendPoint
               <line x1={hoveredCoordinate.x} x2={hoveredCoordinate.x} y1={chart.top} y2={chart.top + chart.plotHeight} className={styles.analyticsHoverLine} />
               <circle cx={hoveredCoordinate.x} cy={hoveredCoordinate.y} r="5" className={styles.analyticsPoint} />
               <g transform={`translate(${Math.min(chart.width - 170, Math.max(55, hoveredCoordinate.x - 75))}, ${Math.max(8, hoveredCoordinate.y - 62)})`}>
-                <rect width="150" height="48" rx="8" className={styles.analyticsTooltipBox} />
+                <rect width="150" height={hoveredNote ? 68 : 48} rx="8" className={styles.analyticsTooltipBox} />
                 <text x="12" y="18" className={styles.analyticsTooltipLabel}>{hovered.label}</text>
                 <text x="12" y="37" className={styles.analyticsTooltipValue}>{metric.format(metric.value(hovered))}</text>
+                {hoveredNote ? <text x="12" y="57" className={styles.analyticsTooltipLabel}>{hoveredNote.text.length > 22 ? `${hoveredNote.text.slice(0, 21)}…` : hoveredNote.text}</text> : null}
               </g>
             </g>
           ) : null}

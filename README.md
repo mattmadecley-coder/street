@@ -37,18 +37,12 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-## Deploy on Vercel
+## Deployment
 
-1. Open Vercel and choose **Add New → Project**.
-2. Import `mattmadecley-coder/street`.
-3. Leave the framework set to Next.js.
-4. Add this environment variable if you want to explicitly set the source store:
-
-```text
-STREET_FIRST_BRAND_URL=https://www.seventyfouruniform.com
-```
-
-5. Deploy.
+Street runs on a Netcup VPS through **Coolify**, built from the `Dockerfile` (Next.js `output: "standalone"`).
+Coolify builds on every push to the main branch. Environment variables are set in Coolify, never baked into the image.
+Domains and DNS are on Cloudflare. Scheduled jobs run from GitHub Actions (`.github/workflows/cron.yml`).
+See `docs/ADMIN.md` for the admin, its database changes and how to roll them out.
 
 ## Important launch rule
 

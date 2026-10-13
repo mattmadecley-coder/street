@@ -6,23 +6,29 @@ import { redirect } from "next/navigation";
 import { supabaseRest } from "@/lib/supabase-rest";
 import { runDailyBrandReports, runBrandRecaps, sendBrandReport, sendTestBrandReport, easternYesterday } from "@/lib/brand-report";
 import { refreshBrandContact } from "@/lib/brand-contact-finder";
+import { actorOf, requirePermission } from "@/lib/admin-guard";
+import { recordAudit } from "@/lib/audit";
 
 const back = (params: Record<string, string>) => redirect(`/admin/reports?${new URLSearchParams(params).toString()}`);
 const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 export async function sendReportAction(formData: FormData) {
+  const actor = await requirePermission("reports.send");
   const result = await sendBrandReport(String(formData.get("id") ?? ""));
+  await recordAudit(actorOf(actor), { action: "report.send", summary: `Sent a brand report email`, targetType: "report", targetId: String(formData.get("id") ?? ""), details: { ok: result.ok, error: result.error } });
   revalidatePath("/admin/reports");
   back(result.ok ? { sent: "1" } : { error: result.error ?? "Send failed" });
 }
 
 export async function sendTestAction(formData: FormData) {
+  const actor = await requirePermission("reports.manage");
   const result = await sendTestBrandReport(String(formData.get("id") ?? ""));
   back(result.ok ? { tested: "1" } : { error: result.error ?? "Test send failed" });
 }
 
 /** Sends every draft in one group (same day + kind). */
 export async function sendAllDraftsAction(formData: FormData) {
+  const actor = await requirePermission("reports.send");
   const date = String(formData.get("date") ?? "");
   const kind = formData.get("kind") === "recap" ? "recap" : "daily";
   const drafts = await supabaseRest<Array<{ id: string }>>(`brand_report_emails?status=eq.draft&report_date=eq.${date}&kind=eq.${kind}&select=id`, { noStore: true });
@@ -32,21 +38,26 @@ export async function sendAllDraftsAction(formData: FormData) {
     const result = await sendBrandReport(draft.id);
     if (result.ok) sent += 1; else errors.push(result.error ?? "failed");
   }
+  await recordAudit(actorOf(actor), { action: "report.send_all", summary: `Sent ${sent} brand report email${sent === 1 ? "" : "s"}`, targetType: "report", details: { date, kind, sent, failed: errors.length } });
   revalidatePath("/admin/reports");
   back(errors.length ? { error: `Sent ${sent}; ${errors.length} failed: ${errors[0]}` } : { sent: String(sent) });
 }
 
 export async function skipReportAction(formData: FormData) {
+  const actor = await requirePermission("reports.manage");
   const id = String(formData.get("id") ?? "");
   await supabaseRest(`brand_report_emails?id=eq.${id}&status=neq.sent`, { method: "PATCH", body: { status: "skipped", error: "Skipped by admin" }, prefer: "return=minimal" });
+  await recordAudit(actorOf(actor), { action: "report.skip", summary: `Skipped a brand report`, targetType: "report", targetId: id });
   revalidatePath("/admin/reports");
   back({ skipped: "1" });
 }
 
 export async function generateReportsAction(formData: FormData) {
+  const actor = await requirePermission("reports.manage");
   const date = String(formData.get("date") ?? "") || easternYesterday();
   if (!isDate(date)) back({ error: "Pick a valid date" });
   const result = await runDailyBrandReports(date);
+  await recordAudit(actorOf(actor), { action: "report.generate", summary: `Built daily brand reports for ${date}`, targetType: "report", details: { date, drafts: result.drafts, sent: result.sent, problems: result.errors.length } });
   revalidatePath("/admin/reports");
   back(result.errors.length
     ? { error: `${result.errors.length} problem(s): ${result.errors[0]}` }
@@ -54,10 +65,12 @@ export async function generateReportsAction(formData: FormData) {
 }
 
 export async function generateRecapAction(formData: FormData) {
+  const actor = await requirePermission("reports.manage");
   const from = String(formData.get("from") ?? "");
   const to = String(formData.get("to") ?? "") || easternYesterday();
   if (!isDate(from) || !isDate(to) || from > to) back({ error: "Pick a valid date range" });
   const result = await runBrandRecaps(from, to);
+  await recordAudit(actorOf(actor), { action: "report.recap", summary: `Built brand recaps for ${from} to ${to}`, targetType: "report", details: { from, to, drafts: result.drafts, problems: result.errors.length } });
   revalidatePath("/admin/reports");
   back(result.errors.length
     ? { error: `${result.errors.length} problem(s): ${result.errors[0]}` }
@@ -66,6 +79,7 @@ export async function generateRecapAction(formData: FormData) {
 
 /** Set a brand's contact email by hand (wins over the automatic finder from then on). Blank clears it. */
 export async function saveContactAction(formData: FormData) {
+  const actor = await requirePermission("reports.manage");
   const brandId = String(formData.get("brand_id") ?? "");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) back({ error: `"${email}" doesn't look like an email address` });
@@ -80,12 +94,14 @@ export async function saveContactAction(formData: FormData) {
       method: "PATCH", body: { status: "draft", error: null, to_email: email }, prefer: "return=minimal",
     });
   }
+  await recordAudit(actorOf(actor), { action: "report.contact_save", summary: `Updated a brand contact`, targetType: "brand", targetId: brandId, details: { hasEmail: Boolean(email) } });
   revalidatePath("/admin/reports");
   back({ contact: "1" });
 }
 
 /** Runs the contact finder for every brand that hasn't been checked yet (or all, with ?all). Runs in the background. */
 export async function findContactsAction(formData: FormData) {
+  const actor = await requirePermission("reports.manage");
   const all = formData.get("all") === "1";
   const brands = await supabaseRest<Array<{ id: string; store_url: string; brand_contacts: { contact_email_checked_at: string | null; contact_email_source: string | null } | null }>>(
     "brands?select=id,store_url,brand_contacts(contact_email_checked_at,contact_email_source)&is_active=eq.true",
@@ -97,5 +113,6 @@ export async function findContactsAction(formData: FormData) {
       await Promise.all(todo.slice(i, i + 4).map((brand) => refreshBrandContact({ id: brand.id, storeUrl: brand.store_url }).catch((error) => console.error("contact finder", brand.store_url, error))));
     }
   });
+  await recordAudit(actorOf(actor), { action: "report.find_contacts", summary: `Started looking up brand contact emails`, targetType: "report", details: { brands: todo.length, all } });
   back({ finding: String(todo.length) });
 }

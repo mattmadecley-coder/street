@@ -237,24 +237,24 @@ export type AnalyticsTrendPoint = {
   intentValue: number;
 };
 
-const easternDay = new Intl.DateTimeFormat("en-US", {
-  timeZone: EASTERN_TIME_ZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-const easternDayLabel = new Intl.DateTimeFormat("en-US", {
-  timeZone: EASTERN_TIME_ZONE,
-  month: "short",
-  day: "numeric",
-});
-const easternHourLabel = new Intl.DateTimeFormat("en-US", {
-  timeZone: EASTERN_TIME_ZONE,
-  hour: "numeric",
-});
+type TrendFormatters = { day: Intl.DateTimeFormat; dayLabel: Intl.DateTimeFormat; hourLabel: Intl.DateTimeFormat };
+const formatterCache = new Map<string, TrendFormatters>();
 
-function dayKey(date: Date) {
-  const parts = easternDay.formatToParts(date);
+function trendFormatters(timeZone: string): TrendFormatters {
+  let found = formatterCache.get(timeZone);
+  if (!found) {
+    found = {
+      day: new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }),
+      dayLabel: new Intl.DateTimeFormat("en-US", { timeZone, month: "short", day: "numeric" }),
+      hourLabel: new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric" }),
+    };
+    formatterCache.set(timeZone, found);
+  }
+  return found;
+}
+
+function dayKey(date: Date, formatter: Intl.DateTimeFormat) {
+  const parts = formatter.formatToParts(date);
   const year = parts.find((part) => part.type === "year")?.value ?? "";
   const month = parts.find((part) => part.type === "month")?.value ?? "";
   const day = parts.find((part) => part.type === "day")?.value ?? "";
@@ -266,8 +266,10 @@ export function buildAnalyticsTrend(
   clicks: OutboundClickRow[],
   window: { startMs: number; endMs: number; hourly: boolean },
   likelyHumanIds: Set<string>,
+  timeZone: string = EASTERN_TIME_ZONE,
 ): AnalyticsTrendPoint[] {
   const { startMs, endMs, hourly } = window;
+  const fmt = trendFormatters(timeZone);
   const rows = new Map<string, {
     label: string;
     visitors: Set<string>;
@@ -284,16 +286,16 @@ export function buildAnalyticsTrend(
     for (let t = startHour; t <= lastHour; t += 3_600_000) {
       const at = new Date(t);
       const key = String(t);
-      rows.set(key, { label: easternHourLabel.format(at), visitors: new Set(), recordedVisitors: new Set(), sessions: new Set(), outboundClicks: 0, intentValue: 0, valuedIntentKeys: new Set() });
+      rows.set(key, { label: fmt.hourLabel.format(at), visitors: new Set(), recordedVisitors: new Set(), sessions: new Set(), outboundClicks: 0, intentValue: 0, valuedIntentKeys: new Set() });
     }
   } else {
-    let dayYmd = easternYmdOf(startMs);
-    const lastDayYmd = easternYmdOf(Math.max(endMs, startMs + 1) - 1);
+    let dayYmd = easternYmdOf(startMs, timeZone);
+    const lastDayYmd = easternYmdOf(Math.max(endMs, startMs + 1) - 1, timeZone);
     // Cap iterations defensively so a malformed window can't hang the request.
     for (let guard = 0; guard < 400; guard += 1) {
-      const at = new Date(zonedMidnightToUtcMs(dayYmd));
-      const key = dayKey(at);
-      rows.set(key, { label: easternDayLabel.format(at), visitors: new Set(), recordedVisitors: new Set(), sessions: new Set(), outboundClicks: 0, intentValue: 0, valuedIntentKeys: new Set() });
+      const at = new Date(zonedMidnightToUtcMs(dayYmd, timeZone));
+      const key = dayKey(at, fmt.day);
+      rows.set(key, { label: fmt.dayLabel.format(at), visitors: new Set(), recordedVisitors: new Set(), sessions: new Set(), outboundClicks: 0, intentValue: 0, valuedIntentKeys: new Set() });
       if (dayYmd.year === lastDayYmd.year && dayYmd.month === lastDayYmd.month && dayYmd.day === lastDayYmd.day) break;
       dayYmd = addDaysToYmd(dayYmd, 1);
     }
@@ -301,7 +303,7 @@ export function buildAnalyticsTrend(
 
   const eventBucketKey = (createdAt: string) => {
     const at = new Date(createdAt);
-    return hourly ? String(Math.floor(at.getTime() / 3_600_000) * 3_600_000) : dayKey(at);
+    return hourly ? String(Math.floor(at.getTime() / 3_600_000) * 3_600_000) : dayKey(at, fmt.day);
   };
 
   for (const event of events) {

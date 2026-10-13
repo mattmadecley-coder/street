@@ -1,9 +1,9 @@
 import Link from "next/link";
 import styles from "@/app/admin/admin.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { LogoInvertPreview } from "@/components/admin/logo-invert-preview";
 import { getBrandBySlug } from "@/lib/catalog-store";
 import { startBrandOnboarding, runLogoFinder, approveLogo, saveManualLogo, skipLogo, runImport } from "./actions";
+import { requireUser } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -24,21 +24,21 @@ function StepIndicator({ step }: { step: "url" | "logo" | "import" }) {
   ];
   const activeIndex = steps.findIndex((item) => item.key === step);
   return (
-    <p className={styles.rowMeta} style={{ marginBottom: 20 }}>
+    <p className={styles.stepper}>
       {steps.map((item, index) => (
-        <span key={item.key} style={{ fontWeight: index === activeIndex ? 700 : 400, color: index <= activeIndex ? "#101010" : undefined, marginRight: 14 }}>{item.label}</span>
+        <span key={item.key} data-state={index === activeIndex ? "current" : index < activeIndex ? "done" : "todo"}>{item.label}</span>
       ))}
     </p>
   );
 }
 
 export default async function AddBrandPage({ searchParams }: { searchParams: Promise<PageParams> }) {
+  await requireUser();
   const params = await searchParams;
   const step = params.step === "logo" || params.step === "import" ? params.step : "url";
 
   return (
-    <div className={styles.shell}>
-      <AdminNav active="/admin/brands" />
+    <div>
       <h1 className={styles.title}>Add a new brand</h1>
       <p className={styles.subtitle}><Link href="/admin/brands" className="link-small">← Back to brands</Link></p>
       <StepIndicator step={step} />
@@ -77,10 +77,10 @@ async function LogoStep({ slug, candidate, source, notfound }: { slug: string; c
 
   return (
     <div>
-      <p style={{ marginBottom: 16 }}><strong>{brand.name}</strong> — {brand.storeUrl}</p>
+      <p className="u-mb-16"><strong>{brand.name}</strong> — {brand.storeUrl}</p>
 
       {!candidate && !notfound ? (
-        <form action={runLogoFinder} className={styles.form} style={{ marginBottom: 24 }}>
+        <form action={runLogoFinder} className={`${styles.form} u-mb-24`}>
           <input type="hidden" name="slug" value={slug} />
           <button type="submit" className={styles.button}>Find logo automatically</button>
         </form>
@@ -89,9 +89,9 @@ async function LogoStep({ slug, candidate, source, notfound }: { slug: string; c
       {notfound ? <p className={styles.notice}>Couldn&rsquo;t confidently find a logo on that site. Paste one below, or upload it.</p> : null}
 
       {candidate ? (
-        <div style={{ marginBottom: 24 }}>
-          <p className={styles.rowMeta} style={{ marginBottom: 8 }}>Found this {source === "ai" ? "(AI pick from the page's images)" : "(from the site header)"}:</p>
-          <img src={candidate} alt="Logo candidate" style={{ maxWidth: 280, maxHeight: 100, objectFit: "contain", border: "1px solid rgba(16,16,16,.16)", padding: 10, background: "#fafaf8", display: "block", marginBottom: 12 }} />
+        <div className="u-mb-24">
+          <p className={`${styles.rowMeta} u-mb-8`}>Found this {source === "ai" ? "(AI pick from the page's images)" : "(from the site header)"}:</p>
+          <img src={candidate} alt="Logo candidate" className={styles.logoCandidate} />
           <div className={styles.actions}>
             <form action={approveLogo}>
               <input type="hidden" name="slug" value={slug} />
@@ -107,8 +107,8 @@ async function LogoStep({ slug, candidate, source, notfound }: { slug: string; c
         </div>
       ) : null}
 
-      <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(16,16,16,.6)", marginBottom: 8 }}>Or set it manually</p>
-      <form action={saveManualLogo} className={styles.form} encType="multipart/form-data" style={{ marginBottom: 16 }}>
+      <p className={styles.eyebrow}>Or set it manually</p>
+      <form action={saveManualLogo} className={`${styles.form} u-mb-16`}>
         <input type="hidden" name="slug" value={slug} />
         <div className={styles.field}>
           <label htmlFor="logo_file">Upload a logo</label>
@@ -136,8 +136,8 @@ async function ImportStep({ slug }: { slug: string }) {
 
   return (
     <div>
-      <p style={{ marginBottom: 16 }}><strong>{brand.name}</strong> — {brand.storeUrl}</p>
-      <p className={styles.rowMeta} style={{ marginBottom: 16, maxWidth: 480 }}>
+      <p className="u-mb-16"><strong>{brand.name}</strong> — {brand.storeUrl}</p>
+      <p className={`${styles.rowMeta} u-mb-16`}>
         This pulls in every product — images, prices, sizes, stock status — then classifies each one into a category in the background. You&rsquo;ll land on the Brands page and see {brand.name} at the top under &ldquo;Recently added&rdquo; with a live progress status.
       </p>
       <form action={runImport} className={styles.form}>

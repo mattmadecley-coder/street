@@ -1,6 +1,5 @@
 import Link from "next/link";
 import styles from "@/app/admin/admin.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { SortSelect } from "@/components/admin/sort-select";
 import { ClassifyRunner } from "@/components/admin/classify-runner";
@@ -10,7 +9,11 @@ import { ScrollMemory } from "@/components/admin/scroll-memory";
 import { getBrandDirectory, getBrandSyncStatuses, getBrandClassificationProgress, type StreetBrandProfile, type BrandSyncStatus } from "@/lib/catalog-store";
 import { getRecentCatalogDiagnostics, type BrandSyncDiagnostic } from "@/lib/recent-catalog-diagnostics";
 import { LogoInvertPreview } from "@/components/admin/logo-invert-preview";
-import { updateBrand, syncBrandNow, findLogoForBrand, approveFoundLogo } from "./actions";
+import { updateBrand, syncBrandNow, findLogoForBrand, approveFoundLogo, saveBrandMeta } from "./actions";
+import { loadBrandMeta, PERMISSION_OPTIONS, EMPTY_META, type BrandMeta } from "@/lib/brand-meta";
+import { BRAND_FILTERS, filterBrands, isBrandFilter, type BrandFilter } from "@/lib/brand-filters";
+import { can } from "@/lib/admin-permissions";
+import { requireUser } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -114,16 +117,16 @@ function sortBrands(brands: StreetBrandProfile[], syncStatuses: Map<string, Bran
 
 function Metric({ label, value, note }: { label: string; value: string | number; note?: string }) {
   return (
-    <div style={{ minWidth: 0 }}>
-      <p style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-.04em" }}>{value}</p>
-      <p className={styles.rowMeta} style={{ margin: "3px 0 0" }}>{label}{note ? ` · ${note}` : ""}</p>
+    <div className="u-min-0">
+      <p className={styles.statValue}>{value}</p>
+      <p className={`${styles.rowMeta} ${styles.statLabel}`}>{label}{note ? ` · ${note}` : ""}</p>
     </div>
   );
 }
 
 function SyncDiagnostics({ diagnostic, pending }: { diagnostic: BrandSyncDiagnostic; pending: number }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(125px, 1fr))", gap: 14, marginBottom: 18, padding: 16, border: "1px solid rgba(16,16,16,.14)", background: "rgba(255,255,255,.38)" }}>
+    <div className={styles.statStrip}>
       <Metric label="new products" value={diagnostic.newProducts} />
       <Metric label="existing refreshed" value={diagnostic.existingProducts} />
       <Metric label="total in latest feed" value={diagnostic.totalProducts} />
@@ -134,14 +137,15 @@ function SyncDiagnostics({ diagnostic, pending }: { diagnostic: BrandSyncDiagnos
   );
 }
 
-function BrandRow({ brand, status, pending, progress, diagnostic, logoCandidate, logoNotFound }: { brand: StreetBrandProfile; status: BrandSyncStatus | undefined; pending: number; progress: Progress; diagnostic?: BrandSyncDiagnostic; logoCandidate?: { url: string; source: string }; logoNotFound?: boolean }) {
+function BrandRow({ brand, status, pending, progress, diagnostic, logoCandidate, logoNotFound, meta = EMPTY_META, canWrite = true }: { brand: StreetBrandProfile; status: BrandSyncStatus | undefined; pending: number; progress: Progress; diagnostic?: BrandSyncDiagnostic; logoCandidate?: { url: string; source: string }; logoNotFound?: boolean; meta?: BrandMeta; canWrite?: boolean }) {
   return (
     <details className={styles.row} data-scroll-id={brand.slug} id={brand.slug} open={logoCandidate || logoNotFound ? true : undefined}>
       <summary className={styles.rowSummary}>
-        <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span className={styles.rowIdentity}>
           {brand.logoUrl ? <img src={brand.logoUrl} alt="" style={brand.logoInvert ? { filter: "invert(1)" } : undefined} /> : <span className={styles.pill}>No logo</span>}
           <strong>{brand.name}</strong>
           {brand.featured ? <span className={styles.pill}>Featured</span> : null}
+          {meta.permission === "granted" ? <span className={styles.pill}>Permission ✓</span> : meta.permission === "requested" ? <span className={styles.pill}>Asked, waiting</span> : meta.permission === "declined" ? <span className={`${styles.pill} ${styles.pillAlert}`}>Removal requested</span> : null}
           {brand.logoInvert ? <span className={styles.pill}>Logo inverted</span> : null}
           {!brand.catalogEnabled ? <span className={styles.pill}>Not in daily sync</span> : null}
           {brand.storefrontStatus === "closed" ? <span className={`${styles.pill} ${styles.pillAlert}`}>Password protected / closed</span> : null}
@@ -167,7 +171,7 @@ function BrandRow({ brand, status, pending, progress, diagnostic, logoCandidate,
           </p>
         ) : null}
         {diagnostic ? <SyncDiagnostics diagnostic={diagnostic} pending={pending} /> : null}
-        <div className={styles.actions} style={{ marginBottom: 16, flexDirection: "column", alignItems: "flex-start" }}>
+        <div className={`${styles.actions} u-mb-16 u-col-start`}>
           <form action={syncBrandNow}>
             <input type="hidden" name="slug" value={brand.slug} />
             <SubmitButton pendingText="Syncing…" className={styles.buttonSecondary}>Sync now ({brand.productCount} pieces on file{status?.lastProductCount != null ? `, ${status.lastProductCount} last import` : ""})</SubmitButton>
@@ -175,16 +179,16 @@ function BrandRow({ brand, status, pending, progress, diagnostic, logoCandidate,
           </form>
         </div>
         {pending > 0 ? (
-          <div style={{ marginBottom: 16 }}>
+          <div className="u-mb-16">
             <ClassifyRunner brandSlug={brand.slug} pendingCount={pending} />
           </div>
         ) : null}
 
-        <div style={{ marginBottom: 16 }}>
+        <div className="u-mb-16">
           {logoCandidate ? (
-            <div style={{ marginBottom: 12 }}>
-              <p className={styles.rowMeta} style={{ marginBottom: 8 }}>Found this {logoCandidate.source === "ai" ? "(AI pick from the page's images)" : "(from the site header)"}:</p>
-              <img src={logoCandidate.url} alt="Logo candidate" style={{ maxWidth: 280, maxHeight: 100, objectFit: "contain", border: "1px solid rgba(16,16,16,.16)", padding: 10, background: "#fafaf8", display: "block", marginBottom: 12 }} />
+            <div className="u-mb-12">
+              <p className={`${styles.rowMeta} u-mb-8`}>Found this {logoCandidate.source === "ai" ? "(AI pick from the page's images)" : "(from the site header)"}:</p>
+              <img src={logoCandidate.url} alt="Logo candidate" className={styles.logoCandidate} />
               <form action={approveFoundLogo}>
                 <input type="hidden" name="slug" value={brand.slug} />
                 <input type="hidden" name="candidate" value={logoCandidate.url} />
@@ -193,13 +197,13 @@ function BrandRow({ brand, status, pending, progress, diagnostic, logoCandidate,
                   <SubmitButton pendingText="Saving…" className={styles.button}>Use this logo</SubmitButton>
                 </div>
               </form>
-              <form action={findLogoForBrand} style={{ marginTop: 8 }}>
+              <form action={findLogoForBrand} className="u-mt-8">
                 <input type="hidden" name="slug" value={brand.slug} />
                 <SubmitButton pendingText="Searching…" className={styles.buttonSecondary}>Try again</SubmitButton>
               </form>
             </div>
           ) : null}
-          {logoNotFound ? <p className={styles.notice} style={{ marginBottom: 12 }}>Couldn&rsquo;t confidently find a logo on that site. Paste one below, or upload it.</p> : null}
+          {logoNotFound ? <p className={`${styles.notice} u-mb-12`}>Couldn&rsquo;t confidently find a logo on that site. Paste one below, or upload it.</p> : null}
           {!logoCandidate ? (
             <form action={findLogoForBrand}>
               <input type="hidden" name="slug" value={brand.slug} />
@@ -209,7 +213,26 @@ function BrandRow({ brand, status, pending, progress, diagnostic, logoCandidate,
           ) : null}
         </div>
 
-        <form action={updateBrand} className={styles.form} encType="multipart/form-data">
+        <p className={`${styles.rowMeta} u-mb-12`}><Link href={`/admin/analytics/brands/${brand.slug}`}>View this brand&rsquo;s analytics →</Link></p>
+
+        {canWrite ? (
+          <form action={saveBrandMeta} className={`${styles.form} u-mb-24`}>
+            <input type="hidden" name="slug" value={brand.slug} />
+            <p className={styles.eyebrow}>Permission &amp; notes</p>
+            <div className={styles.field}>
+              <label htmlFor={`perm_${brand.slug}`}>Does this brand agree to be listed?</label>
+              <select id={`perm_${brand.slug}`} name="permission" defaultValue={meta.permission}>
+                {PERMISSION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div className={styles.field}><label htmlFor={`src_${brand.slug}`}>Where it came from (email, DM, contract…)</label><input id={`src_${brand.slug}`} name="source" type="text" maxLength={120} defaultValue={meta.source} /></div>
+            <div className={styles.field}><label htmlFor={`date_${brand.slug}`}>Date</label><input id={`date_${brand.slug}`} name="date" type="date" defaultValue={meta.date} /></div>
+            <div className={styles.field}><label htmlFor={`notes_${brand.slug}`}>Notes</label><textarea id={`notes_${brand.slug}`} name="notes" maxLength={1000} defaultValue={meta.notes} /></div>
+            <SubmitButton pendingText="Saving…" className={styles.buttonSecondary}>Save permission &amp; notes</SubmitButton>
+          </form>
+        ) : null}
+
+        <form action={updateBrand} className={styles.form}>
           <input type="hidden" name="slug" value={brand.slug} />
           <div className={styles.field}>
             <label htmlFor={`store_url_${brand.slug}`}>Store link (used by &ldquo;Shop at {brand.name}&rdquo;)</label>
@@ -243,14 +266,18 @@ function BrandRow({ brand, status, pending, progress, diagnostic, logoCandidate,
   );
 }
 
-export default async function AdminBrandsPage({ searchParams }: { searchParams: Promise<{ saved?: string; synced?: string; syncError?: string; justAdded?: string; classifying?: string; sort?: string; logoCandidateSlug?: string; logoCandidate?: string; logoCandidateSource?: string; logoNotFoundSlug?: string }> }) {
-  const { saved, synced, syncError, justAdded, classifying, sort: sortParam, logoCandidateSlug, logoCandidate, logoCandidateSource, logoNotFoundSlug } = await searchParams;
+export default async function AdminBrandsPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string; metaError?: string; saved?: string; synced?: string; syncError?: string; justAdded?: string; classifying?: string; sort?: string; logoCandidateSlug?: string; logoCandidate?: string; logoCandidateSource?: string; logoNotFoundSlug?: string }> }) {
+  const principal = await requireUser();
+  const canWrite = can(principal.role, "catalog.write");
+  const { q = "", filter: filterParam, metaError, saved, synced, syncError, justAdded, classifying, sort: sortParam, logoCandidateSlug, logoCandidate, logoCandidateSource, logoNotFoundSlug } = await searchParams;
   const sort: SortKey = SORT_OPTIONS.some((option) => option.value === sortParam) ? (sortParam as SortKey) : "name";
-  const [brands, syncStatuses, pendingByBrand, diagnostics] = await Promise.all([
+  const filter: BrandFilter = isBrandFilter(filterParam) ? filterParam : "all";
+  const [brands, syncStatuses, pendingByBrand, diagnostics, brandMeta] = await Promise.all([
     getBrandDirectory(),
     getBrandSyncStatuses(),
     getBrandClassificationProgress(),
     getRecentCatalogDiagnostics(),
+    loadBrandMeta(),
   ]);
 
   const classificationStartedSlugs = new Set([justAdded, classifying].filter((slug): slug is string => Boolean(slug)));
@@ -294,22 +321,29 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
     };
   });
 
+  const nowMs = Date.now();
+  const visible = filterBrands(
+    allSorted.map((item) => ({ ...item, slug: item.brand.slug, name: item.brand.name, logoUrl: item.brand.logoUrl, catalogEnabled: item.brand.catalogEnabled, storefrontStatus: item.brand.storefrontStatus, progressState: item.progress.state, lastSuccessAt: item.status?.lastSuccessAt ?? null })),
+    filter,
+    q,
+    brandMeta.map,
+    nowMs,
+  );
+  const withoutPermission = brands.filter((brand) => (brandMeta.map[brand.slug]?.permission ?? "none") === "none").length;
+
   return (
-    <div className={styles.shell}>
-      <AdminNav active="/admin/brands" />
+    <div>
       {inProgress.length ? <AutoRefresh /> : null}
-      <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+      <div className="u-between">
         <div>
           <h1 className={styles.title}>Brands</h1>
           <p className={styles.subtitle}>Fix a logo, correct a store link, feature a brand, or inspect exactly what changed during its latest catalog refresh. {brands.length} brands total.</p>
         </div>
         <Link href="/admin/brands/new" className={styles.button}>+ Add new brand</Link>
       </div>
-
-      {saved ? <p className={styles.notice}>Saved {saved}.</p> : null}
       {synced ? <p className={syncError ? styles.noticeError : styles.notice}>{syncError ? `Sync failed for ${synced}: ${syncError}` : `Synced ${synced}. Classification will continue in the background.`}</p> : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 16, margin: "18px 0 34px", padding: 20, border: "1px solid #101010" }}>
+      <div className={`${styles.statStrip} ${styles.statStripHero}`}>
         <Metric label="products added in the last 24 hours" value={diagnostics.addedLast24Hours} />
         <Metric label="brands with something new" value={diagnostics.brandsWithNewProducts} />
         <Metric label="most recent catalog activity" value={timeAgo(diagnostics.latestSyncAt)} />
@@ -317,13 +351,13 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
       </div>
 
       {inProgress.length ? (
-        <div className={styles.section} style={{ marginTop: 0 }}>
+        <div className={`${styles.section} u-mt-0`}>
           <div className={styles.sectionHead}><h2>Imports in progress</h2></div>
           <div className={styles.rowList}>
             {inProgress.map(({ brand, progress }) => (
               <div key={brand.slug} className={styles.row}>
-                <div className={styles.rowSummary} style={{ cursor: "default" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div className={`${styles.rowSummary} ${styles.rowSummaryStatic}`}>
+                  <span className="u-row-12">
                     {brand.logoUrl ? <img src={brand.logoUrl} alt="" style={brand.logoInvert ? { filter: "invert(1)" } : undefined} /> : <span className={styles.pill}>No logo</span>}
                     <strong>{brand.name}</strong>
                   </span>
@@ -333,8 +367,8 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
                   </span>
                 </div>
                 {progress.state === "classifying" ? (
-                  <div className={styles.rowBody} style={{ paddingTop: 0 }}>
-                    <div className={styles.miniBarTrack}><div className={styles.miniBarFill} style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} /></div>
+                  <div className={`${styles.rowBody} ${styles.rowBodyFlush}`}>
+                    <div className={styles.miniBarTrack}><div className={styles.miniBarFill} style={{ "--w": `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` } as React.CSSProperties} /></div>
                   </div>
                 ) : null}
               </div>
@@ -344,24 +378,35 @@ export default async function AdminBrandsPage({ searchParams }: { searchParams: 
       ) : null}
 
       {recentlyFinished.length ? (
-        <div className={styles.section} style={{ marginTop: inProgress.length ? 34 : 0 }}>
+        <div className={inProgress.length ? styles.section : `${styles.section} u-mt-0`}>
           <div className={styles.sectionHead}><h2>Recently finished</h2></div>
           <div className={styles.rowList}>
             {recentlyFinished.map(({ brand, status, pending, progress, diagnostic }) => (
-              <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} logoCandidate={logoCandidateSlug === brand.slug && logoCandidate ? { url: logoCandidate, source: logoCandidateSource ?? "" } : undefined} logoNotFound={logoNotFoundSlug === brand.slug} />
+              <BrandRow key={brand.slug} meta={brandMeta.map[brand.slug]} canWrite={canWrite} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} logoCandidate={logoCandidateSlug === brand.slug && logoCandidate ? { url: logoCandidate, source: logoCandidateSource ?? "" } : undefined} logoNotFound={logoNotFoundSlug === brand.slug} />
             ))}
           </div>
         </div>
       ) : null}
 
       <div className={styles.section}>
-        <div className={styles.sectionHead}><h2>All brands</h2></div>
+        <div className={styles.sectionHead}><h2>All brands</h2><span className={styles.rowMeta}>{visible.length === brands.length ? `${brands.length} brands` : `${visible.length} of ${brands.length} brands`} · {withoutPermission} without a recorded permission</span></div>
+        {metaError ? <p className={styles.noticeError} role="alert">{metaError}</p> : null}
+        {!brandMeta.available ? <p className={styles.rowMeta}>Recording each brand&rsquo;s permission switches on after the 20261014_admin_state database update is applied.</p> : null}
+        <form action="/admin/brands" className={styles.searchBar}>
+          <input type="text" name="q" defaultValue={q} placeholder="Search brands…" aria-label="Search brands" />
+          <select name="filter" defaultValue={filter} aria-label="Filter brands">
+            {BRAND_FILTERS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+          {sort !== "name" ? <input type="hidden" name="sort" value={sort} /> : null}
+          <button type="submit">Filter</button>
+        </form>
         <SortSelect defaultValue={sort} />
         <ScrollMemory>
         <div className={styles.rowList}>
-          {allSorted.map(({ brand, status, pending, progress, diagnostic }) => (
-            <BrandRow key={brand.slug} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} logoCandidate={logoCandidateSlug === brand.slug && logoCandidate ? { url: logoCandidate, source: logoCandidateSource ?? "" } : undefined} logoNotFound={logoNotFoundSlug === brand.slug} />
+          {visible.map(({ brand, status, pending, progress, diagnostic }) => (
+            <BrandRow key={brand.slug} meta={brandMeta.map[brand.slug]} canWrite={canWrite} brand={brand} status={status} pending={pending} progress={progress} diagnostic={diagnostic} logoCandidate={logoCandidateSlug === brand.slug && logoCandidate ? { url: logoCandidate, source: logoCandidateSource ?? "" } : undefined} logoNotFound={logoNotFoundSlug === brand.slug} />
           ))}
+          {!visible.length ? <p className={styles.rowMeta}>No brands match.</p> : null}
         </div>
         </ScrollMemory>
       </div>

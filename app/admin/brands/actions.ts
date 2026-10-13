@@ -7,8 +7,13 @@ import { uploadSiteAsset } from "@/lib/supabase-storage";
 import { getBrandBySlug, syncSingleBrand } from "@/lib/catalog-store";
 import { triggerClassificationDrain } from "@/lib/classification-trigger";
 import { findBrandLogo } from "@/lib/brand-logo-finder";
+import { AdminStateUnavailableError, readAdminState, writeAdminState } from "@/lib/admin-state";
+import { cleanBrandMeta, sanitizeStoredMeta, withBrandMeta } from "@/lib/brand-meta";
+import { actorOf, requirePermission } from "@/lib/admin-guard";
+import { recordAudit } from "@/lib/audit";
 
 export async function updateBrand(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const slug = String(formData.get("slug") ?? "").trim();
   if (!slug) throw new Error("Missing brand slug.");
 
@@ -37,6 +42,7 @@ export async function updateBrand(formData: FormData) {
   // busting it here, the admin brands list redirect below re-renders from
   // a stale cached read (up to an hour old) and a just-saved change (like
   // the logo-invert checkbox) appears to silently revert.
+  await recordAudit(actorOf(actor), { action: "brand.update", summary: `Updated brand ${slug}`, targetType: "brand", targetId: slug, details: body });
   revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
   revalidatePath("/admin/brands");
   revalidatePath("/brands");
@@ -52,6 +58,7 @@ export async function updateBrand(formData: FormData) {
  * rather than saving it immediately.
  */
 export async function findLogoForBrand(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const slug = String(formData.get("slug") ?? "").trim();
   if (!slug) throw new Error("Missing brand slug.");
   const brand = await getBrandBySlug(slug);
@@ -71,6 +78,7 @@ export async function findLogoForBrand(formData: FormData) {
 
 /** Admin approved a logo candidate found via findLogoForBrand above. */
 export async function approveFoundLogo(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const slug = String(formData.get("slug") ?? "").trim();
   const candidate = String(formData.get("candidate") ?? "").trim();
   const logoInvert = formData.get("logo_invert") === "on";
@@ -78,6 +86,7 @@ export async function approveFoundLogo(formData: FormData) {
 
   await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body: { logo_url: candidate, logo_invert: logoInvert }, prefer: "return=minimal" });
 
+  await recordAudit(actorOf(actor), { action: "brand.logo_set", summary: `Approved a logo for ${slug}`, targetType: "brand", targetId: slug, details: { logo: candidate, invert: logoInvert } });
   revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
   revalidatePath("/admin/brands");
   revalidatePath("/brands");
@@ -91,6 +100,7 @@ export async function approveFoundLogo(formData: FormData) {
  * invocations continue until the oldest-first queue is empty.
  */
 export async function syncBrandNow(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const slug = String(formData.get("slug") ?? "").trim();
   if (!slug) throw new Error("Missing brand slug.");
   const brand = await getBrandBySlug(slug);
@@ -102,6 +112,25 @@ export async function syncBrandNow(formData: FormData) {
     await triggerClassificationDrain().catch((error) => console.error("Unable to start Street classification drain", error));
   }
 
+  await recordAudit(actorOf(actor), { action: "brand.sync", summary: `Synced ${brand.name} now`, targetType: "brand", targetId: slug, details: { ok: result.ok, error: result.ok ? undefined : result.error } });
   revalidatePath("/admin/brands");
   redirect(`/admin/brands?synced=${encodeURIComponent(slug)}${result.ok ? `&classifying=${encodeURIComponent(slug)}` : `&syncError=${encodeURIComponent(result.error ?? "Sync failed")}`}`);
+}
+
+/** Records whether a brand has agreed to be listed (see lib/brand-meta.ts). */
+export async function saveBrandMeta(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
+  const slug = String(formData.get("slug") ?? "").trim();
+  if (!slug) throw new Error("Missing brand slug.");
+  const meta = cleanBrandMeta({ permission: formData.get("permission"), source: formData.get("source"), date: formData.get("date"), notes: formData.get("notes") });
+  try {
+    const { value } = await readAdminState<unknown>("brand_meta", {});
+    await writeAdminState("brand_meta", withBrandMeta(sanitizeStoredMeta(value), slug, meta));
+  } catch (error) {
+    if (error instanceof AdminStateUnavailableError) redirect(`/admin/brands?metaError=${encodeURIComponent(error.message)}#${encodeURIComponent(slug)}`);
+    throw error;
+  }
+  await recordAudit(actorOf(actor), { action: "brand.permission", targetType: "brand", targetId: slug, summary: `Set the permission status for ${slug} to "${meta.permission}"`, details: { permission: meta.permission, source: meta.source, date: meta.date } });
+  revalidatePath("/admin/brands");
+  redirect(`/admin/brands?saved=${encodeURIComponent(slug)}#${encodeURIComponent(slug)}`);
 }

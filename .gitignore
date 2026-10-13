@@ -19,3 +19,10 @@ cleanup*.ps1
 .open-next/
 .wrangler/
 next-env.d.ts
+
+# Sensitive session-briefing doc with live credentials -- never commit
+PROJECT_BRIEFING.md
+
+# Local scratch archive and dev logs
+_archive/
+dev*.log

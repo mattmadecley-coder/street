@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import styles from "@/app/admin/admin.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { SubmitButton } from "@/components/admin/submit-button";
 import { ScrollMemory } from "@/components/admin/scroll-memory";
 import { getCollectionBySlug, searchProductsForPicker } from "@/lib/collections-store";
 import { updateCollectionAction, deleteCollectionAction, addProductAction } from "../actions";
 import { CollectionProductList } from "@/components/admin/collection-product-list";
+import { requireUser } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCollectionEditPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ saved?: string; q?: string }> }) {
+  await requireUser();
   const { slug } = await params;
   const { saved, q } = await searchParams;
   const collection = await getCollectionBySlug(slug);
@@ -21,20 +22,17 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
   const inCollectionIds = new Set(collection.products.map((product) => product.id.slice(product.brandSlug.length + 1)));
 
   return (
-    <div className={styles.shell}>
-      <AdminNav active="/admin/collections" />
-      <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+    <div>
+      <div className="u-between">
         <div>
           <h1 className={styles.title}>{collection.title}</h1>
           <p className={styles.subtitle}>{collection.productCount} product{collection.productCount === 1 ? "" : "s"} · <Link href="/admin/collections" className="link-small">Back to all collections</Link></p>
         </div>
       </div>
 
-      {saved ? <p className={styles.notice}>Saved.</p> : null}
-
-      <div className={styles.section} style={{ marginTop: 0 }}>
+      <div className={`${styles.section} u-mt-0`}>
         <div className={styles.sectionHead}><h2>Details</h2></div>
-        <form action={updateCollectionAction} className={styles.form} encType="multipart/form-data">
+        <form action={updateCollectionAction} className={styles.form}>
           <input type="hidden" name="id" value={collection.id} />
           <input type="hidden" name="slug" value={collection.slug} />
           <div className={styles.field}>
@@ -61,7 +59,7 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
             <SubmitButton pendingText="Saving…" className={styles.button}>Save</SubmitButton>
           </div>
         </form>
-        <form action={deleteCollectionAction} style={{ marginTop: 14 }}>
+        <form action={deleteCollectionAction} className="u-mt-14">
           <input type="hidden" name="id" value={collection.id} />
           <ConfirmSubmitButton confirmText={`Delete "${collection.title}"? This can't be undone.`} className={styles.buttonSecondary}>
             Delete collection
@@ -84,7 +82,7 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
                   const alreadyIn = inCollectionIds.has(product.id);
                   return (
                     <tr key={product.id}>
-                      <td>{product.primaryImageUrl ? <img src={product.primaryImageUrl} alt="" style={{ width: 40, height: 40, objectFit: "contain" }} /> : null}</td>
+                      <td>{product.primaryImageUrl ? <img src={product.primaryImageUrl} alt="" className="u-thumb-40" /> : null}</td>
                       <td>{product.title}</td>
                       <td>{product.brandName}</td>
                       <td>${Number(product.price).toFixed(2)}</td>

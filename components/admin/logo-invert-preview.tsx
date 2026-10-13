@@ -54,15 +54,15 @@ export function LogoInvertPreview({
   }, [watchFileInputId]);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 16, margin: "12px 0" }}>
-      <div style={{ width: 140, height: 60, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(16,16,16,.16)", background: invert ? "#101010" : "#fafaf8", flexShrink: 0 }}>
+    <div className="u-row-12 u-my-12">
+      <div className="adm-logo-box" data-invert={invert ? "true" : "false"}>
         {src ? (
-          <img src={src} alt="Logo preview" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", filter: invert ? "invert(1)" : undefined }} />
+          <img src={src} alt="Logo preview" />
         ) : (
-          <span style={{ fontSize: 10, color: "rgba(16,16,16,.4)" }}>No preview yet</span>
+          <span className="adm-logo-empty">No preview yet</span>
         )}
       </div>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+      <label className="adm-check-label">
         <input type="checkbox" name={name} checked={invert} onChange={(event) => setInvert(event.target.checked)} />
         Invert this logo (white/light logo → black, so it shows up on our background)
       </label>

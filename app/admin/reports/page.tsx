@@ -1,9 +1,11 @@
 import styles from "@/app/admin/admin.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { SubmitButton } from "@/components/admin/submit-button";
+import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { supabaseRest } from "@/lib/supabase-rest";
 import { easternYesterday, reportsConfig, type ReportRow } from "@/lib/brand-report";
 import { findContactsAction, generateRecapAction, generateReportsAction, saveContactAction, sendAllDraftsAction, sendReportAction, sendTestAction, skipReportAction } from "./actions";
+import { requireUser } from "@/lib/admin-guard";
+import { can } from "@/lib/admin-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +15,28 @@ type BrandContact = {
   brand_contacts: { contact_email: string | null; contact_email_source: string | null; contact_email_checked_at: string | null; reports_opted_out_at: string | null } | null;
 };
 
-const STATUS_LABEL: Record<ReportRow["status"], string> = { draft: "Waiting for approval", sent: "Sent", skipped: "Skipped", failed: "Failed" };
+/** Spelled-out confirmation for the irreversible "send real email to a brand" actions. */
+function sendAllConfirmText(rows: ReportWithBrand[], drafts: number) {
+  const lines = rows
+    .filter((row) => row.status === "draft")
+    .slice(0, 12)
+    .map((row) => `• ${row.brands?.name ?? "Unknown brand"} → ${row.to_email ?? "no email"}`);
+  const more = drafts > 12 ? `\n…and ${drafts - 12} more` : "";
+  return `Send ${drafts} real email${drafts === 1 ? "" : "s"} to brands?\n\n${lines.join("\n")}${more}\n\nThis cannot be undone.`;
+}
+
+function sendOneConfirmText(row: ReportWithBrand) {
+  return `Send this email to ${row.brands?.name ?? "this brand"} (${row.to_email ?? "no email"})?\n\nThis cannot be undone.`;
+}
+
+const STATUS_LABEL: Record<ReportRow["status"], string> ={ draft: "Waiting for approval", sent: "Sent", skipped: "Skipped", failed: "Failed" };
 // Click tracking (outbound_clicks) only has complete data from this day on.
 const TRACKING_START = "2026-09-26";
 
 export default async function AdminReportsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const principal = await requireUser();
+  const canSend = can(principal.role, "reports.send");
+  const canManage = can(principal.role, "reports.manage");
   const params = await searchParams;
   const config = reportsConfig();
   const [reports, brands] = await Promise.all([
@@ -41,8 +60,7 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
   ].filter(Boolean) as string[];
 
   return (
-    <div className={styles.shell}>
-      <AdminNav active="/admin/reports" />
+    <div>
       <h1 className={styles.title}>Brand reports</h1>
       <p className={styles.subtitle}>
         Every morning (~9 AM ET) Street builds a report for each brand it sent shoppers to the day before.
@@ -50,23 +68,20 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
         {" "}From <strong>{config.from}</strong>, replies to <strong>{config.replyTo}</strong>. Test copies go to <strong>{config.testTo}</strong>.
       </p>
 
+      {!canSend ? <p className={styles.notice}>{canManage ? "You can build and review reports, but only an admin or owner can send them to brands." : "You have view-only access to brand reports."}</p> : null}
       {blockers.map((message) => <p key={message} className={styles.noticeError}>{message}</p>)}
       {params.error ? <p className={styles.noticeError}>{params.error}</p> : null}
-      {params.sent ? <p className={styles.notice}>Sent {params.sent === "1" ? "the report" : `${params.sent} report(s)`}.</p> : null}
-      {params.tested ? <p className={styles.notice}>Test copy sent to {config.testTo}.</p> : null}
-      {params.skipped ? <p className={styles.notice}>Report skipped.</p> : null}
       {params.generated ? <p className={styles.notice}>Built {params.generated}.</p> : null}
-      {params.contact ? <p className={styles.notice}>Contact saved.</p> : null}
       {params.finding ? <p className={styles.notice}>Looking up contact emails for {params.finding} brand(s) in the background — refresh in a minute or two.</p> : null}
 
       <section className={styles.section}>
         <div className={styles.sectionHead}><div><h2>Build reports</h2><p className={styles.rowMeta}>Re-building rebuilds drafts with fresh numbers. Already-sent reports are never touched. Recaps are never sent automatically.</p></div></div>
-        <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
-          <form action={generateReportsAction} className={styles.form} style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+        <div className="u-gap-32">
+          <form action={generateReportsAction} className={`${styles.form} ${styles.formInline}`}>
             <div className={styles.field}><label htmlFor="date">Daily report — day (Eastern)</label><input id="date" name="date" type="date" defaultValue={easternYesterday()} /></div>
             <SubmitButton pendingText="Building…" className={styles.button}>Build daily reports</SubmitButton>
           </form>
-          <form action={generateRecapAction} className={styles.form} style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+          <form action={generateRecapAction} className={`${styles.form} ${styles.formInline}`}>
             <div className={styles.field}><label htmlFor="from">Recap — from</label><input id="from" name="from" type="date" defaultValue={TRACKING_START} min={TRACKING_START} /></div>
             <div className={styles.field}><label htmlFor="to">to</label><input id="to" name="to" type="date" defaultValue={easternYesterday()} /></div>
             <SubmitButton pendingText="Building…" className={styles.button}>Build recaps</SubmitButton>
@@ -83,7 +98,12 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
               <div><h2>{title}</h2><p className={styles.rowMeta}>{group.rows.length} brand(s) · {drafts} waiting</p></div>
               {drafts ? (
                 <form action={sendAllDraftsAction}><input type="hidden" name="date" value={group.date} /><input type="hidden" name="kind" value={group.kind} />
-                  <SubmitButton pendingText="Sending…" className={styles.button} disabled={blockers.length > 0}>Approve &amp; send all {drafts}</SubmitButton>
+                  <ConfirmSubmitButton
+                    confirmText={sendAllConfirmText(group.rows, drafts)}
+                    pendingText="Sending…"
+                    className={styles.button}
+                    disabled={blockers.length > 0 || !canSend}
+                  >Approve &amp; send all {drafts}</ConfirmSubmitButton>
                 </form>
               ) : null}
             </div>
@@ -99,13 +119,18 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
                   </summary>
                   <div className={styles.rowBody}>
                     <p className={styles.rowMeta}>Subject: <strong>{row.subject}</strong></p>
-                    <iframe title={`Email for ${row.brands?.name}`} srcDoc={row.html} style={{ width: "100%", maxWidth: 640, height: 1000, border: "1px solid rgba(16,16,16,.16)", background: "#f4f3ee" }} />
+                    <iframe title={`Email for ${row.brands?.name}`} srcDoc={row.html} className={styles.emailFrame} />
                     {row.status === "sent" ? (
                       <p className={styles.rowMeta}>Sent {row.sent_at ? new Date(row.sent_at).toLocaleString("en-US", { timeZone: "America/New_York" }) : ""} ET</p>
                     ) : (
-                      <div className={styles.actions} style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                      <div className={`${styles.actions} u-mt-14`}>
                         <form action={sendReportAction}><input type="hidden" name="id" value={row.id} />
-                          <SubmitButton pendingText="Sending…" className={styles.button} disabled={blockers.length > 0 || !row.to_email}>Approve &amp; send</SubmitButton>
+                          <ConfirmSubmitButton
+                            confirmText={sendOneConfirmText(row)}
+                            pendingText="Sending…"
+                            className={styles.button}
+                            disabled={blockers.length > 0 || !row.to_email || !canSend}
+                          >Approve &amp; send</ConfirmSubmitButton>
                         </form>
                         <form action={sendTestAction}><input type="hidden" name="id" value={row.id} />
                           <SubmitButton pendingText="Sending test…" className={styles.buttonSecondary} disabled={!config.apiKey}>Send test to me</SubmitButton>
@@ -128,7 +153,7 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
       <section className={styles.section}>
         <div className={styles.sectionHead}>
           <div><h2>Brand contact emails</h2><p className={styles.rowMeta}>{withEmail} of {brands.length} brands have an address · {checked} checked. Found automatically from each store&apos;s public contact/policy pages; anything you type here wins.</p></div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="u-row">
             <form action={findContactsAction}><SubmitButton pendingText="Starting…" className={styles.button}>Find missing emails</SubmitButton></form>
             <form action={findContactsAction}><input type="hidden" name="all" value="1" /><SubmitButton pendingText="Starting…" className={styles.buttonSecondary}>Re-check all</SubmitButton></form>
           </div>
@@ -142,9 +167,9 @@ export default async function AdminReportsPage({ searchParams }: { searchParams:
                 <tr key={brand.id}>
                   <td><a href={brand.store_url} target="_blank" rel="noreferrer">{brand.name}</a></td>
                   <td>
-                    <form action={saveContactAction} style={{ display: "flex", gap: 6 }}>
+                    <form action={saveContactAction} className={styles.inlineForm}>
                       <input type="hidden" name="brand_id" value={brand.id} />
-                      <input name="email" type="email" defaultValue={contact?.contact_email ?? ""} placeholder={contact?.contact_email_checked_at ? "none found" : "not checked yet"} style={{ minWidth: 220 }} />
+                      <input name="email" type="email" defaultValue={contact?.contact_email ?? ""} placeholder={contact?.contact_email_checked_at ? "none found" : "not checked yet"} className={styles.emailInput} />
                       <SubmitButton pendingText="…" className={styles.buttonSecondary}>Save</SubmitButton>
                     </form>
                   </td>

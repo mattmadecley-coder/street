@@ -4,13 +4,13 @@ import { after } from "next/server";
 import { runClassificationWorkerBatch } from "@/lib/classification-recovery";
 import { triggerClassificationDrain } from "@/lib/classification-trigger";
 import { CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS, supabaseRest } from "@/lib/supabase-rest";
+import { hasCronSecretAccess } from "@/lib/cron-auth";
 
 export const maxDuration = 60;
 const WORKER_BATCH_SIZE = 8;
 
 async function isAuthorized(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") === `Bearer ${secret}`) return true;
+  if (hasCronSecretAccess(request.headers.get("authorization"))) return true;
 
   const watchdogToken = request.headers.get("x-street-worker-token")?.trim();
   if (!watchdogToken) return false;

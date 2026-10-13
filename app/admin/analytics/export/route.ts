@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { getRecentOutboundClicks, getRecentSiteEvents, type SiteEventRow } from "@/lib/analytics";
 import { resolveAnalyticsRange } from "@/lib/date-range";
+import { hasPermission } from "@/lib/admin-guard";
+import { getAdminTimeZone } from "@/lib/admin-timezone";
 
 function csvCell(value: unknown) {
   const text = value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
@@ -17,13 +19,17 @@ function metadataString(event: SiteEventRow, key: string) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!(await hasPermission("view"))) return new Response("Unauthorized", { status: 401 });
   const legacyDays = Number(request.nextUrl.searchParams.get("days"));
   const range = request.nextUrl.searchParams.get("range") ?? (Number.isFinite(legacyDays) && legacyDays > 0 ? String(legacyDays === 1 ? "today" : legacyDays) : undefined);
-  const rangeInfo = resolveAnalyticsRange({
-    range,
-    start: request.nextUrl.searchParams.get("start") ?? undefined,
-    end: request.nextUrl.searchParams.get("end") ?? undefined,
-  });
+  const rangeInfo = resolveAnalyticsRange(
+    {
+      range,
+      start: request.nextUrl.searchParams.get("start") ?? undefined,
+      end: request.nextUrl.searchParams.get("end") ?? undefined,
+    },
+    { timeZone: await getAdminTimeZone() },
+  );
   const dataset = request.nextUrl.searchParams.get("dataset") ?? "events";
   const since = new Date(rangeInfo.startMs).toISOString();
   const [rawEvents, rawOutbound] = await Promise.all([getRecentSiteEvents(50000, since), getRecentOutboundClicks(50000, since)]);

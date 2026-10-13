@@ -1,12 +1,12 @@
 import styles from "@/app/admin/admin.module.css";
 import s from "@/app/admin/social/social.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { SocialChart } from "@/components/admin/social-chart";
 import { TodayChart } from "@/components/admin/social-today-chart";
 import { Alerts, CompareTable, GroupTable, HealthList, Kpi, Meter, SectionTitle, SocialTabs, TodayHero } from "@/components/admin/social-ui";
 import {
   CHANNEL_COLOR, addDays, buildSeries, compareWindows, countByDay, etDay, fmtWhen, getJobs, getSocialPosts, getTraffic, groupPosts, int, lastNDays, n, nowStamp, pct, todayET, todaySummary,
 } from "@/lib/social-dashboard";
+import { requireUser } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 const str = (v: unknown) => (typeof v === "string" && v ? v : null);
@@ -14,6 +14,7 @@ const C = CHANNEL_COLOR.tiktok;
 const TARGET = 6;
 
 export default async function TikTokDashboard() {
+  await requireUser();
   const [all, jobs, traffic] = await Promise.all([getSocialPosts("tiktok"), getJobs(), getTraffic()]);
   const today = todayET();
   const yesterday = addDays(today, -1);
@@ -60,8 +61,7 @@ export default async function TikTokDashboard() {
   const recent = [...all].sort((a, b) => (b.posted_at ?? "").localeCompare(a.posted_at ?? "")).slice(0, 15);
 
   return (
-    <div className={styles.shell}>
-      <AdminNav active="/admin/social" />
+    <div>
       <div className={s.head}>
         <div><h1 className={styles.title}>TikTok</h1><p className={styles.subtitle}>Photo carousels: boyfriend and streetwearkid series, 6 posts a day.</p></div>
         <div className={s.stamp}>Eastern time · as of {nowStamp()}</div>
@@ -76,9 +76,9 @@ export default async function TikTokDashboard() {
         <TodayChart title="TikTok visits through the day" lines={[{ key: "tt", label: "TikTok", color: C, today: t.todayCum }]} yesterday={t.yesterdayCum} />
       </div>
 
-      <div className={s.grid} style={{ marginTop: 14 }}>
+      <div className={`${s.grid} u-mt-14`}>
         <div className={s.kpi}>
-          <span>Posted today</span><strong>{postedToday} <small style={{ fontSize: 15, fontWeight: 400 }}>of {TARGET}</small></strong>
+          <span>Posted today</span><strong>{postedToday} <small className={s.kpiUnit}>of {TARGET}</small></strong>
           <Meter value={postedToday} max={TARGET} color={C} />
           <small>{n(postsMap[yesterday])} yesterday · {last7.last7} of 42 this week</small>
         </div>
@@ -99,7 +99,7 @@ export default async function TikTokDashboard() {
         <SocialChart title="Engagement" series={[buildSeries("likes", "Likes", likesMap, "sum", "int", C), buildSeries("comments", "Comments", commentsMap, "sum", "int", C), buildSeries("shares", "Shares", sharesMap, "sum", "int", C), buildSeries("saves", "Saves", savesMap, "sum", "int", C)]} />
         <SocialChart title="Visits sent to Street" series={[buildSeries("sessions", "Visits", sessions, "sum", "int", C), buildSeries("outbound", "Clicks out", outbound, "sum", "int", C)]} />
       </div>
-      <div style={{ marginTop: 14 }}>
+      <div className="u-mt-14">
         <CompareTable rows={[
           { label: "Posts", c: compareWindows(postsMap) }, { label: "Views", c: compareWindows(viewsMap) }, { label: "Likes", c: compareWindows(likesMap) },
           { label: "Comments", c: compareWindows(commentsMap) }, { label: "Visits to Street", c: compareWindows(sessions) }, { label: "Clicks out", c: compareWindows(outbound) },

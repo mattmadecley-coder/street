@@ -1,13 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import styles from "@/app/admin/social/social.module.css";
 import type { Series } from "@/lib/social-dashboard";
 
 type Gran = "day" | "week" | "month";
 type Layout = "stack" | "lines" | "tabs";
 const RANGE: Record<Gran, string> = { day: "Last 30 days", week: "Last 12 weeks", month: "Last 12 months" };
-const MUTED = "#c9c7bf";
+const MUTED = "var(--adm-chart-muted)";
+const INK = "var(--adm-text)";
 const fmt = (v: number, f?: "int" | "pct") => (f === "pct" ? `${(v * 100).toFixed(1)}%` : v >= 10000 ? `${(v / 1000).toFixed(1)}K` : Math.round(v).toLocaleString("en-US"));
 
 function niceMax(v: number) {
@@ -78,7 +79,7 @@ export function SocialChart({ title, subtitle, series, layout = "tabs", height =
       </div>
       {legend ? (
         <div className={styles.legend}>
-          {series.map((s) => (<span key={s.key}><i style={{ background: s.color ?? "#101010", ...(layout === "lines" ? { height: 3, borderRadius: 2 } : {}) }} />{s.label}</span>))}
+          {series.map((s) => (<span key={s.key}><i data-line={layout === "lines" ? "true" : undefined} style={{ "--sw": s.color ?? INK } as CSSProperties} />{s.label}</span>))}
         </div>
       ) : null}
 
@@ -107,10 +108,10 @@ export function SocialChart({ title, subtitle, series, layout = "tabs", height =
               const last = s[gran][count - 1];
               return (
                 <g key={s.key}>
-                  {shown.length === 1 ? <polygon points={`${cx(0)},${T + ph} ${pts} ${cx(count - 1)},${T + ph}`} fill={s.color ?? "#101010"} opacity="0.1" /> : null}
-                  <polyline points={pts} fill="none" stroke={s.color ?? "#101010"} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-                  <circle cx={cx(count - 1)} cy={y(last.y)} r="4.5" fill={s.color ?? "#101010"} stroke="#fff" strokeWidth="2" />
-                  {hover !== null ? <circle cx={cx(hover)} cy={y(s[gran][hover].y)} r="4.5" fill={s.color ?? "#101010"} stroke="#fff" strokeWidth="2" /> : null}
+                  {shown.length === 1 ? <polygon points={`${cx(0)},${T + ph} ${pts} ${cx(count - 1)},${T + ph}`} fill={s.color ?? INK} opacity="0.1" /> : null}
+                  <polyline points={pts} fill="none" stroke={s.color ?? INK} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                  <circle cx={cx(count - 1)} cy={y(last.y)} r="4.5" fill={s.color ?? INK} stroke="var(--adm-surface)" strokeWidth="2" />
+                  {hover !== null ? <circle cx={cx(hover)} cy={y(s[gran][hover].y)} r="4.5" fill={s.color ?? INK} stroke="var(--adm-surface)" strokeWidth="2" /> : null}
                 </g>
               );
             }) : null}
@@ -124,7 +125,7 @@ export function SocialChart({ title, subtitle, series, layout = "tabs", height =
                     const top = y(acc + q.v), bottom = y(acc);
                     acc += q.v;
                     const gap = k === 0 ? 0 : 2;
-                    return <path key={q.s.key} d={colPath(cx(i) - barW / 2, top, barW, Math.max(1, bottom - top - gap), 4, k === parts.length - 1)} fill={q.s.color ?? "#101010"} />;
+                    return <path key={q.s.key} d={colPath(cx(i) - barW / 2, top, barW, Math.max(1, bottom - top - gap), 4, k === parts.length - 1)} fill={q.s.color ?? INK} />;
                   })}
                   {!parts.length ? <rect x={cx(i) - barW / 2} y={T + ph - 1.5} width={barW} height="1.5" fill={MUTED} /> : null}
                 </g>
@@ -134,7 +135,7 @@ export function SocialChart({ title, subtitle, series, layout = "tabs", height =
             {layout === "tabs" ? shown[0][gran].map((p, i) => {
               const h = Math.max(p.y > 0 ? 2 : 1.5, T + ph - y(p.y));
               const latest = i === count - 1;
-              return <path key={i} d={colPath(cx(i) - barW / 2, T + ph - h, barW, h, 4, true)} fill={latest ? shown[0].color ?? "#101010" : hover === i ? "#9b998f" : MUTED} />;
+              return <path key={i} d={colPath(cx(i) - barW / 2, T + ph - h, barW, h, 4, true)} fill={latest ? shown[0].color ?? INK : hover === i ? "var(--adm-text-3)" : MUTED} />;
             }) : null}
 
             {shown[0][gran].map((p, i) => (i === count - 1 || (i % every === 0 && count - 1 - i >= Math.ceil(every / 2))) ? (
@@ -142,9 +143,9 @@ export function SocialChart({ title, subtitle, series, layout = "tabs", height =
             ) : null)}
           </svg>
           {hover !== null ? (
-            <div className={styles.tip} style={{ left: `${tipLeft}%`, transform: tipFlip ? "translateX(calc(-100% - 12px))" : "translateX(12px)" }}>
+            <div className={styles.tip} style={{ "--tip-left": `${tipLeft}%`, "--tip-transform": tipFlip ? "translateX(calc(-100% - 12px))" : "translateX(12px)" } as CSSProperties}>
               <b>{shown[0][gran][hover].x}</b>
-              {shown.map((s) => (<div key={s.key}><i style={{ background: s.color ?? "#101010" }} /><strong>{fmt(s[gran][hover].y, s.format)}</strong> {s.label}</div>))}
+              {shown.map((s) => (<div key={s.key}><i style={{ "--sw": s.color ?? INK } as CSSProperties} /><strong>{fmt(s[gran][hover].y, s.format)}</strong> {s.label}</div>))}
               {layout === "stack" && shown.length > 1 ? <div className={styles.tipTotal}>Total <strong>{fmt(totals[hover])}</strong></div> : null}
             </div>
           ) : null}

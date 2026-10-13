@@ -50,12 +50,12 @@ export function CollectionProductList({ collectionId, slug, initialProducts }: {
       <tbody>
         {products.map((product, index) => (
           <tr key={product.displayId}>
-            <td>{product.primaryImage ? <img src={product.primaryImage} alt="" style={{ width: 40, height: 40, objectFit: "contain" }} /> : null}</td>
+            <td>{product.primaryImage ? <img src={product.primaryImage} alt="" className="u-thumb-40" /> : null}</td>
             <td>{product.title}{isPending && movingId === product.rawId ? <span className={styles.rowMeta}> · moving…</span> : null}</td>
             <td>{product.brandName}</td>
             <td>${product.price.toFixed(2)}</td>
             <td>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div className="u-row">
                 <button type="button" className={styles.buttonSecondary} disabled={index === 0 || isPending} aria-label="Move up" onClick={() => move(index, "up")}>↑</button>
                 <button type="button" className={styles.buttonSecondary} disabled={index === products.length - 1 || isPending} aria-label="Move down" onClick={() => move(index, "down")}>↓</button>
                 <form action={removeProductAction}>

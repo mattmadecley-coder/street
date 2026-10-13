@@ -1,12 +1,16 @@
 import styles from "@/app/admin/admin.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { getSiteSettings } from "@/lib/site-settings";
 import { getBrandDirectory } from "@/lib/catalog-store";
 import { getActiveHomepageFeatureSchedule, getHomepageFeatureSchedules } from "@/lib/homepage-feature-schedule";
-import { removeHomepageFeature, saveHomepageSettings, scheduleHomepageFeature, updateScheduledFeatureAction } from "./actions";
+import { removeHomepageFeature, restoreHomepageVersion, saveHomepageSettings, scheduleHomepageFeature, updateScheduledFeatureAction } from "./actions";
+import { HomepagePreview } from "@/components/admin/homepage-preview";
+import { PageHeader } from "@/components/admin/ui";
+import { loadHomepageHistory } from "@/lib/homepage-history";
+import { can } from "@/lib/admin-permissions";
 import { SubmitButton } from "@/components/admin/submit-button";
 import { PendingStatus } from "@/components/admin/pending-status";
 import { ScrollMemory } from "@/components/admin/scroll-memory";
+import { requireUser } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -34,34 +38,48 @@ function easternDateTimeLocalValue(value: string | number | Date) {
 }
 
 export default async function AdminHomepagePage({ searchParams }: { searchParams: Promise<{ saved?: string; scheduled?: string; deleted?: string; edit?: string; scheduleError?: string; scheduleUpdated?: string }> }) {
+  const principal = await requireUser();
+  const canWrite = can(principal.role, "homepage.write");
   const { saved, scheduled, deleted, edit, scheduleError, scheduleUpdated } = await searchParams;
-  const [settings, brands, schedules, activeSchedule] = await Promise.all([
+  const [settings, brands, schedules, activeSchedule, history] = await Promise.all([
     getSiteSettings(),
     getBrandDirectory(),
     getHomepageFeatureSchedules(),
     getActiveHomepageFeatureSchedule(new Date(), true),
+    loadHomepageHistory(),
   ]);
   const brandNames = new Map(brands.map((brand) => [brand.slug, brand.name]));
   const now = Date.now();
   const nowEasternLocal = easternDateTimeLocalValue(now);
   const editingSchedule = edit ? schedules.find((item) => item.id === edit) : undefined;
+  const brandNameMap = Object.fromEntries(brands.map((brand) => [brand.slug, brand.name]));
+  const live = {
+    imageUrl: activeSchedule?.heroImageUrl || settings.hero_image_url,
+    videoUrl: activeSchedule?.heroVideoUrl || settings.hero_video_url,
+    brandName: brandNameMap[activeSchedule?.brandSlug ?? settings.featured_brand_slug] ?? (activeSchedule?.brandSlug ?? settings.featured_brand_slug),
+    ctaLabel: activeSchedule?.ctaLabel || settings.featured_brand_cta_label,
+  };
+  const nextScheduled = schedules.filter((item) => new Date(item.startsAt).getTime() > now).sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())[0];
 
   return (
-    <div className={styles.shell}>
-      <AdminNav active="/admin/homepage" />
-      <h1 className={styles.title}>Homepage</h1>
-      <p className={styles.subtitle}>Change the homepage now or schedule future featured brands and hero media. Scheduled times use Eastern Time and become visible within about one minute.</p>
+    <div>
+      <PageHeader title="Homepage" subtitle="Change the homepage now or schedule future featured brands and hero media. Scheduled times use Eastern Time and become visible within about one minute." />
+      {scheduleError ? <p className={styles.noticeError} role="alert">{scheduleError}</p> : null}
 
-      {saved ? <p className={styles.notice}>The live homepage fallback was saved.</p> : null}
-      {scheduled ? <p className={styles.notice}>The featured brand and media were scheduled.</p> : null}
-      {scheduleUpdated ? <p className={styles.notice}>The scheduled feature was updated.</p> : null}
-      {deleted ? <p className={styles.notice}>The scheduled feature was removed.</p> : null}
-      {scheduleError ? <p className={styles.noticeError}>{scheduleError}</p> : null}
-      {activeSchedule ? <p className={styles.notice}>A scheduled feature is currently live: <strong>{brandNames.get(activeSchedule.brandSlug) ?? activeSchedule.brandSlug}</strong>, started {easternDateTime(activeSchedule.startsAt)} ET.</p> : null}
+      <section aria-label="Live now">
+        <HomepagePreview title={activeSchedule ? "Live now: scheduled feature" : "Live now: fallback homepage"} initial={live} />
+        <p className={styles.rowMeta}>
+          {activeSchedule ? <>A scheduled feature is live: <strong>{live.brandName}</strong>, started {easternDateTime(activeSchedule.startsAt)} ET. It stays up until a later one starts.</> : <>No scheduled feature is live, so visitors see the fallback below.</>}
+          {nextScheduled ? <> Next up: <strong>{brandNames.get(nextScheduled.brandSlug) ?? nextScheduled.brandSlug}</strong> on {easternDateTime(nextScheduled.startsAt)} ET.</> : null}
+        </p>
+      </section>
 
       <section className={styles.section}>
-        <div className={styles.sectionHead}><div><h2>Change it now</h2><p className={styles.rowMeta}>This is also the fallback whenever no scheduled feature has started.</p></div></div>
-        <form action={saveHomepageSettings} className={styles.form} encType="multipart/form-data">
+        <div className={styles.sectionHead}><div><h2>Fallback homepage</h2><p className={styles.rowMeta}>Visitors see this whenever no scheduled feature is live. Editing it changes the live site as soon as you save, and the preview below updates as you type.</p></div></div>
+        {canWrite ? (
+          <HomepagePreview title="Preview of your changes" formId="homepage-fallback-form" brandNames={brandNameMap} initial={{ imageUrl: settings.hero_image_url, videoUrl: settings.hero_video_url, brandName: brandNameMap[settings.featured_brand_slug] ?? settings.featured_brand_slug, ctaLabel: settings.featured_brand_cta_label }} />
+        ) : null}
+        <form action={saveHomepageSettings} id="homepage-fallback-form" className={styles.form}>
           <div className={styles.field}>
             <label htmlFor="hero_image_file">Hero image — upload a new one</label>
             <input id="hero_image_file" name="hero_image_file" type="file" accept="image/*" />
@@ -70,7 +88,6 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
             <label htmlFor="hero_image_url">Hero image — or paste a URL</label>
             <input id="hero_image_url" name="hero_image_url" type="text" defaultValue={settings.hero_image_url} placeholder="https://..." />
           </div>
-          {settings.hero_image_url ? <img src={settings.hero_image_url} alt="Current hero" style={{ width: "100%", maxWidth: 360, aspectRatio: "16/9", objectFit: "cover", border: "1px solid rgba(16,16,16,.16)" }} /> : null}
           <div className={styles.field}>
             <label htmlFor="hero_video_url">Hero video URL (optional — takes priority over the image)</label>
             <input id="hero_video_url" name="hero_video_url" type="text" defaultValue={settings.hero_video_url} placeholder="https://..." />
@@ -92,7 +109,7 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
 
       <section className={styles.section}>
         <div className={styles.sectionHead}><div><h2>Schedule a future feature</h2><p className={styles.rowMeta}>At the selected time, this brand and its media automatically replace the current feature. It stays live until a later scheduled entry starts.</p></div></div>
-        <form action={scheduleHomepageFeature} className={styles.form} encType="multipart/form-data">
+        <form action={scheduleHomepageFeature} className={styles.form}>
           <div className={styles.field}>
             <label htmlFor="starts_at">Start date and time (Eastern Time)</label>
             <input id="starts_at" name="starts_at" type="datetime-local" min={nowEasternLocal} required />
@@ -129,7 +146,7 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
       <section className={styles.section}>
         <div className={styles.sectionHead}><h2>Featured-brand schedule</h2><span className={styles.rowMeta}>{schedules.length} saved</span></div>
         {schedules.length ? (
-          <div style={{ overflowX: "auto" }}>
+          <div className="u-scroll-x">
             <table className={styles.table}>
               <thead><tr><th>Starts</th><th>Brand</th><th>Media</th><th>CTA</th><th>Status</th><th /></tr></thead>
               <tbody>
@@ -141,7 +158,7 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
                     return (
                       <tr key={item.id}>
                         <td colSpan={6}>
-                          <form action={updateScheduledFeatureAction} className={styles.form} encType="multipart/form-data" style={{ margin: "10px 0" }}>
+                          <form action={updateScheduledFeatureAction} className={`${styles.form} u-my-10`}>
                             <input type="hidden" name="schedule_id" value={item.id} />
                             <div className={styles.field}>
                               <label htmlFor={`edit_starts_at_${item.id}`}>Start date and time (Eastern Time)</label>
@@ -171,7 +188,7 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
                             </div>
                             <div className={styles.actions}>
                               <SubmitButton pendingText="Saving…" className={styles.button}>Save changes</SubmitButton>
-                              <a href="/admin/homepage" className={styles.buttonSecondary} style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Cancel</a>
+                              <a href="/admin/homepage" className={styles.buttonSecondary}>Cancel</a>
                             </div>
                             <PendingStatus label="Saving — uploading the new hero image if one was selected" />
                           </form>
@@ -186,8 +203,8 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
                     <td>{item.ctaLabel}</td>
                     <td><span className={styles.pill}>{status}</span></td>
                     <td>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <a href={`/admin/homepage?edit=${item.id}`} className={styles.buttonSecondary} style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Edit</a>
+                      <div className="u-row">
+                        <a href={`/admin/homepage?edit=${item.id}`} className={styles.buttonSecondary}>Edit</a>
                         <form action={removeHomepageFeature}><input type="hidden" name="schedule_id" value={item.id} /><SubmitButton pendingText="Removing…" className={styles.buttonSecondary}>Remove</SubmitButton></form>
                       </div>
                     </td>
@@ -199,6 +216,29 @@ export default async function AdminHomepagePage({ searchParams }: { searchParams
         ) : <p className={styles.rowMeta}>No future homepage features are scheduled yet.</p>}
       </section>
       </ScrollMemory>
+
+      <section className={styles.section} aria-label="Version history">
+        <div className={styles.sectionHead}><div><h2>Fallback history</h2><p className={styles.rowMeta}>Each time the fallback homepage is replaced, what was live is kept here so you can put it back. The last 20 are kept.</p></div></div>
+        {!history.available ? <p className={styles.rowMeta}>Version history switches on after the 20261014_admin_state database update is applied.</p> : history.items.length === 0 ? <p className={styles.rowMeta}>Nothing replaced yet.</p> : (
+          <ul className="adm-version-list">
+            {history.items.map((version) => (
+              <li key={version.at}>
+                {version.settings.hero_image_url ? <img src={version.settings.hero_image_url} alt="" className="adm-version-thumb" /> : <span className="adm-version-thumb" />}
+                <div>
+                  <strong>{brandNameMap[version.settings.featured_brand_slug] ?? version.settings.featured_brand_slug}</strong>
+                  <span className={`${styles.rowMeta} u-block`}>Replaced {easternDateTime(version.at)} ET by {version.by}{version.settings.hero_video_url ? " · video" : ""}</span>
+                </div>
+                {canWrite ? (
+                  <form action={restoreHomepageVersion}>
+                    <input type="hidden" name="at" value={version.at} />
+                    <SubmitButton pendingText="Restoring…" className={styles.buttonSecondary}>Restore</SubmitButton>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

@@ -1,98 +1,129 @@
 import styles from "@/app/admin/admin.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { AnalyticsNav } from "@/components/admin/analytics-nav";
-import { getAnalyticsDailySummaries, summaryNumber, type AnalyticsDailySummary } from "@/lib/analytics-summaries";
+import { ChangeChip } from "@/components/admin/change-chip";
+import { InfoTip } from "@/components/admin/info-tip";
+import { Banner, PageHeader } from "@/components/admin/ui";
+import { getAdminRange } from "@/lib/admin-range";
+import { compareHasNoHistory, loadRangeSnapshot } from "@/lib/analytics-snapshot";
+import { describeChange, describeFractionChange, describeRateChange, lowerIsBetter, type ChangeTone } from "@/lib/analytics-change";
+import type { WindowStats } from "@/lib/analytics-metrics";
+import type { MetricKey } from "@/lib/analytics-glossary";
+import { timeZoneLabel } from "@/lib/date-range";
+import { requireUser } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Compare periods" };
 
-function aggregate(rows: AnalyticsDailySummary[]) {
-  return rows.reduce((total, row) => ({
-    visitors: total.visitors + summaryNumber(row.visitors),
-    sessions: total.sessions + summaryNumber(row.sessions),
-    impressions: total.impressions + summaryNumber(row.product_impressions),
-    productClicks: total.productClicks + summaryNumber(row.product_clicks),
-    views: total.views + summaryNumber(row.product_views),
-    searches: total.searches + summaryNumber(row.searches),
-    outbound: total.outbound + summaryNumber(row.outbound_clicks),
-    outboundSessions: total.outboundSessions + summaryNumber(row.outbound_sessions),
-  }), {
-    visitors: 0,
-    sessions: 0,
-    impressions: 0,
-    productClicks: 0,
-    views: 0,
-    searches: 0,
-    outbound: 0,
-    outboundSessions: 0,
+const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+const pct = (value: number | null) => (value === null ? "—" : `${(value * 100).toFixed(1)}%`);
+const rate = (value: number, total: number) => (total ? `${((value / total) * 100).toFixed(1)}%` : "—");
+
+type Row = { label: string; indent?: boolean; metric?: MetricKey; current: string; previous: string; change: { text: string; tone: ChangeTone } };
+
+export default async function AnalyticsComparisonPage({ searchParams }: { searchParams: Promise<{ range?: string; start?: string; end?: string; compare?: string; days?: string }> }) {
+  await requireUser();
+  const range = await getAdminRange(await searchParams);
+  const snapshot = await loadRangeSnapshot(range);
+  const { current } = snapshot;
+  const previous: WindowStats | null = snapshot.compare;
+  const noHistory = compareHasNoHistory(snapshot);
+  const noData = { text: "No prior data", tone: "none" as const };
+  const off = { text: "—", tone: "none" as const };
+
+  const count = (label: string, pick: (stats: WindowStats) => number, metric?: MetricKey, indent = false): Row => ({
+    label,
+    indent,
+    metric,
+    current: pick(current).toLocaleString(),
+    previous: previous ? pick(previous).toLocaleString() : "—",
+    change: previous ? (noHistory ? noData : describeChange(pick(current), pick(previous))) : off,
   });
-}
 
-function change(current: number, previous: number) {
-  if (!previous) return current ? "+100.0%" : "0.0%";
-  const value = ((current - previous) / previous) * 100;
-  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
-}
+  const rows: Row[] = [
+    count("Visitors", (s) => s.visitors, "visitors"),
+    count("Engaged visitors", (s) => s.engagedVisitors, "engagedVisitors"),
+    count("Sessions", (s) => s.sessions, "sessions"),
+    {
+      label: "Bounce rate",
+      metric: "bounceRate",
+      current: pct(current.bounceRate),
+      previous: previous ? pct(previous.bounceRate) : "—",
+      change: previous ? (noHistory ? noData : lowerIsBetter(describeFractionChange(current.bounceRate, previous.bounceRate))) : off,
+    },
+    count("Product impressions", (s) => s.impressions, "impressions"),
+    count("Product clicks", (s) => s.productClicks, "productClicks"),
+    count("Product views", (s) => s.productViews),
+    count("Searches", (s) => s.searches),
+    count("Bag adds", (s) => s.bagAdds, "bagAdds"),
+    count("Outbound clicks", (s) => s.handoffs.total, "outboundClicks"),
+    count("Brand visits", (s) => s.handoffs.brandVisits, "brandVisits", true),
+    count("Product visits", (s) => s.handoffs.productVisits, "productVisits", true),
+    count("Checkout clicks", (s) => s.handoffs.checkoutClicks, "checkoutClicks", true),
+    count("High-intent clicks", (s) => s.handoffs.highIntent, "highIntentClicks"),
+    count("Outbound shoppers", (s) => s.shoppers, "shoppers"),
+    {
+      label: "Intent value",
+      current: money.format(current.intentValue),
+      previous: previous ? money.format(previous.intentValue) : "—",
+      change: previous ? (noHistory ? noData : describeChange(current.intentValue, previous.intentValue)) : off,
+    },
+  ];
 
-function rate(value: number, total: number) {
-  return total ? `${((value / total) * 100).toFixed(1)}%` : "0.0%";
-}
-
-export default async function AnalyticsComparisonPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
-  const params = await searchParams;
-  const days = [7, 30, 90].includes(Number(params.days)) ? Number(params.days) : 30;
-  const now = new Date();
-  const currentStart = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
-  const previousStart = new Date(now.getTime() - days * 2 * 86400000).toISOString().slice(0, 10);
-  const summaries = await getAnalyticsDailySummaries(previousStart);
-  const current = aggregate(summaries.filter((row) => row.day >= currentStart));
-  const previous = aggregate(summaries.filter((row) => row.day >= previousStart && row.day < currentStart));
-
-  const rows: Array<[string, number, number, string]> = [
-    ["Recorded visitors (daily total)", current.visitors, previous.visitors, change(current.visitors, previous.visitors)],
-    ["Sessions (daily total)", current.sessions, previous.sessions, change(current.sessions, previous.sessions)],
-    ["Product impressions", current.impressions, previous.impressions, change(current.impressions, previous.impressions)],
-    ["Product clicks", current.productClicks, previous.productClicks, change(current.productClicks, previous.productClicks)],
-    ["Product views", current.views, previous.views, change(current.views, previous.views)],
-    ["Searches", current.searches, previous.searches, change(current.searches, previous.searches)],
-    ["Outbound clicks", current.outbound, previous.outbound, change(current.outbound, previous.outbound)],
-    ["Outbound sessions", current.outboundSessions, previous.outboundSessions, change(current.outboundSessions, previous.outboundSessions)],
+  const rateRows = [
+    { label: "Impression → product click", metric: "ctr" as MetricKey, cn: current.productClicks, cd: current.impressions, pn: previous?.productClicks ?? 0, pd: previous?.impressions ?? 0 },
+    { label: "Product view → outbound click", cn: current.handoffs.total, cd: current.productViews, pn: previous?.handoffs.total ?? 0, pd: previous?.productViews ?? 0 },
+    { label: "Visitor → outbound shopper", cn: current.shoppers, cd: current.visitors, pn: previous?.shoppers ?? 0, pd: previous?.visitors ?? 0 },
   ];
 
   return (
-    <div className={styles.shell}>
-      <AdminNav active="/admin/analytics" />
+    <div>
       <AnalyticsNav active="/admin/analytics/comparison" />
-      <h1 className={styles.title}>Period comparison</h1>
-      <p className={styles.subtitle}>Period totals calculated inside Supabase and returned as daily summaries instead of downloading raw event history.</p>
-      <form style={{ margin: "18px 0" }}>
-        <select name="days" defaultValue={String(days)} style={{ padding: "9px 12px" }}>
-          <option value="7">7 days vs previous 7</option>
-          <option value="30">30 days vs previous 30</option>
-          <option value="90">90 days vs previous 90</option>
-        </select>
-        <button className={styles.buttonSecondary} style={{ marginLeft: 8 }} type="submit">Apply</button>
-      </form>
+      <PageHeader
+        title="Compare periods"
+        subtitle={<>{range.label} ({range.startDateInput === range.endDateInput ? range.startDateInput : `${range.startDateInput} to ${range.endDateInput}`}) in {timeZoneLabel(range.timeZone)}{range.compare ? <> against {range.compare.label}</> : null}.</>}
+      />
+
+      {!range.compare ? (
+        <Banner tone="info">Comparison is switched off. Open the date picker in the top bar and choose &ldquo;Previous period&rdquo; or &ldquo;Same period last year&rdquo;.</Banner>
+      ) : null}
+      {noHistory ? (
+        <Banner tone="info">Tracking started on {new Date(snapshot.earliestEventMs ?? 0).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: range.timeZone })}, so the comparison period has no data to compare against.</Banner>
+      ) : null}
+      {snapshot.truncated ? <Banner tone="warn">There is more traffic than the dashboard can load at once, so the oldest events are left out and totals for long ranges may be low. Pick a shorter range for exact numbers.</Banner> : null}
+      <p className={styles.basisNote}>These are the same likely-human numbers as Home and Analytics: bots and your own browser are excluded, days follow your reporting time zone, and repeat clicks within 30 minutes count once.{range.inProgress ? " The current range includes today so far, so it is compared with an equally long part of the earlier period." : ""}</p>
+
       <div className={styles.section}>
         <table className={styles.table}>
-          <thead><tr><th>Metric</th><th>Current</th><th>Previous</th><th>Change</th></tr></thead>
-          <tbody>{rows.map(([label, currentValue, previousValue, delta]) => (
-            <tr key={label}>
-              <td>{label}</td>
-              <td>{currentValue.toLocaleString()}</td>
-              <td>{previousValue.toLocaleString()}</td>
-              <td>{delta}</td>
-            </tr>
-          ))}</tbody>
+          <thead><tr><th scope="col">Metric</th><th scope="col">Current</th><th scope="col">Previous</th><th scope="col">Change</th></tr></thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <th scope="row">{row.indent ? <span className="u-muted">↳ {row.label}</span> : row.label}{row.metric ? <InfoTip metric={row.metric} /> : null}</th>
+                <td className={styles.numCell}>{row.current}</td>
+                <td className={styles.numCell}>{row.previous}</td>
+                <td><ChangeChip text={row.change.text} tone={row.change.tone} /></td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
+
       <div className={styles.section}>
         <div className={styles.sectionHead}><h2>Conversion-rate comparison</h2></div>
         <table className={styles.table}>
-          <thead><tr><th>Rate</th><th>Current</th><th>Previous</th></tr></thead>
+          <thead><tr><th scope="col">Rate</th><th scope="col">Current</th><th scope="col">Previous</th><th scope="col">Change</th></tr></thead>
           <tbody>
-            <tr><td>Impression → product click</td><td>{rate(current.productClicks, current.impressions)}</td><td>{rate(previous.productClicks, previous.impressions)}</td></tr>
-            <tr><td>Product view → outbound</td><td>{rate(current.outbound, current.views)}</td><td>{rate(previous.outbound, previous.views)}</td></tr>
-            <tr><td>Session → outbound</td><td>{rate(current.outboundSessions, current.sessions)}</td><td>{rate(previous.outboundSessions, previous.sessions)}</td></tr>
+            {rateRows.map((row) => {
+              const change = previous ? (noHistory ? noData : describeRateChange(row.cn, row.cd, row.pn, row.pd)) : off;
+              return (
+                <tr key={row.label}>
+                  <th scope="row">{row.label}{row.metric ? <InfoTip metric={row.metric} /> : null}</th>
+                  <td className={styles.numCell}>{rate(row.cn, row.cd)}</td>
+                  <td className={styles.numCell}>{previous ? rate(row.pn, row.pd) : "—"}</td>
+                  <td><ChangeChip text={change.text} tone={change.tone} /></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

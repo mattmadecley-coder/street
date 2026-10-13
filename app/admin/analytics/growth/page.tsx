@@ -1,22 +1,36 @@
 import styles from "@/app/admin/admin.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { AnalyticsNav } from "@/components/admin/analytics-nav";
 import { getCampaignDaily, getPositionDaily, getSearchDaily } from "@/lib/analytics-growth";
+import { getAdminRange } from "@/lib/admin-range";
+import { rangeUtcDays, timeZoneLabel } from "@/lib/date-range";
+import { PageHeader } from "@/components/admin/ui";
+import { requireUser } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 
 const n = (value: number | string) => Number(value) || 0;
 const percent = (value: number, total: number) => total ? `${((value / total) * 100).toFixed(1)}%` : "0.0%";
 
-export default async function GrowthAnalyticsPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
-  const params = await searchParams;
-  const days = [7, 30, 90].includes(Number(params.days)) ? Number(params.days) : 30;
-  const since = new Date(Date.now() - days * 86400000).toISOString();
-  const [searchRows, campaignRows, positionRows] = await Promise.all([
-    getSearchDaily(since),
-    getCampaignDaily(since),
-    getPositionDaily(since),
+/** The next UTC day after `day` ("YYYY-MM-DD"). */
+function nextDay(day: string) {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+}
+
+export default async function GrowthAnalyticsPage({ searchParams }: { searchParams: Promise<{ range?: string; start?: string; end?: string; compare?: string; days?: string }> }) {
+  await requireUser();
+  const range = await getAdminRange(await searchParams);
+  const { startDay, endDay } = rangeUtcDays(range);
+  // These tables are per UTC day. Include the current day when the range runs up to now.
+  const untilDay = range.inProgress ? nextDay(endDay) : endDay;
+  const within = <T extends { day: string }>(rows: T[]) => rows.filter((row) => row.day < untilDay);
+  const [rawSearchRows, rawCampaignRows, rawPositionRows] = await Promise.all([
+    getSearchDaily(startDay),
+    getCampaignDaily(startDay),
+    getPositionDaily(startDay),
   ]);
+  const searchRows = within(rawSearchRows);
+  const campaignRows = within(rawCampaignRows);
+  const positionRows = within(rawPositionRows);
 
   const searchMap = new Map<string, { searches: number; zero: number; results: number; clicks: number; outbound: number }>();
   for (const row of searchRows) {
@@ -58,18 +72,17 @@ export default async function GrowthAnalyticsPage({ searchParams }: { searchPara
   }
   const positions = [...positionMap.values()].sort((a, b) => b.impressions - a.impressions || a.position - b.position).slice(0, 40);
 
-  return <div className={styles.shell}>
-    <AdminNav active="/admin/analytics" />
+  return <div>
     <AnalyticsNav active="/admin/analytics/growth" />
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 16, flexWrap: "wrap" }}>
-      <div><h1 className={styles.title}>Growth intelligence</h1><p className={styles.subtitle}>Search demand, campaign conversion, product placement, and ranked inventory opportunities.</p></div>
-      <form><select name="days" defaultValue={String(days)} style={{ padding: "9px 12px" }}><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option></select><button className={styles.buttonSecondary} style={{ marginLeft: 8 }} type="submit">Apply</button></form>
-    </div>
+    <PageHeader
+      title="Growth intelligence"
+      subtitle={<>Search demand, campaign conversion, product placement, and ranked inventory opportunities for {range.label.toLowerCase()} ({range.startDateInput === range.endDateInput ? range.startDateInput : `${range.startDateInput} to ${range.endDateInput}`}). These tables count whole UTC days, so the first and last day can differ slightly from the {timeZoneLabel(range.timeZone)} figures on Home.</>}
+    />
 
-    <div className={styles.section}><div className={styles.sectionHead}><h2>Inventory recommendations</h2></div>{searches.length ? <div style={{ overflowX: "auto" }}><table className={styles.table}><thead><tr><th>Search</th><th>Demand</th><th>Zero results</th><th>Avg. results</th><th>Search CTR</th><th>Outbound</th><th>Recommendation</th></tr></thead><tbody>{searches.slice(0, 25).map((row) => <tr key={row.query}><td>{row.query}</td><td>{row.searches}</td><td>{row.zero}</td><td>{row.averageResults.toFixed(1)}</td><td>{percent(row.clicks, row.searches)}</td><td>{row.outbound}</td><td>{row.zero > 0 ? "Add matching inventory" : row.averageResults < 6 ? "Expand selection" : row.clicks === 0 ? "Improve relevance" : row.outbound === 0 ? "Review product quality" : "Healthy"}</td></tr>)}</tbody></table></div> : <p className={styles.rowMeta}>Search intelligence will populate as shoppers search.</p>}</div>
+    <div className={styles.section}><div className={styles.sectionHead}><h2>Inventory recommendations</h2></div>{searches.length ? <div className="u-scroll-x"><table className={styles.table}><thead><tr><th>Search</th><th>Demand</th><th>Zero results</th><th>Avg. results</th><th>Search CTR</th><th>Outbound</th><th>Recommendation</th></tr></thead><tbody>{searches.slice(0, 25).map((row) => <tr key={row.query}><td>{row.query}</td><td>{row.searches}</td><td>{row.zero}</td><td>{row.averageResults.toFixed(1)}</td><td>{percent(row.clicks, row.searches)}</td><td>{row.outbound}</td><td>{row.zero > 0 ? "Add matching inventory" : row.averageResults < 6 ? "Expand selection" : row.clicks === 0 ? "Improve relevance" : row.outbound === 0 ? "Review product quality" : "Healthy"}</td></tr>)}</tbody></table></div> : <p className={styles.rowMeta}>Search intelligence will populate as shoppers search.</p>}</div>
 
-    <div className={styles.section}><div className={styles.sectionHead}><h2>Campaign and creator performance</h2></div>{campaigns.length ? <div style={{ overflowX: "auto" }}><table className={styles.table}><thead><tr><th>Source</th><th>Medium</th><th>Campaign</th><th>Content / creator</th><th>Visitors</th><th>Sessions</th><th>Product views</th><th>Outbound</th><th>Session → outbound</th></tr></thead><tbody>{campaigns.map((row) => <tr key={`${row.source}-${row.medium}-${row.campaign}-${row.content}`}><td>{row.source}</td><td>{row.medium}</td><td>{row.campaign}</td><td>{row.content}</td><td>{row.visitors}</td><td>{row.sessions}</td><td>{row.views}</td><td>{row.outbound}</td><td>{percent(row.outboundSessions, row.sessions)}</td></tr>)}</tbody></table></div> : <p className={styles.rowMeta}>Campaign rows will appear when UTM-tagged traffic arrives.</p>}</div>
+    <div className={styles.section}><div className={styles.sectionHead}><h2>Campaign and creator performance</h2></div>{campaigns.length ? <div className="u-scroll-x"><table className={styles.table}><thead><tr><th>Source</th><th>Medium</th><th>Campaign</th><th>Content / creator</th><th>Visitors</th><th>Sessions</th><th>Product views</th><th>Outbound</th><th>Session → outbound</th></tr></thead><tbody>{campaigns.map((row) => <tr key={`${row.source}-${row.medium}-${row.campaign}-${row.content}`}><td>{row.source}</td><td>{row.medium}</td><td>{row.campaign}</td><td>{row.content}</td><td>{row.visitors}</td><td>{row.sessions}</td><td>{row.views}</td><td>{row.outbound}</td><td>{percent(row.outboundSessions, row.sessions)}</td></tr>)}</tbody></table></div> : <p className={styles.rowMeta}>Campaign rows will appear when UTM-tagged traffic arrives.</p>}</div>
 
-    <div className={styles.section}><div className={styles.sectionHead}><h2>Product-position performance</h2></div>{positions.length ? <div style={{ overflowX: "auto" }}><table className={styles.table}><thead><tr><th>Component</th><th>Position</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Signal</th></tr></thead><tbody>{positions.map((row) => <tr key={`${row.component}-${row.position}`}><td>{row.component}</td><td>{row.position || "Unknown"}</td><td>{row.impressions}</td><td>{row.clicks}</td><td>{percent(row.clicks, row.impressions)}</td><td>{row.impressions >= 20 && row.clicks / Math.max(row.impressions, 1) < 0.03 ? "Weak placement or product" : row.impressions >= 10 && row.clicks / Math.max(row.impressions, 1) >= 0.1 ? "Strong placement" : "Collecting data"}</td></tr>)}</tbody></table></div> : <p className={styles.rowMeta}>Position reporting will populate as product impressions accumulate.</p>}</div>
+    <div className={styles.section}><div className={styles.sectionHead}><h2>Product-position performance</h2></div>{positions.length ? <div className="u-scroll-x"><table className={styles.table}><thead><tr><th>Component</th><th>Position</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Signal</th></tr></thead><tbody>{positions.map((row) => <tr key={`${row.component}-${row.position}`}><td>{row.component}</td><td>{row.position || "Unknown"}</td><td>{row.impressions}</td><td>{row.clicks}</td><td>{percent(row.clicks, row.impressions)}</td><td>{row.impressions >= 20 && row.clicks / Math.max(row.impressions, 1) < 0.03 ? "Weak placement or product" : row.impressions >= 10 && row.clicks / Math.max(row.impressions, 1) >= 0.1 ? "Strong placement" : "Collecting data"}</td></tr>)}</tbody></table></div> : <p className={styles.rowMeta}>Position reporting will populate as product impressions accumulate.</p>}</div>
   </div>;
 }

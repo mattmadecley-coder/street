@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import styles from "@/app/admin/social/social.module.css";
 import admin from "@/app/admin/admin.module.css";
 import {
@@ -17,7 +18,7 @@ export function SocialTabs({ active }: { active: string }) {
     <nav className={styles.tabs} aria-label="Social channels">
       {TABS.map((t) => (
         <Link key={t.href} href={t.href} data-active={t.href === active ? "true" : undefined}>
-          {t.ch ? <i style={{ background: CHANNEL_COLOR[t.ch] }} /> : null}{t.label}
+          {t.ch ? <i style={{ "--sw": CHANNEL_COLOR[t.ch] } as CSSProperties} /> : null}{t.label}
         </Link>
       ))}
     </nav>
@@ -40,13 +41,13 @@ export function Spark({ values, color = "#101010", width = 132, height = 34 }: {
   return (
     <svg className={styles.spark} width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Last 14 days">
       <polyline points={pts.map((p) => p.join(",")).join(" ")} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" opacity={values.some((v) => v > 0) ? 1 : 0.35} />
-      {last ? <circle cx={last[0]} cy={last[1]} r="4" fill={color} stroke="#fff" strokeWidth="2" /> : null}
+      {last ? <circle cx={last[0]} cy={last[1]} r="4" fill={color} stroke="var(--adm-surface)" strokeWidth="2" /> : null}
     </svg>
   );
 }
 
 export function Meter({ value, max, color = "#101010" }: { value: number; max: number; color?: string }) {
-  return <div className={styles.meter} style={{ ["--c" as string]: color }} role="meter" aria-valuenow={value} aria-valuemax={max}><div style={{ width: `${Math.min(100, (value / Math.max(1, max)) * 100)}%` }} /></div>;
+  return <div className={styles.meter} style={{ "--c": color } as CSSProperties} role="meter" aria-valuenow={value} aria-valuemax={max}><div style={{ "--w": `${Math.min(100, (value / Math.max(1, max)) * 100)}%` } as CSSProperties} /></div>;
 }
 
 export function Kpi({ label, value, cur, prev, vs, note, spark, color }: { label: string; value: string; cur?: number; prev?: number; vs?: string; note?: string; spark?: number[]; color?: string }) {
@@ -78,14 +79,14 @@ export function TodayHero({ label, value, prevAtNow, yesterdayTotal, rows, nowLa
         Yesterday&apos;s full day: <b>{yesterdayTotal}</b>
       </div>
       <hr />
-      <dl>{rows.map(([k, v]) => (<div key={k} style={{ display: "contents" }}><dt>{k}</dt><dd>{v}</dd></div>))}</dl>
+      <dl>{rows.map(([k, v]) => (<div key={k} className={styles.dlRow}><dt>{k}</dt><dd>{v}</dd></div>))}</dl>
     </div>
   );
 }
 
 export function ChannelCard({ ch, href, visits, prevAtNow, yesterdayTotal, spark, facts }: { ch: Platform; href: string; visits: number; prevAtNow: number; yesterdayTotal: number; spark: number[]; facts: Array<[string, string]> }) {
   return (
-    <Link href={href} className={styles.chan} style={{ ["--c" as string]: CHANNEL_COLOR[ch] }}>
+    <Link href={href} className={styles.chan} style={{ "--c": CHANNEL_COLOR[ch] } as CSSProperties}>
       <h3>{CHANNEL_LABEL[ch]} <em>open &rarr;</em></h3>
       <div className={styles.num}>{visits}</div>
       <div className={styles.sub}>visits today · <Delta cur={visits} prev={prevAtNow} /> vs {prevAtNow} at this time yesterday ({yesterdayTotal} all day)</div>
@@ -98,7 +99,7 @@ export function ChannelCard({ ch, href, visits, prevAtNow, yesterdayTotal, spark
 /** Today / this week / this month for several metrics. */
 export function CompareTable({ rows }: { rows: Array<{ label: string; c: Comparison; format?: (v: number) => string }> }) {
   return (
-    <div className={styles.panel} style={{ overflowX: "auto" }}>
+    <div className={`${styles.panel} ${styles.panelScroll}`}>
       <table className={admin.table}>
         <thead>
           <tr><th rowSpan={2}>Metric</th><th colSpan={3}>Today vs yesterday</th><th colSpan={3}>Last 7 days vs the 7 before</th><th colSpan={3}>Last 30 days vs the 30 before</th></tr>
@@ -159,7 +160,7 @@ export function Alerts({ items }: { items: Array<{ level: "bad" | "warn" | "info
 export function GroupTable({ title, rows, empty = "Not enough data yet." }: { title: string; rows: GroupStat[]; empty?: string }) {
   return (
     <div>
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>{title}</h3>
+      <h3 className={styles.subHeading}>{title}</h3>
       {rows.length ? (
         <div className={styles.panel}>
           <table className={admin.table}>

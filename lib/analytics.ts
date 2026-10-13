@@ -126,7 +126,14 @@ export type OutboundClickRow = {
   created_at: string;
 };
 
-const MAX_RAW_ANALYTICS_ROWS = 10000;
+/**
+ * Hard ceiling on raw rows pulled into memory per query. Newest rows win, so
+ * hitting it silently drops the OLDEST events in a long range. Callers that
+ * show totals should check `ANALYTICS_ROW_CAP` against the row count and warn
+ * (see getAnalyticsRows). A SQL-aggregate rebuild removes this limit.
+ */
+export const ANALYTICS_ROW_CAP = 50000;
+const MAX_RAW_ANALYTICS_ROWS = ANALYTICS_ROW_CAP;
 
 /**
  * `since` cutoffs computed from `Date.now()` to the millisecond mean every
@@ -192,4 +199,38 @@ export async function getRecentOutboundClicks(limit = 5000, since?: string, bran
     console.error("Street outbound click read failed", error);
     return [];
   }
+}
+
+/** Events and outbound clicks since a cutoff, plus whether the row cap clipped the oldest rows. */
+export async function getAnalyticsRows(sinceIso: string): Promise<{ events: SiteEventRow[]; clicks: OutboundClickRow[]; truncated: boolean }> {
+  const [events, clicks] = await Promise.all([
+    getRecentSiteEvents(ANALYTICS_ROW_CAP, sinceIso),
+    getRecentOutboundClicks(ANALYTICS_ROW_CAP, sinceIso),
+  ]);
+  return { events, clicks, truncated: events.length >= ANALYTICS_ROW_CAP || clicks.length >= ANALYTICS_ROW_CAP };
+}
+
+let earliestCache: { at: number; value: number | null } | null = null;
+
+/** Timestamp of the very first tracked event (cached 10 minutes), used to explain "No prior data". */
+export async function getEarliestEventMs(): Promise<number | null> {
+  if (earliestCache && Date.now() - earliestCache.at < 600_000) return earliestCache.value;
+  if (!hasSupabaseCatalog()) return null;
+  try {
+    const rows = await supabaseRest<Array<{ created_at: string }>>("site_events?select=created_at&order=created_at.asc&limit=1", { noStore: true });
+    const value = rows[0] ? new Date(rows[0].created_at).getTime() : null;
+    earliestCache = { at: Date.now(), value: Number.isFinite(value as number) ? value : null };
+    return earliestCache.value;
+  } catch {
+    return null;
+  }
+}
+
+/** Like getAnalyticsRows, but filtered to one brand server-side so a busy brand cannot crowd a small one out of the row cap. */
+export async function getAnalyticsRowsForBrand(brandSlug: string, sinceIso: string): Promise<{ events: SiteEventRow[]; clicks: OutboundClickRow[]; truncated: boolean }> {
+  const [events, clicks] = await Promise.all([
+    getRecentSiteEvents(ANALYTICS_ROW_CAP, sinceIso, brandSlug),
+    getRecentOutboundClicks(ANALYTICS_ROW_CAP, sinceIso, brandSlug),
+  ]);
+  return { events, clicks, truncated: events.length >= ANALYTICS_ROW_CAP || clicks.length >= ANALYTICS_ROW_CAP };
 }

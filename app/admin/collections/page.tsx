@@ -1,24 +1,22 @@
 import Link from "next/link";
 import styles from "@/app/admin/admin.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { listCollections } from "@/lib/collections-store";
 import { createCollectionAction } from "./actions";
+import { requireUser } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCollectionsPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  await requireUser();
   const { deleted } = await searchParams;
   const collections = await listCollections();
 
   return (
-    <div className={styles.shell}>
-      <AdminNav active="/admin/collections" />
+    <div>
       <h1 className={styles.title}>Collections</h1>
       <p className={styles.subtitle}>Hand-picked capsule or seasonal groupings of specific products. Active collections with at least one product show up as homepage shelves.</p>
 
-      {deleted ? <p className={styles.notice}>Collection deleted.</p> : null}
-
-      <div className={styles.section} style={{ marginTop: 0 }}>
+      <div className={`${styles.section} u-mt-0`}>
         <div className={styles.sectionHead}><h2>New collection</h2></div>
         <form action={createCollectionAction} className={styles.form}>
           <div className={styles.field}>

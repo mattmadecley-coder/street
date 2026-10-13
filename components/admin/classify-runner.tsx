@@ -45,7 +45,7 @@ export function ClassifyRunner({ brandSlug, pendingCount }: { brandSlug: string;
         {running ? `Classifying… (${done} done)` : remaining === 0 ? "Done classifying" : `Resume classification (${remaining} left)`}
       </button>
       {done > 0 ? (
-        <p className={styles.rowMeta} style={{ marginTop: 8 }}>
+        <p className={`${styles.rowMeta} u-mt-8`}>
           {done} processed{fallbacks ? `, ${fallbacks} assigned a broad category for review` : ""}.
         </p>
       ) : null}

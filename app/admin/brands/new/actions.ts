@@ -11,6 +11,8 @@ import { refreshBrandContact } from "@/lib/brand-contact-finder";
 import { uploadSiteAsset } from "@/lib/supabase-storage";
 import { supabaseRest, CATALOG_CACHE_TAG, CATALOG_REVALIDATE_SECONDS } from "@/lib/supabase-rest";
 import { slugify, slugFromUrl } from "@/lib/slug";
+import { actorOf, requirePermission } from "@/lib/admin-guard";
+import { recordAudit } from "@/lib/audit";
 
 function tryParseUrl(value: string): URL | null {
   try {
@@ -22,6 +24,7 @@ function tryParseUrl(value: string): URL | null {
 
 /** Step 1: create the brand row from a store URL (+ optional name), after checking no existing brand already has this domain. */
 export async function startBrandOnboarding(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const rawUrl = String(formData.get("store_url") ?? "").trim();
   const rawName = String(formData.get("name") ?? "").trim();
 
@@ -64,11 +67,13 @@ export async function startBrandOnboarding(formData: FormData) {
     }
     throw error;
   }
+  await recordAudit(actorOf(actor), { action: "brand.onboard_start", summary: `Started onboarding ${name}`, targetType: "brand", targetId: slug, details: { storeUrl } });
   redirect(`/admin/brands/new?step=logo&slug=${encodeURIComponent(slug)}`);
 }
 
 /** Step 2a: run the (heuristic, then AI-fallback) logo finder and show the result for approval. */
 export async function runLogoFinder(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const slug = String(formData.get("slug") ?? "");
   const brand = await getBrandBySlug(slug);
   if (!brand) {
@@ -88,17 +93,20 @@ export async function runLogoFinder(formData: FormData) {
 
 /** Step 2b: admin approved the found candidate. */
 export async function approveLogo(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const slug = String(formData.get("slug") ?? "");
   const candidate = String(formData.get("candidate") ?? "");
   const logoInvert = formData.get("logo_invert") === "on";
   if (slug && candidate) {
     await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body: { logo_url: candidate, logo_invert: logoInvert }, prefer: "return=minimal" });
   }
+  await recordAudit(actorOf(actor), { action: "brand.logo_set", summary: `Set the logo for ${slug}`, targetType: "brand", targetId: slug, details: { logo: candidate, invert: logoInvert } });
   redirect(`/admin/brands/new?step=import&slug=${encodeURIComponent(slug)}`);
 }
 
 /** Step 2c: admin rejected the candidate (or none was found) and provided their own URL/upload. */
 export async function saveManualLogo(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const slug = String(formData.get("slug") ?? "");
   const logoUrlInput = String(formData.get("logo_url") ?? "").trim();
   const logoFile = formData.get("logo_file");
@@ -109,16 +117,19 @@ export async function saveManualLogo(formData: FormData) {
   if (slug && logoUrl) {
     await supabaseRest(`brands?slug=eq.${encodeURIComponent(slug)}`, { method: "PATCH", body: { logo_url: logoUrl, logo_invert: logoInvert }, prefer: "return=minimal" });
   }
+  await recordAudit(actorOf(actor), { action: "brand.logo_set", summary: `Uploaded or pasted a logo for ${slug}`, targetType: "brand", targetId: slug, details: { logo: logoUrl, invert: logoInvert } });
   redirect(`/admin/brands/new?step=import&slug=${encodeURIComponent(slug)}`);
 }
 
 export async function skipLogo(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const slug = String(formData.get("slug") ?? "");
   redirect(`/admin/brands/new?step=import&slug=${encodeURIComponent(slug)}`);
 }
 
 /** Import the catalog, then start the single global classification drain. */
 export async function runImport(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
   const slug = String(formData.get("slug") ?? "");
   const brand = await getBrandBySlug(slug);
   if (!brand) {
@@ -151,12 +162,14 @@ export async function runImport(formData: FormData) {
     }
   });
 
+  await recordAudit(actorOf(actor), { action: "brand.import", summary: `Started the catalog import for ${brand.name}`, targetType: "brand", targetId: slug });
   revalidatePath("/admin/brands");
   redirect(`/admin/brands?justAdded=${encodeURIComponent(slug)}`);
 }
 
 /** Manual admin batches use the same singleton lease as the automatic worker. */
 export async function classifyBatchAction(brandSlug: string) {
+  const actor = await requirePermission("catalog.write");
   const result = await runClassificationWorkerBatch(8, brandSlug);
   if (result.results.length) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
   return result;

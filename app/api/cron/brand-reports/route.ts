@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runDailyBrandReports } from "@/lib/brand-report";
+import { hasCronSecretAccess } from "@/lib/cron-auth";
 
 export const maxDuration = 60;
 
@@ -9,8 +10,7 @@ export const maxDuration = 60;
  * Optional ?date=YYYY-MM-DD to (re)build a specific day.
  */
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!hasCronSecretAccess(request.headers.get("authorization"))) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   const date = request.nextUrl.searchParams.get("date") ?? undefined;

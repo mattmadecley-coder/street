@@ -24,9 +24,9 @@ export function SortSelect({ defaultValue }: { defaultValue: string }) {
   }
 
   return (
-    <div className="admin-sort-bar" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, fontSize: 12 }}>
+    <div className="admin-sort-bar adm-sort-bar">
       <label htmlFor="sort">Sort</label>
-      <select id="sort" defaultValue={defaultValue} onChange={(event) => onChange(event.target.value)} style={{ height: 34, border: "1px solid rgba(16,16,16,.25)", padding: "0 8px", fontSize: 12, background: "#fff" }}>
+      <select id="sort" defaultValue={defaultValue} onChange={(event) => onChange(event.target.value)}>
         {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </div>

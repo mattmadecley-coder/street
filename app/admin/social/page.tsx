@@ -1,6 +1,5 @@
 import styles from "@/app/admin/admin.module.css";
 import s from "@/app/admin/social/social.module.css";
-import { AdminNav } from "@/components/admin/admin-nav";
 import { SocialChart } from "@/components/admin/social-chart";
 import { TodayChart } from "@/components/admin/social-today-chart";
 import { Alerts, ChannelCard, CompareTable, HealthList, SectionTitle, SocialTabs, TodayHero } from "@/components/admin/social-ui";
@@ -8,11 +7,13 @@ import {
   CHANNEL_COLOR, CHANNEL_LABEL, PLATFORMS, addDays, buildSeries, compareWindows, countByDay, etDay, fmtWhen, getJobs, getSocialPosts, getTraffic, int, jobHealth, lastNDays,
   n, nowStamp, todayET, todaySummary, type Platform,
 } from "@/lib/social-dashboard";
+import { requireUser } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 const TARGET: Partial<Record<Platform, number>> = { tiktok: 6, pinterest: 10 };
 
 export default async function SocialOverviewPage() {
+  await requireUser();
   const [posts, jobs, traffic] = await Promise.all([getSocialPosts(), getJobs(), getTraffic()]);
   const today = todayET();
   const yesterday = addDays(today, -1);
@@ -69,8 +70,7 @@ export default async function SocialOverviewPage() {
   const top = posts.filter((x) => n(x.views) > 0).sort((a, b) => n(b.views) - n(a.views)).slice(0, 8);
 
   return (
-    <div className={styles.shell}>
-      <AdminNav active="/admin/social" />
+    <div>
       <div className={s.head}>
         <div><h1 className={styles.title}>Social growth</h1><p className={styles.subtitle}>What TikTok, Instagram and Pinterest did today, and what they sent to Street.</p></div>
         <div className={s.stamp}>Eastern time · as of {stamp}</div>
@@ -93,7 +93,7 @@ export default async function SocialOverviewPage() {
         />
       </div>
 
-      <div className={s.chans} style={{ marginTop: 14 }}>
+      <div className={`${s.chans} u-mt-14`}>
         {PLATFORMS.map((p) => (
           <ChannelCard
             key={p} ch={p} href={`/admin/social/${p}`}
@@ -117,14 +117,14 @@ export default async function SocialOverviewPage() {
         <SocialChart title="Visits by channel" series={sessionSeries} layout="stack" />
         <SocialChart title="Clicks out to brands" subtitle="what social visitors did next" series={outboundSeries} layout="stack" />
       </div>
-      <div style={{ marginTop: 14 }}>
+      <div className="u-mt-14">
         <CompareTable rows={[
           { label: "Visits from social", c: compareWindows(sessionsAll) },
           { label: "Clicks out to brands", c: compareWindows(outboundAll) },
           { label: "Posts published", c: compareWindows(postsAll) },
         ]} />
       </div>
-      {!Object.values(sessionsAll).some((v) => v > 0) ? <p className={s.note} style={{ marginTop: 10 }}>No social visits recorded yet. Pinterest pins are tagged utm_source=pinterest; TikTok and Instagram show up when the app passes a referrer.</p> : null}
+      {!Object.values(sessionsAll).some((v) => v > 0) ? <p className={`${s.note} u-mt-10`}>No social visits recorded yet. Pinterest pins are tagged utm_source=pinterest; TikTok and Instagram show up when the app passes a referrer.</p> : null}
 
       <SectionTitle title="Output" hint="Posts published per period" />
       <SocialChart title="Posts published" series={postSeries} layout="stack" height={200} />

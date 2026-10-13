@@ -26,7 +26,7 @@ export function PendingStatus({ label }: { label: string }) {
 
   if (!pending) return null;
   return (
-    <p role="status" aria-live="polite" style={{ margin: "10px 0 0", fontSize: 12, color: "rgba(16,16,16,.6)" }}>
+    <p role="status" aria-live="polite" className="adm-muted-note">
       {label}
       {elapsed > 0 ? ` — ${elapsed}s so far` : ""}
     </p>
