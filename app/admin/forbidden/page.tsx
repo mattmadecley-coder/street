@@ -13,6 +13,8 @@ const DESCRIPTIONS: Record<string, string> = {
   "homepage.write": "change the homepage",
   "reports.manage": "build or edit brand reports",
   "reports.send": "send emails to brands",
+  "email.write": "build email segments and templates",
+  "email.send": "send emails to customers",
   "analytics.write": "change analytics notes and alerts",
   "settings.write": "change settings",
   "team.manage": "manage the team",

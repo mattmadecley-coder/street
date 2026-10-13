@@ -9,7 +9,7 @@ export const ROLE_LABELS: Record<Role, { label: string; description: string }> =
   owner: { label: "Owner", description: "Everything, including managing the team and permanently deleting data." },
   admin: { label: "Admin", description: "Everything except managing the team and permanent deletion." },
   editor: { label: "Catalog editor", description: "Brands, products and collections. Cannot delete or send emails." },
-  marketing: { label: "Marketing", description: "Homepage, brand report drafts, social and chart notes. Cannot change the catalog." },
+  marketing: { label: "Marketing", description: "Homepage, brand report drafts, email segments and templates, social and chart notes. Cannot change the catalog or send email." },
   analyst: { label: "Analyst", description: "Read-only access to everything except settings, team and activity." },
 };
 
@@ -21,6 +21,8 @@ export const PERMISSIONS = [
   "homepage.write",
   "reports.manage",
   "reports.send",
+  "email.write",
+  "email.send",
   "analytics.write",
   "settings.write",
   "team.manage",
@@ -30,9 +32,9 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 const MATRIX: Record<Role, ReadonlySet<Permission>> = {
   owner: new Set(PERMISSIONS),
-  admin: new Set<Permission>(["view", "catalog.write", "catalog.delete", "homepage.write", "reports.manage", "reports.send", "analytics.write", "settings.write", "audit.view"]),
+  admin: new Set<Permission>(["view", "catalog.write", "catalog.delete", "homepage.write", "reports.manage", "reports.send", "email.write", "email.send", "analytics.write", "settings.write", "audit.view"]),
   editor: new Set<Permission>(["view", "catalog.write", "analytics.write"]),
-  marketing: new Set<Permission>(["view", "homepage.write", "reports.manage", "analytics.write"]),
+  marketing: new Set<Permission>(["view", "homepage.write", "reports.manage", "email.write", "analytics.write"]),
   analyst: new Set<Permission>(["view"]),
 };
 
