@@ -39,10 +39,12 @@ const DEFAULTS: Record<string, () => Row> = {
   audit_log: () => ({ id: ++identity, at: new Date().toISOString(), target_type: null, target_id: null, summary: "", details: {} }),
   admin_state: () => ({ updated_at: new Date().toISOString() }),
   admin_login_attempts: () => ({ fail_count: 0, locked_until: null, updated_at: new Date().toISOString() }),
+  email_contacts: () => ({ id: randomUUID(), token: randomUUID(), phone: null, tags: [], emails_sent: 0, open_count: 0, click_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+  email_contact_events: () => ({ id: randomUUID(), created_at: new Date().toISOString() }),
   email_segments: () => ({ id: randomUUID(), description: "", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   email_templates: () => ({ id: randomUUID(), subject: "", preheader: "", design: {}, blocks: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null }),
 };
-const UNIQUE: Record<string, string[]> = { admin_users: ["email"], admin_state: ["key"], admin_login_attempts: ["ip"], email_segments: ["name"] };
+const UNIQUE: Record<string, string[]> = { admin_users: ["email"], admin_state: ["key"], admin_login_attempts: ["ip"], email_segments: ["name"], email_contacts: ["email"] };
 
 function parse(path: string) {
   const [table, query = ""] = path.split("?");
