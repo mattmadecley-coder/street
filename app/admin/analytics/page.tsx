@@ -328,7 +328,7 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
       <div className={styles.analyticsPageHead}>
         <div>
           <h1 className={styles.title}>Analytics overview</h1>
-          <p className={styles.subtitle}>Qualified audience growth, storefront discovery, and purchase intent sent to brands.</p>
+          <p className={styles.subtitle}>Qualified audience growth, storefront discovery, and purchase intent sent to brands. <a href="/admin/analytics/flagged">Flagged visitors</a> are left out.</p>
         </div>
         <form className={styles.analyticsRangeForm}>
           <label>Date range

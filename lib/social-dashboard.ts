@@ -178,7 +178,7 @@ export async function getTraffic(): Promise<Traffic> {
   const since = new Date(Date.now() - 120 * 86400000).toISOString();
   type Ev = { created_at: string; session_id: string; anonymous_user_id: string | null; referrer: string | null; utm_source: string | null; utm_campaign: string | null };
   const events = await restAll<Ev>(
-    `site_events?select=created_at,session_id,anonymous_user_id,referrer,utm_source,utm_campaign&created_at=gte.${since}` +
+    `site_events?select=created_at,session_id,anonymous_user_id,referrer,utm_source,utm_campaign&excluded=is.false&created_at=gte.${since}` +
     `&or=(utm_source.in.(${SRC_IN}),referrer.ilike.*tiktok*,referrer.ilike.*instagram*,referrer.ilike.*pinterest*,referrer.ilike.*pin.it*)&order=created_at.asc`,
     1000, 30000,
   ).catch(() => [] as Ev[]);
@@ -199,7 +199,7 @@ export async function getTraffic(): Promise<Traffic> {
     users.set(key, set);
   }
   type Oc = { created_at: string; session_id: string | null; referrer: string | null; utm_source: string | null; utm_campaign: string | null; brand_slug: string | null; product_title: string | null };
-  const clicks = await restAll<Oc>(`outbound_clicks?select=created_at,session_id,referrer,utm_source,utm_campaign,brand_slug,product_title&created_at=gte.${since}`, 1000, 20000).catch(() => [] as Oc[]);
+  const clicks = await restAll<Oc>(`outbound_clicks?select=created_at,session_id,referrer,utm_source,utm_campaign,brand_slug,product_title&excluded=is.false&created_at=gte.${since}`, 1000, 20000).catch(() => [] as Oc[]);
   for (const c of clicks) {
     const ch = (c.session_id ? bySession.get(c.session_id) : undefined) ?? channelOfSource(c.utm_source ?? "") ?? channelOfReferrer(c.referrer);
     if (!ch) continue;

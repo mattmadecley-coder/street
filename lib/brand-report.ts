@@ -86,13 +86,13 @@ export async function computeBrandReportStats(brandSlug: string, date: string, p
 
   const [clicks, bagEvents, checkoutEvents, productViews, impressions, allTime] = await Promise.all([
     fetchAll<{ product_id: string | null; product_slug: string | null; product_title: string | null; product_price: number | null; anonymous_user_id: string | null }>(
-      `outbound_clicks?select=product_id,product_slug,product_title,product_price,anonymous_user_id&brand_slug=eq.${slug}&${inRange}`),
+      `outbound_clicks?select=product_id,product_slug,product_title,product_price,anonymous_user_id&brand_slug=eq.${slug}&excluded=is.false&${inRange}`),
     fetchAll<{ product_id: string | null; price: number | null; anonymous_user_id: string | null }>(
-      `site_events?select=product_id,price,anonymous_user_id&event_type=eq.add_to_cart&brand_slug=eq.${slug}&${inRange}`),
-    fetchAll<{ anonymous_user_id: string | null }>(`site_events?select=anonymous_user_id&event_type=eq.cart_checkout_click&brand_slug=eq.${slug}&${inRange}`),
-    countRows(`site_events?select=id&event_type=eq.product_view&brand_slug=eq.${slug}&${inRange}`),
-    countRows(`site_events?select=id&event_type=eq.product_impression&brand_slug=eq.${slug}&${inRange}`),
-    fetchAll<{ anonymous_user_id: string | null }>(`outbound_clicks?select=anonymous_user_id&brand_slug=eq.${slug}&created_at=lt.${end}`),
+      `site_events?select=product_id,price,anonymous_user_id&event_type=eq.add_to_cart&brand_slug=eq.${slug}&excluded=is.false&${inRange}`),
+    fetchAll<{ anonymous_user_id: string | null }>(`site_events?select=anonymous_user_id&event_type=eq.cart_checkout_click&brand_slug=eq.${slug}&excluded=is.false&${inRange}`),
+    countRows(`site_events?select=id&event_type=eq.product_view&brand_slug=eq.${slug}&excluded=is.false&${inRange}`),
+    countRows(`site_events?select=id&event_type=eq.product_impression&brand_slug=eq.${slug}&excluded=is.false&${inRange}`),
+    fetchAll<{ anonymous_user_id: string | null }>(`outbound_clicks?select=anonymous_user_id&brand_slug=eq.${slug}&excluded=is.false&created_at=lt.${end}`),
   ]);
 
   type Entry = ReportProduct & { productId: string | null; people: Set<string>; baggers: Set<string> };
@@ -459,8 +459,8 @@ export async function sendTestBrandReport(reportId: string): Promise<{ ok: boole
 
 async function brandsWithTraffic(start: string, end: string) {
   const [clicked, checkouts] = await Promise.all([
-    supabaseRest<Array<{ brand_slug: string | null }>>(`outbound_clicks?select=brand_slug&created_at=gte.${start}&created_at=lt.${end}`, { noStore: true }),
-    supabaseRest<Array<{ brand_slug: string | null }>>(`site_events?select=brand_slug&event_type=eq.cart_checkout_click&created_at=gte.${start}&created_at=lt.${end}`, { noStore: true }),
+    supabaseRest<Array<{ brand_slug: string | null }>>(`outbound_clicks?select=brand_slug&excluded=is.false&created_at=gte.${start}&created_at=lt.${end}`, { noStore: true }),
+    supabaseRest<Array<{ brand_slug: string | null }>>(`site_events?select=brand_slug&event_type=eq.cart_checkout_click&excluded=is.false&created_at=gte.${start}&created_at=lt.${end}`, { noStore: true }),
   ]);
   const slugs = [...new Set([...clicked, ...checkouts].map((row) => row.brand_slug).filter((slug): slug is string => Boolean(slug)))];
   if (!slugs.length) return [];
