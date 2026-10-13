@@ -9,6 +9,7 @@ on:
     - cron: "50 12 * * *" # brand report emails (~9 AM Eastern; GitHub often runs late)
     - cron: "20 13 * * *" # alert digest (only sends when a destination is configured)
     - cron: "30 8 * * *" # daily housekeeping: smart collections
+    - cron: "*/10 * * * *" # customer email: start scheduled campaigns, keep sends moving
   workflow_dispatch:
     inputs:
       job:
@@ -16,7 +17,7 @@ on:
         required: true
         default: catalog
         type: choice
-        options: [catalog, storefront-health, classify, brand-reports, alerts, daily]
+        options: [catalog, storefront-health, classify, brand-reports, alerts, daily, email-send]
 
 jobs:
   run-cron:
@@ -35,6 +36,7 @@ jobs:
               "50 12 * * *") echo "path=brand-reports" >> "$GITHUB_OUTPUT" ;;
               "20 13 * * *") echo "path=alerts" >> "$GITHUB_OUTPUT" ;;
               "30 8 * * *") echo "path=daily" >> "$GITHUB_OUTPUT" ;;
+              "*/10 * * * *") echo "path=email-send" >> "$GITHUB_OUTPUT" ;;
             esac
           fi
 

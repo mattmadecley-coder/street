@@ -20,6 +20,7 @@ roll changes out safely, and what to do when something goes wrong.
 | Smart collections | `lib/smart-collections.ts`, `lib/product-criteria.ts` | A collection can fill itself from rules (brands, category, tags, price, availability, newness, markdowns). Synced when saved and every morning |
 | Email segments | `lib/email-segments-core.ts`, `/admin/email/segments` | Saved rules over customers (signup date, opens, clicks, tags, source, phone). Live audience count. Only subscribed people are ever counted as emailable |
 | Email templates | `lib/email-blocks.ts`, `/admin/email/templates` | Block-based email layouts (header, text, image, button, image+text, product grid) with drag-and-drop editor, live preview and starter templates. The unsubscribe footer is always added |
+| Email campaigns | `lib/email-send.ts`, `lib/email-campaigns.ts`, `/admin/email/campaigns` | One-off sends to a segment: test send, send now or schedule, per-recipient results (delivered, opened, clicked, bounced, unsubscribed). Sent from `mail.streetdotcom.com` through Resend with one-click unsubscribe headers |
 | Daily roll-ups | `lib/analytics-daily.ts`, `/api/cron/daily` | One row per day of headline numbers, so long ranges keep a complete day-by-day chart |
 
 ## Rules that keep the numbers trustworthy
@@ -38,7 +39,8 @@ roll changes out safely, and what to do when something goes wrong.
 | `supabase/migrations/20261014_admin_state.sql` | `admin_state` table (service role only) | Editable alert thresholds, acknowledge/snooze, chart notes, alert digest memory, brand permission records, homepage history |
 | `supabase/migrations/20261015_admin_accounts.sql` | `admin_users`, `admin_sessions`, `audit_log`; `deleted_at` on products and brands | Personal accounts, activity log, product trash |
 | `supabase/migrations/20261016_analytics_daily.sql` | `analytics_daily` (service role only) | Daily roll-ups. Applied to production 2026-10-13 |
-| `supabase/migrations/20261017_email_platform.sql` | `email_segments`, `email_templates` (service role only) | Email segments and templates. Applied to staging; production pending sign-off |
+| `supabase/migrations/20261017_email_platform.sql` | `email_segments`, `email_templates` (service role only) | Email segments and templates. Applied to production 2026-10-13 |
+| `supabase/migrations/20261018_email_campaigns.sql` | `email_campaigns`, `email_campaign_sends` (service role only) | Email campaigns. Applied to staging; production pending sign-off |
 
 **Applied on 2026-10-13**, first to a staging database, then to production. Both are safe to run again.
 The admin degrades gracefully if a table is missing: each feature shows a "switches on after the migration" note.
@@ -54,6 +56,15 @@ The admin degrades gracefully if a table is missing: each feature shows a "switc
 3. Sign in with the new account and set up two-step sign-in when asked.
 4. Add other people from Team (a temporary password is shown once). Check each role sees only what it should.
 5. Optional safety net for the first day: set `ADMIN_ALLOW_LEGACY_LOGIN=true` in Coolify so the shared password still works at `/admin/login?mode=legacy`. Remove it afterwards.
+
+## Customer email: how sending works
+
+- Sender: `mail.streetdotcom.com` in Resend (DNS records live in Cloudflare, all verified). Brand outreach keeps using the main domain, so the two reputations stay separate.
+- Who is emailed: only people whose status is *subscribed*, matching the campaign's segment. Everyone is re-checked just before their email goes out, so someone who unsubscribes mid-send is skipped.
+- Daily limit (Email settings, default 300 per rolling 24 hours): a new sending domain has no reputation, so raise it gradually. A campaign bigger than the limit continues automatically the next day.
+- The job `/api/cron/email-send` (every 10 minutes from GitHub Actions) starts scheduled campaigns and keeps sends moving. "Send now" starts immediately in the background.
+- Required in every email: the mailing address (`BRAND_REPORTS_MAILING_ADDRESS`) and an unsubscribe link. Sending is blocked without the address.
+- Results come from the Resend webhook (delivered, opened, clicked, bounced, spam complaint). Open counts are inflated by Apple Mail privacy features, so treat clicks as the more honest signal.
 
 ## Roles
 

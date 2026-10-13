@@ -16,6 +16,7 @@ const PATHS: Record<string, ReactNode> = {
   moon: <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />,
   menu: <path d="M3 6h18M3 12h18M3 18h18" />,
   x: <path d="M18 6L6 18M6 6l12 12" />,
+  send: <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />,
   collapse: <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />,
   external: <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />,
   logout: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,

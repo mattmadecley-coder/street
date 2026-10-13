@@ -21,6 +21,13 @@ export function __table(name: string, rows: Row[] = []) {
 export function __rows(name: string): Row[] {
   return (tables.get(name) ?? []).map((row) => ({ ...row }));
 }
+/** Test helper: change rows in place (the rows __rows returns are copies). */
+export function __update(name: string, match: (row: Row) => boolean, patch: Row) {
+  for (const row of tables.get(name) ?? []) if (match(row)) Object.assign(row, patch);
+}
+export function __push(name: string, row: Row) {
+  (tables.get(name) ?? missing(name)).push({ ...row });
+}
 export function __drop(name: string) {
   tables.delete(name);
 }
@@ -41,6 +48,8 @@ const DEFAULTS: Record<string, () => Row> = {
   admin_login_attempts: () => ({ fail_count: 0, locked_until: null, updated_at: new Date().toISOString() }),
   email_contacts: () => ({ id: randomUUID(), token: randomUUID(), phone: null, tags: [], emails_sent: 0, open_count: 0, click_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   email_contact_events: () => ({ id: randomUUID(), created_at: new Date().toISOString() }),
+  email_campaigns: () => ({ id: randomUUID(), status: "draft", subject: "", preheader: "", template_id: null, segment_id: null, content: null, segment_definition: null, scheduled_at: null, started_at: null, completed_at: null, canceled_at: null, recipients_total: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+  email_campaign_sends: () => ({ id: randomUUID(), status: "queued", attempts: 0, resend_id: null, error: null, sent_at: null, delivered_at: null, first_opened_at: null, open_count: 0, first_clicked_at: null, click_count: 0, bounced_at: null, complained_at: null, last_event: null, last_event_at: null, created_at: new Date().toISOString() }),
   email_segments: () => ({ id: randomUUID(), description: "", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   email_templates: () => ({ id: randomUUID(), subject: "", preheader: "", design: {}, blocks: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null }),
 };
@@ -114,12 +123,14 @@ export async function supabaseRest<T>(path: string, options: { method?: string; 
   if (method === "POST") {
     const conflict = params.find(([key]) => key === "on_conflict")?.[1];
     const merge = (options.prefer ?? "").includes("resolution=merge-duplicates");
+    const ignoreDup = (options.prefer ?? "").includes("resolution=ignore-duplicates");
     const inputs: Row[] = Array.isArray(options.body) ? options.body : [options.body];
     const saved: Row[] = [];
     for (const input of inputs) {
       const keys = conflict ? conflict.split(",") : [];
       const existing = keys.length && merge ? rows.find((row) => keys.every((key) => row[key] === input[key])) : undefined;
       if (existing) { Object.assign(existing, input); saved.push(existing); continue; }
+      if (keys.length && ignoreDup && rows.some((row) => keys.every((key) => row[key] === input[key]))) continue;
       const row = { ...(DEFAULTS[table]?.() ?? {}), ...input };
       checkUnique(table, rows, row);
       rows.push(row);

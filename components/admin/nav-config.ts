@@ -38,10 +38,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/email", label: "Overview", icon: "mail", exact: true },
       { href: "/admin/email/analytics", label: "Email analytics", icon: "chart" },
       { href: "/admin/email/contacts", label: "Customers", icon: "users" },
+      { href: "/admin/email/campaigns", label: "Campaigns", icon: "send" },
       { href: "/admin/email/segments", label: "Segments", icon: "layers" },
       { href: "/admin/email/templates", label: "Templates", icon: "layout" },
       { href: "/admin/email/popup", label: "Signup popup", icon: "layout", also: ["/admin/email-popup"] },
       { href: "/admin/reports", label: "Brand outreach", icon: "arrow" },
+      { href: "/admin/email/settings", label: "Email settings", icon: "settings" },
     ],
   },
   {

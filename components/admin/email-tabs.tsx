@@ -5,10 +5,12 @@ const TABS = [
   { href: "/admin/email", label: "Overview" },
   { href: "/admin/email/analytics", label: "Analytics" },
   { href: "/admin/email/contacts", label: "Customers" },
+  { href: "/admin/email/campaigns", label: "Campaigns" },
   { href: "/admin/email/segments", label: "Segments" },
   { href: "/admin/email/templates", label: "Templates" },
   { href: "/admin/email/popup", label: "Signup popup" },
   { href: "/admin/reports", label: "Brand outreach" },
+  { href: "/admin/email/settings", label: "Settings" },
 ];
 
 export function EmailTabs({ active }: { active: string }) {

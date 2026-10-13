@@ -29,6 +29,7 @@ type ContactRow = { id: string; emails_sent: number; open_count: number; click_c
 // Emails that aren't brand reports go to Street's own customers: track the same
 // events on email_contacts and keep a per-contact timeline for the admin profile.
 async function handleCustomerEvent(event: ResendEvent, type: string) {
+  await recordCampaignEvent(event, type);
   const to = event.data?.to?.[0]?.trim().toLowerCase();
   if (!to) return Response.json({ ok: true, ignored: "no recipient" });
   const contact = (await supabaseRest<ContactRow[]>(`email_contacts?email=eq.${encodeURIComponent(to)}&select=id,emails_sent,open_count,click_count,first_opened_at&limit=1`, { noStore: true }))[0];
@@ -60,6 +61,29 @@ async function handleCustomerEvent(event: ResendEvent, type: string) {
   });
   return Response.json({ ok: true, customer: true });
 }
+type CampaignSendRow = { id: string; open_count: number; click_count: number; first_opened_at: string | null; first_clicked_at: string | null };
+
+// Campaign emails: keep per-recipient delivery and engagement on email_campaign_sends so each
+// campaign has its own results. Missing table (migration not applied) or unknown id is fine.
+async function recordCampaignEvent(event: ResendEvent, type: string) {
+  const resendId = event.data?.email_id;
+  if (!resendId) return;
+  try {
+    const send = (await supabaseRest<CampaignSendRow[]>(`email_campaign_sends?resend_id=eq.${encodeURIComponent(resendId)}&select=id,open_count,click_count,first_opened_at,first_clicked_at&limit=1`, { noStore: true }))[0];
+    if (!send) return;
+    const at = event.created_at ?? new Date().toISOString();
+    const patch: Record<string, unknown> = { last_event: type.replace("email.", ""), last_event_at: at };
+    if (type === "email.delivered") patch.delivered_at = at;
+    if (type === "email.opened") { patch.open_count = (send.open_count ?? 0) + 1; if (!send.first_opened_at) patch.first_opened_at = at; }
+    if (type === "email.clicked") { patch.click_count = (send.click_count ?? 0) + 1; if (!send.first_clicked_at) patch.first_clicked_at = at; }
+    if (type === "email.bounced") patch.bounced_at = at;
+    if (type === "email.complained") patch.complained_at = at;
+    await supabaseRest(`email_campaign_sends?id=eq.${send.id}`, { method: "PATCH", body: patch, prefer: "return=minimal" });
+  } catch (error) {
+    console.error("campaign event update failed", error);
+  }
+}
+
 type EmailRow = { id: string; brand_id: string; open_count: number; first_opened_at: string | null; first_clicked_at: string | null };
 
 export async function POST(request: Request) {

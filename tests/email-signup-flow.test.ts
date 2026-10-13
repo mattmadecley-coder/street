@@ -48,7 +48,7 @@ test("closing after step 1 keeps the customer with no phone", async () => {
 
 test("signing up again does not duplicate, and brings back someone who unsubscribed", async () => {
   const first = await (await post(subscribe, { email: "sam@example.com", anonymousId: "a1" })).json();
-  db.__rows("email_contacts")[0].status = "unsubscribed";
+  db.__update("email_contacts", () => true, { status: "unsubscribed" });
   const again = await (await post(subscribe, { email: "SAM@example.com", anonymousId: "a2" })).json();
   assert.equal(again.returning, true);
   assert.equal(again.token, first.token);

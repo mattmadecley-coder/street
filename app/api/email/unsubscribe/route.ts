@@ -3,7 +3,7 @@ import { logContactEvent } from "@/lib/email-marketing";
 
 export const dynamic = "force-dynamic";
 
-async function unsubscribe(token: string | null) {
+async function unsubscribe(token: string | null, campaign: string | null = null) {
   if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return false;
   const now = new Date().toISOString();
   const rows = await supabaseRest<{ id: string }[]>(`email_contacts?token=eq.${token}`, {
@@ -11,7 +11,7 @@ async function unsubscribe(token: string | null) {
     body: { status: "unsubscribed", unsubscribed_at: now, updated_at: now },
   }).catch(() => []);
   if (!rows[0]) return false;
-  await logContactEvent(rows[0].id, "unsubscribed", {});
+  await logContactEvent(rows[0].id, "unsubscribed", campaign && /^[0-9a-f-]{36}$/i.test(campaign) ? { campaign } : {});
   return true;
 }
 
@@ -21,12 +21,14 @@ function page(message: string) {
 }
 
 export async function GET(request: Request) {
-  const ok = await unsubscribe(new URL(request.url).searchParams.get("t"));
+  const params = new URL(request.url).searchParams;
+  const ok = await unsubscribe(params.get("t"), params.get("c"));
   return page(ok ? "You're unsubscribed. You won't get any more emails from us." : "That unsubscribe link isn't valid.");
 }
 
 // One-click unsubscribe (RFC 8058) posts here.
 export async function POST(request: Request) {
-  const ok = await unsubscribe(new URL(request.url).searchParams.get("t"));
+  const params = new URL(request.url).searchParams;
+  const ok = await unsubscribe(params.get("t"), params.get("c"));
   return Response.json({ ok });
 }
