@@ -5,6 +5,7 @@ import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { getPrincipal } from "@/lib/admin-guard";
 import { findUserById, listActiveSessions } from "@/lib/admin-users";
 import { otpauthUrl } from "@/lib/admin-totp";
+import { qrSvg } from "@/lib/admin-qr";
 import { ROLE_LABELS, requiresTwoFactor } from "@/lib/admin-permissions";
 import { changePassword, confirmTotpSetup, disableTotp, signOutDevice, signOutOtherDevices, startTotpSetup } from "./actions";
 import { redirect } from "next/navigation";
@@ -38,6 +39,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const sessions = await listActiveSessions(user.id).catch(() => []);
   const pendingSecret = !user.totp_enabled ? user.totp_secret : null;
   const mustTwoFactor = requiresTwoFactor(user.role);
+  const setupUrl = pendingSecret ? otpauthUrl(pendingSecret, user.email) : null;
+  const qr = setupUrl ? await qrSvg(setupUrl) : null;
 
   return (
     <div>
@@ -73,15 +76,20 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         ) : pendingSecret ? (
           <div className={styles.form}>
             <ol className="adm-steps">
-              <li>In your authenticator app choose <strong>Add account → Enter a setup key</strong>.</li>
-              <li>Account name: <strong>{user.email}</strong>. Key (spaces are fine):</li>
+              <li><strong>Install an authenticator app</strong> on your phone if you do not have one (Google Authenticator, Microsoft Authenticator, 1Password or Authy).</li>
+              <li><strong>Add this account.</strong> Open the app, tap <strong>+</strong> (or <strong>Add account</strong>) and choose <strong>Scan a QR code</strong>. Point the camera at the square below.</li>
+              <li><strong>Or type the key instead</strong> if you cannot scan: choose <strong>Enter a setup key</strong>, use the account name <strong>{user.email}</strong>, paste the key below and leave the type on <strong>Time based</strong>.</li>
+              <li><strong>Type the 6-digit code</strong> the app now shows for Street Admin into the box at the bottom and press the button. The code changes every 30 seconds, so type it right away.</li>
             </ol>
+            {qr ? <div role="img" aria-label="QR code for your authenticator app" style={{ width: 188, height: 188, background: "#fff", padding: 6, borderRadius: 8 }} dangerouslySetInnerHTML={{ __html: qr }} /> : null}
+            <p className={styles.rowMeta}>Setup key (spaces do not matter):</p>
             <code className="adm-secret" aria-label="Setup key">{pendingSecret.replace(/(.{4})/g, "$1 ").trim()}</code>
-            <p className={styles.rowMeta}>On a phone you can also open this link: <a href={otpauthUrl(pendingSecret, user.email)}>add to authenticator</a>.</p>
+            <p className={styles.rowMeta}>On your phone you can also tap <a href={setupUrl ?? "#"}>add to authenticator</a>. Keep the key private: anyone with it can make valid codes.</p>
             <form action={confirmTotpSetup} className={styles.form}>
-              <div className={styles.field}><label htmlFor="code">Enter the 6-digit code to finish</label><input id="code" name="code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} required /></div>
+              <div className={styles.field}><label htmlFor="code">Code from the app</label><input id="code" name="code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} placeholder="123456" required /></div>
               <SubmitButton pendingText="Checking…" className={styles.button}>Turn on two-step sign-in</SubmitButton>
             </form>
+            <p className={styles.rowMeta}>If the code is refused, check that your phone's date and time are set to automatic, then try the next code. Afterwards, sign in with your password and then the code from the same app.</p>
           </div>
         ) : (
           <form action={startTotpSetup}><SubmitButton pendingText="Starting…" className={styles.button}>Set up two-step sign-in</SubmitButton></form>

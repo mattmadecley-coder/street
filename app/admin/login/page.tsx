@@ -11,7 +11,7 @@ export const metadata = { title: "Sign in" };
 const MESSAGES: Record<string, string> = {
   invalid: "Wrong email or password. Try again.",
   "code-needed": "Enter the 6-digit code from your authenticator app.",
-  "bad-code": "That code did not work. Check your phone's clock and try the next code.",
+  "bad-code": "That code did not work. Wait for the app to show a new code, then try again. If it keeps failing, set your phone's date and time to automatic.",
   "not-configured": "Sign-in is not set up. Add ADMIN_PASSWORD to the app's environment variables in your hosting dashboard, then redeploy.",
 };
 

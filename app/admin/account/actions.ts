@@ -53,7 +53,7 @@ export async function confirmTotpSetup(formData: FormData) {
   if (user.totp_enabled) redirect("/admin/account#two-factor");
   if (!user.totp_secret) fail("Start the setup first.", "#two-factor");
   const step = verifyTotp(user.totp_secret, String(formData.get("code") ?? ""), Date.now());
-  if (step === null) fail("That code did not match. Check the app and try the next code.", "#two-factor");
+  if (step === null) fail("That code did not match. Wait for the app to show a new code and try again. If it keeps failing, set your phone's date and time to automatic.", "#two-factor");
   await updateUser(user.id, { totp_enabled: true, totp_last_step: step });
   await recordAudit(actorOf(principal), { action: "account.2fa_enabled", targetType: "user", targetId: user.id, summary: "Turned on two-step sign-in" });
   revalidatePath("/admin", "layout");
