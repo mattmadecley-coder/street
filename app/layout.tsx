@@ -11,6 +11,7 @@ import { CartProvider } from "@/components/cart-context";
 import { SavedProvider } from "@/components/saved-context";
 import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { CatalogAnalytics } from "@/components/catalog-analytics";
+import { EmailPopupLoader } from "@/components/email-popup-loader";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const googleAnalyticsId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "G-E621RKXPX3";
@@ -89,6 +90,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Suspense fallback={null}>
               <AnalyticsTracker />
               <CatalogAnalytics />
+              <EmailPopupLoader />
             </Suspense>
           </SavedProvider>
         </CartProvider>

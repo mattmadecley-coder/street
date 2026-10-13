@@ -47,6 +47,12 @@ export const STREET_TAXONOMY = {
       Anoraks: {},
       "Capes and Ponchos": {},
     },
+    // Matching sets sold as one product (jacket + pants). Added after tracksuits
+    // kept landing in Needs review because no category fit them.
+    Sets: {
+      Tracksuits: {},
+      "Matching Sets": {},
+    },
     Dresses: {
       "Short Dresses": {},
       "Mid Dresses": {},
@@ -141,7 +147,7 @@ export const STREET_TAXONOMY = {
   // and GOAT's own tree for them is thinner in the data we pulled — treat
   // these as a starting point, not verified against the live site.
   Media: { Music: {}, Books: {}, Magazines: {} },
-  Objects: { Vases: {}, Furniture: {}, Cushions: {}, Glassware: {}, Incense: {}, Rugs: {} },
+  Objects: { Vases: {}, Furniture: {}, Cushions: {}, Glassware: {}, Incense: {}, Rugs: {}, "Air Fresheners": {} },
   Art: { Prints: {}, Photography: {} },
   // Added Football after real catalog data included a branded football with
   // no matching category — Basketball/Soccer/Baseball were already covered

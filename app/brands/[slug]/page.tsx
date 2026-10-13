@@ -72,7 +72,7 @@ export default async function BrandPage({ params, searchParams }: { params: Prom
             <div><p className="eyebrow">Independent brand on Street</p><h1>{brand.name}</h1><p>{total.toLocaleString()} piece{total === 1 ? "" : "s"} available to discover.</p></div>
           </div>
           <div className={styles.links}>
-            <a href={`/api/out?to=${encodeURIComponent(brand.storeUrl)}&brand=${encodeURIComponent(brand.slug)}`} target="_blank" rel="noreferrer">Visit website ↗</a>
+            <a href={`/api/out?to=${encodeURIComponent(brand.storeUrl)}&brand=${encodeURIComponent(brand.slug)}&source=brand_page`} target="_blank" rel="noreferrer">Visit website ↗</a>
             {brand.instagramUrl ? <a href={brand.instagramUrl} target="_blank" rel="noreferrer">{instagramLabel(brand.instagramUrl)} ↗</a> : null}
           </div>
         </section>

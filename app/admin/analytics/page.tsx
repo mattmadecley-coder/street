@@ -4,7 +4,7 @@ import styles from "@/app/admin/admin.module.css";
 import { AnalyticsControls } from "@/components/admin/analytics-controls";
 import { AnalyticsOverviewChart } from "@/components/admin/analytics-overview-chart";
 import { getAnalyticsRows, type SiteEventRow, type OutboundClickRow } from "@/lib/analytics";
-import { analyzeAudience, buildAnalyticsTrend, summarizePurchaseIntent } from "@/lib/analytics-audience";
+import { analyzeAudience, buildAnalyticsTrend, buildReturningTrend, summarizePurchaseIntent } from "@/lib/analytics-audience";
 import { cacheFriendlySinceMs, timeZoneLabel } from "@/lib/date-range";
 import { getAdminRange } from "@/lib/admin-range";
 import { buildWindowStats, inWindow } from "@/lib/analytics-metrics";
@@ -15,6 +15,7 @@ import { loadAnnotations } from "@/lib/analytics-annotations";
 import { addAnnotationAction, deleteAnnotationAction } from "./actions";
 import { InfoTip } from "@/components/admin/info-tip";
 import { requireUser } from "@/lib/admin-guard";
+import { RetentionChart } from "@/components/admin/retention-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -327,6 +328,7 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
   const products = productPerformance(events, outboundClicks);
   const brands = brandPerformance(events, outboundClicks);
   const retention = retentionSummary(allQualifiedEvents);
+  const returningRange = buildReturningTrend(allEvents, { startMs: rangeInfo.startMs, endMs: rangeInfo.endMs, hourly: rangeInfo.hourly }, audience.likelyHumanIds, rangeInfo.timeZone);
   const searchGaps = searchOpportunities(events);
   const weakDiscovery = products.filter((row) => row.impressions >= 10 && row.clicks / row.impressions < 0.05).slice(0, 15);
   const weakConversion = products.filter((row) => row.views >= 3 && row.outbound === 0).sort((a, b) => b.views - a.views).slice(0, 15);
@@ -334,13 +336,27 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
   const performanceEvents = events.filter((event) => event.event_type === "page_performance");
   const averageLoad = performanceEvents.length ? Math.round(performanceEvents.reduce((sum, event) => sum + (metadataNumber(event, "loadMs") ?? 0), 0) / performanceEvents.length) : 0;
   const slowPages = performanceEvents.filter((event) => (metadataNumber(event, "loadMs") ?? 0) >= 3000).length;
+  // Shopper funnel: distinct people who reached each step in the selected range.
+  const peopleWho = (type: string) => unique(events.filter((event) => event.event_type === type).map((event) => event.anonymous_user_id));
+  const peopleOut = (sources: string[]) => unique(outboundClicks.filter((click) => sources.includes(click.source_component ?? "")).map((click) => click.anonymous_user_id));
+  const otherOutbound = unique(outboundClicks.filter((click) => !["product_page", "product_mobile_bar", "cart", "brand_page"].includes(click.source_component ?? "")).map((click) => click.anonymous_user_id));
+  const funnel = [
+    { label: "Visited Street", people: visitors, note: "Likely-human visitors" },
+    { label: "Looked at a product", people: peopleWho("product_view"), note: "Opened a product page" },
+    { label: "Added to StreetBag", people: peopleWho("add_to_cart"), note: "Put an item in the bag" },
+    { label: "Clicked Buy now", people: peopleOut(["product_page", "product_mobile_bar"]), note: "Buy now on a product page (desktop or phone)" },
+    { label: "Checked out from StreetBag", people: peopleOut(["cart"]), note: "Checkout in the bag" },
+    { label: "Clicked Visit website", people: peopleOut(["brand_page"]), note: "Visit website on a brand's Street page" },
+    ...(otherOutbound > 0 ? [{ label: "Other / older links", people: otherOutbound, note: "Clicks logged before sources were tracked, or from other links" }] : []),
+    { label: "Sent to a brand (total)", people: intent.uniqueShoppers, note: "Anyone who clicked out by any of the ways above, counted once" },
+  ];
 
   return (
     <div>
       <div className={styles.analyticsPageHead}>
         <div>
           <h1 className={styles.title}>Analytics overview</h1>
-          <p className={styles.subtitle}>Qualified audience growth, storefront discovery, and purchase intent sent to brands.</p>
+          <p className={styles.subtitle}>Qualified audience growth, storefront discovery, and purchase intent sent to brands. <a href="/admin/analytics/flagged">Flagged visitors</a> are left out.</p>
         </div>
       </div>
       <p className={styles.rowMeta}>
@@ -405,6 +421,29 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
         )}
       </section>
 
+      <section className={styles.section}>
+        <div className={styles.sectionHead}>
+          <div>
+            <h2>Shopper funnel</h2>
+            <p className={styles.rowMeta}>How many people reached each step in {rangeInfo.label.toLowerCase()}. Steps aren&apos;t strictly in order: shoppers can go straight to a brand&apos;s store without using the bag.</p>
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+          {funnel.map((step) => {
+            const width = visitors > 0 ? Math.max(1.5, Math.min(100, (step.people / visitors) * 100)) : 0;
+            return (
+              <div key={step.label} style={{ display: "grid", gridTemplateColumns: "minmax(150px,220px) 1fr 140px", gap: 12, alignItems: "center" }}>
+                <div><strong style={{ fontSize: 14 }}>{step.label}</strong><div className={styles.rowMeta}>{step.note}</div></div>
+                <div style={{ background: "rgba(16,16,16,.07)", height: 14 }} role="img" aria-label={`${step.label}: ${step.people} people, ${percent(step.people, visitors)} of visitors`}>
+                  <div style={{ width: `${width}%`, height: "100%", background: "#2a78d6" }} />
+                </div>
+                <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}><strong>{step.people.toLocaleString()}</strong> <span className={styles.rowMeta}>{percent(step.people, visitors)}</span></div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       <section className={styles.analyticsQualityCard}>
         <div className={styles.analyticsQualityHead}>
           <div>
@@ -452,14 +491,26 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
       {tab === "audience" ? (
         <>
       <div className={styles.section}>
-        <div className={styles.sectionHead}><h2>Retention</h2></div>
-        <div className={styles.analyticsDetailGrid}>
-          <Metric label="Returning visitors" value={retention.returning} note={percent(retention.returning, retention.total)} />
-          <Metric label="Returned after 1+ day" value={retention.day1} note={percent(retention.day1, retention.total)} />
-          <Metric label="Returned after 7+ days" value={retention.day7} note={percent(retention.day7, retention.total)} />
-          <Metric label="Returned after 30+ days" value={retention.day30} note={percent(retention.day30, retention.total)} />
+        <div className={styles.sectionHead}>
+          <div>
+            <h2>Returning visitors</h2>
+            <p className={styles.rowMeta}>{rangeInfo.label} Â· Eastern Time. A visitor counts as returning if we had also seen their browser before the start of this range (history goes back about 90 days).</p>
+          </div>
         </div>
-        {retention.cohorts.length ? <table className={`${styles.table} u-mt-16`}><thead><tr><th>First visit</th><th>Visitors</th><th>Returned</th><th>Return rate</th></tr></thead><tbody>{retention.cohorts.map(([date, row]) => <tr key={date}><td>{date}</td><td>{row.visitors}</td><td>{row.returned}</td><td>{percent(row.returned, row.visitors)}</td></tr>)}</tbody></table> : null}
+        <div className={styles.analyticsDetailGrid}>
+          <Metric label="Visitors in this range" value={returningRange.rangeNew + returningRange.rangeReturning} note="Likely-human, counted once each" />
+          <Metric label="Returning" value={returningRange.rangeReturning} note={`${percent(returningRange.rangeReturning, returningRange.rangeNew + returningRange.rangeReturning)} had visited before`} />
+          <Metric label="First-time" value={returningRange.rangeNew} note={`${percent(returningRange.rangeNew, returningRange.rangeNew + returningRange.rangeReturning)} are new`} />
+        </div>
+        <RetentionChart points={returningRange.points} unit={rangeInfo.hourly ? "hour" : "day"} />
+        <h3 style={{ margin: "26px 0 4px", fontSize: 16 }}>Last 90 days, all visitors</h3>
+        <p className={styles.rowMeta}>How many of the {retention.total.toLocaleString()} visitors in the last 90 days came back. This part ignores the date range above.</p>
+        <div className={styles.analyticsDetailGrid}>
+          <Metric label="Came back at least once" value={retention.returning} note={`${percent(retention.returning, retention.total)} of visitors - your returning visitor rate`} />
+          <Metric label="Back after 1+ day" value={retention.day1} note={`${percent(retention.day1, retention.total)} of visitors`} />
+          <Metric label="Back after 7+ days" value={retention.day7} note={`${percent(retention.day7, retention.total)} of visitors`} />
+          <Metric label="Back after 30+ days" value={retention.day30} note={`${percent(retention.day30, retention.total)} of visitors`} />
+        </div>        {retention.cohorts.length ? <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", fontSize: 13 }}>Return rate by first-visit day</summary><table className={styles.table} style={{ marginTop: 8 }}><thead><tr><th>First visit</th><th>Visitors</th><th>Came back</th><th>Return rate</th></tr></thead><tbody>{retention.cohorts.map(([date, row]) => <tr key={date}><td>{date}</td><td>{row.visitors}</td><td>{row.returned}</td><td>{percent(row.returned, row.visitors)}</td></tr>)}</tbody></table></details> : null}
       </div>
 
       <div className="u-cards-300">

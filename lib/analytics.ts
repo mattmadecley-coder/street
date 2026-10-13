@@ -179,7 +179,7 @@ export async function getRecentSiteEvents(limit = 5000, since?: string, brandSlu
     // dashboard quietly showed zeros any time a window's true event count
     // passed the limit -- which was most of the time, since the site sees
     // well over 5000 events in a normal 30-day window.
-    return await supabaseRestAll<SiteEventRow[]>(`site_events?select=event_type,anonymous_user_id,session_id,query,results_count,product_id,brand_slug,street_group,street_category,price,path,referrer,source_component,position,device_type,browser,operating_system,screen_width,language,timezone,landing_path,utm_source,utm_medium,utm_campaign,metadata,created_at${dateFilter}${brandFilter}&order=created_at.desc`, 1000, safeLimit);
+    return await supabaseRestAll<SiteEventRow[]>(`site_events?select=event_type,anonymous_user_id,session_id,query,results_count,product_id,brand_slug,street_group,street_category,price,path,referrer,source_component,position,device_type,browser,operating_system,screen_width,language,timezone,landing_path,utm_source,utm_medium,utm_campaign,metadata,created_at${dateFilter}${brandFilter}&excluded=is.false&order=created_at.desc`, 1000, safeLimit);
   } catch (error) {
     console.error("Street analytics read failed", error);
     return [];
@@ -194,7 +194,7 @@ export async function getRecentOutboundClicks(limit = 5000, since?: string, bran
     const brandFilter = brandSlug ? `&brand_slug=eq.${encodeURIComponent(brandSlug)}` : "";
     // See getRecentSiteEvents above for why maxItems (not an embedded
     // `limit=` query param) is the right way to cap this.
-    return await supabaseRestAll<OutboundClickRow[]>(`outbound_clicks?select=product_id,brand_slug,product_slug,product_title,product_price,destination_url,anonymous_user_id,session_id,source_component,source_path,search_query,position,referrer,utm_source,utm_medium,utm_campaign,created_at${dateFilter}${brandFilter}&order=created_at.desc`, 1000, safeLimit);
+    return await supabaseRestAll<OutboundClickRow[]>(`outbound_clicks?select=product_id,brand_slug,product_slug,product_title,product_price,destination_url,anonymous_user_id,session_id,source_component,source_path,search_query,position,referrer,utm_source,utm_medium,utm_campaign,created_at${dateFilter}${brandFilter}&excluded=is.false&order=created_at.desc`, 1000, safeLimit);
   } catch (error) {
     console.error("Street outbound click read failed", error);
     return [];

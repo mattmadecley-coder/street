@@ -1,6 +1,6 @@
 /* Catalog/search/header polish loaded after the legacy desktop and mobile layers. */
 
-.desktop-cart-link { display: block; }
+.desktop-cart-link { display: flex; align-items: center; gap: 22px; }
 
 @media (min-width: 841px) {
   .desktop-nav { align-items: center; }

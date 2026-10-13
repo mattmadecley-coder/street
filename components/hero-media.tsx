@@ -6,8 +6,8 @@ import { MEDIA_BLUR_DATA_URL } from "@/lib/media-placeholders";
 
 // Every other image on the site routes through CatalogImage (ImageKit's
 // proxy, or a direct pass-through fallback) instead of Next's own
-// server-side image optimizer -- that optimizer 500/503'd under load on
-// Render's free tier, and it isn't available at all on Cloudflare Workers
+// server-side image optimizer -- that optimizer 500/503'd under load,
+// and it isn't available at all on Cloudflare Workers
 // without extra Images-product setup. The hero image was the one
 // remaining place still using next/image directly; moved it onto the
 // same pipeline as everything else so the whole app has zero dependency

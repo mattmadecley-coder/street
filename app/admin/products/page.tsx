@@ -29,6 +29,7 @@ type AdminProductRow = {
   street_activity: string | null;
   street_tags: string[] | null;
   classification_status: string;
+  classification_pass: number | null;
   is_hidden: boolean;
   stock_status: string;
   brands: { slug: string; name: string } | null;
@@ -44,7 +45,7 @@ const STATUS_OPTIONS = [
 
 function productsPath(q: string | undefined, status: string, brandSlug: string | undefined, trashOn: boolean) {
   const params = new URLSearchParams();
-  params.set("select", "id,title,price,primary_image_url,street_group,street_category,street_type,street_detail,street_activity,street_tags,classification_status,is_hidden,stock_status,brands!inner(slug,name)");
+  params.set("select", "id,title,price,primary_image_url,street_group,street_category,street_type,street_detail,street_activity,street_tags,classification_status,classification_pass,is_hidden,stock_status,brands!inner(slug,name)");
   params.set("is_active", "eq.true");
   params.set("order", "updated_at.desc");
   if (status === "trash") params.set("deleted_at", "not.is.null");
@@ -138,6 +139,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
               <span className="u-row">
                 {product.is_hidden ? <span className={styles.pill}>Hidden</span> : null}
                 <span className={styles.pill}>{product.classification_status.replace("_", " ")}</span>
+                {product.classification_status !== "pending" ? <span className={styles.pill} title={product.classification_pass === 2 ? "Decided by the 2nd classifier (3 candidates, picked the best)" : "Decided by the 1st classifier"}>{product.classification_pass === 2 ? "2nd pass" : "1st pass"}</span> : null}
               </span>
             </summary>
             <div className={styles.rowBody}>

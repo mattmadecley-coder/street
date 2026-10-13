@@ -16,6 +16,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/`, changeFrequency: "daily", priority: 1 },
     { url: `${siteUrl}/catalog`, changeFrequency: "hourly", priority: 0.9 },
     { url: `${siteUrl}/brands`, changeFrequency: "daily", priority: 0.6 },
+    { url: `${siteUrl}/privacy`, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${siteUrl}/terms`, changeFrequency: "yearly", priority: 0.2 },
   ];
 
   // Every brand with at least one live product gets a filtered-catalog URL

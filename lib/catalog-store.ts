@@ -1,8 +1,9 @@
 import { STREET_BRANDS, type StreetBrand } from "@/lib/brands";
 import { STREET_TAXONOMY, categoriesForGroup } from "@/lib/street-taxonomy";
 import { fetchBrandMetadata, type BrandMetadata } from "@/lib/brand-metadata";
-import { classifyProductWithAI } from "@/lib/ai-product-classifier";
+import { classifyProductSecondPass, classifyProductWithAI, type ProductClassification } from "@/lib/ai-product-classifier";
 import { importBrandCatalog, type ImportedProduct } from "@/lib/source-import";
+import { isJunkProduct } from "@/lib/junk-products";
 import { inspectStorefront, type StorefrontHealth } from "@/lib/storefront-health";
 import { hasSupabaseCatalog, supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 import type { StreetProduct } from "@/lib/catalog";
@@ -476,7 +477,7 @@ export async function syncSingleBrand(brand: StreetBrand): Promise<CatalogSyncRe
     // product_id's sort_order slots). De-dupe by handle up front -- last
     // occurrence wins, since a later page is never less current than an
     // earlier one for the same product.
-    const dedupedImported = [...new Map(imported.map((product) => [product.handle, product])).values()];
+    const dedupedImported = [...new Map(imported.filter((product) => !isJunkProduct(product)).map((product) => [product.handle, product])).values()];
 
     const existingByExternalId = new Map(existingRows.map((row) => [row.external_id, row]));
     // Some brands' source platforms (seen on Shopify) occasionally reissue a
@@ -634,13 +635,31 @@ export async function classifyPendingProducts(requestedLimit?: number, brandSlug
 
   for (const product of pending) {
     try {
-      const { classification, model } = await classifyProductWithAI({
+      const input = {
         title: product.title,
         description: product.description,
         sourceCategory: product.category,
         sourceTags: product.tags ?? [],
         sourceColors: product.colors ?? [],
-      });
+      };
+      const first = await classifyProductWithAI(input);
+      let classification: ProductClassification = first.classification;
+      let model = first.model;
+      let pass = 1;
+      let firstGuess: ProductClassification | null = null;
+      // 2nd pass: only for products the 1st pass was unsure about, one at a time.
+      // A failed 2nd pass never loses the 1st answer; the product just stays in review.
+      if (classification.confidence === "low") {
+        try {
+          const second = await classifyProductSecondPass(input, first.classification);
+          firstGuess = first.classification;
+          classification = second.classification;
+          model = second.model;
+          pass = 2;
+        } catch (secondError) {
+          console.warn("2nd classification pass failed", product.id, secondError instanceof Error ? secondError.message : secondError);
+        }
+      }
       const status = classification.confidence === "low" ? "needs_review" : "classified";
       await supabaseRest(`products?id=eq.${product.id}`, {
         method: "PATCH",
@@ -656,6 +675,8 @@ export async function classifyPendingProducts(requestedLimit?: number, brandSlug
           classification_confidence: classification.confidence,
           classification_model: model,
           classification_version: 2,
+          classification_pass: pass,
+          classification_first_guess: firstGuess ? { group: firstGuess.group, category: firstGuess.category, type: firstGuess.type, detail: firstGuess.detail, confidence: firstGuess.confidence } : null,
           classified_at: new Date().toISOString(),
           classification_error: null,
         },

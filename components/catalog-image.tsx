@@ -14,10 +14,9 @@ type CatalogImageProps = Omit<ImageProps, "src" | "unoptimized" | "onError"> & {
 /**
  * Loads remote catalog media through ImageKit's free "Web proxy" CDN (see
  * lib/catalog-image.ts) instead of Next's own server-side image optimizer.
- * We tried Next's optimizer directly on Render and it 500/503'd under a
- * catalog grid's concurrent load (free/starter plan, not enough CPU) --
+ * Next's optimizer 500/503'd under a catalog grid's concurrent load, so
  * ImageKit does the resizing/AVIF-WebP conversion at its own edge instead,
- * so Render never touches it. `unoptimized` stays on so Next doesn't also
+ * and the app server never touches it. `unoptimized` stays on so Next doesn't also
  * try to process the already-optimized ImageKit URL. Failed candidates fall
  * back down the chain built in catalogImageCandidates, then to any supplied
  * alternate images.

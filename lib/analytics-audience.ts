@@ -341,3 +341,65 @@ export function buildAnalyticsTrend(
     intentValue: row.intentValue,
   }));
 }
+
+export type ReturningTrendPoint = { key: string; label: string; newVisitors: number; returningVisitors: number };
+
+/**
+ * New vs returning likely-human visitors per bucket (hour for single-day
+ * ranges, Eastern day otherwise) across the selected window. "Returning" means
+ * the browser was also seen before the bucket started, using whatever history
+ * `allEvents` holds (the page loads ~90 days); "new" means first seen in that
+ * bucket. `rangeNew` / `rangeReturning` count each visitor once for the whole
+ * window, using the window start as the cutoff.
+ */
+export function buildReturningTrend(
+  allEvents: SiteEventRow[],
+  window: { startMs: number; endMs: number; hourly: boolean },
+  likelyHumanIds: Set<string>,
+  timeZone: string = EASTERN_TIME_ZONE,
+): { points: ReturningTrendPoint[]; rangeNew: number; rangeReturning: number; historyStartMs: number | null } {
+  const { startMs, endMs, hourly } = window;
+  const fmt = trendFormatters(timeZone);
+  const buckets: Array<{ key: string; label: string; start: number; end: number; ids: Set<string> }> = [];
+  if (hourly) {
+    const first = Math.floor(startMs / 3_600_000) * 3_600_000;
+    const last = Math.floor((Math.max(endMs, startMs + 1) - 1) / 3_600_000) * 3_600_000;
+    for (let t = first; t <= last; t += 3_600_000) buckets.push({ key: String(t), label: fmt.hourLabel.format(new Date(t)), start: t, end: t + 3_600_000, ids: new Set() });
+  } else {
+    let ymd = easternYmdOf(startMs, timeZone);
+    const lastYmd = easternYmdOf(Math.max(endMs, startMs + 1) - 1, timeZone);
+    for (let guard = 0; guard < 400; guard += 1) {
+      const start = zonedMidnightToUtcMs(ymd, timeZone);
+      const next = addDaysToYmd(ymd, 1);
+      buckets.push({ key: dayKey(new Date(start), fmt.day), label: fmt.dayLabel.format(new Date(start)), start, end: zonedMidnightToUtcMs(next, timeZone), ids: new Set() });
+      if (ymd.year === lastYmd.year && ymd.month === lastYmd.month && ymd.day === lastYmd.day) break;
+      ymd = next;
+    }
+  }
+
+  const firstSeen = new Map<string, number>();
+  let historyStartMs: number | null = null;
+  for (const event of allEvents) {
+    const id = event.anonymous_user_id;
+    if (!id) continue;
+    const at = new Date(event.created_at).getTime();
+    if (historyStartMs === null || at < historyStartMs) historyStartMs = at;
+    const seen = firstSeen.get(id);
+    if (seen === undefined || at < seen) firstSeen.set(id, at);
+    if (event.event_type !== "page_view" || !likelyHumanIds.has(id) || at < startMs || at >= endMs) continue;
+    const bucket = buckets.find((entry) => at >= entry.start && at < entry.end);
+    bucket?.ids.add(id);
+  }
+
+  const points = buckets.map((bucket) => {
+    let newVisitors = 0;
+    for (const id of bucket.ids) if ((firstSeen.get(id) ?? bucket.start) >= bucket.start) newVisitors += 1;
+    return { key: bucket.key, label: bucket.label, newVisitors, returningVisitors: bucket.ids.size - newVisitors };
+  });
+
+  const inRange = new Set<string>();
+  for (const bucket of buckets) for (const id of bucket.ids) inRange.add(id);
+  let rangeReturning = 0;
+  for (const id of inRange) if ((firstSeen.get(id) ?? startMs) < startMs) rangeReturning += 1;
+  return { points, rangeNew: inRange.size - rangeReturning, rangeReturning, historyStartMs };
+}

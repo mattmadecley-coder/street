@@ -1,5 +1,6 @@
 import styles from "@/app/admin/admin.module.css";
 import s from "@/app/admin/social/social.module.css";
+import { AdminNav } from "@/components/admin/admin-nav";
 import { SocialChart } from "@/components/admin/social-chart";
 import { TodayChart } from "@/components/admin/social-today-chart";
 import { Alerts, ChannelCard, CompareTable, HealthList, SectionTitle, SocialTabs, TodayHero } from "@/components/admin/social-ui";
@@ -22,7 +23,10 @@ export default async function SocialOverviewPage() {
 
   const by = (p: Platform) => posts.filter((x) => x.platform === p);
   const whenOf = (x: (typeof posts)[number]) => (x.platform === "pinterest" ? x.scheduled_for ?? x.posted_at : x.posted_at);
-  const posted = (p: Platform) => by(p).filter((x) => (x.status === "posted" || (p === "pinterest" && x.status === "scheduled")) && whenOf(x));
+  // Pinterest publishes scheduled pins on its own, so a pin counts as posted once its time has passed.
+  // Pins scheduled for later today are shown separately as "later today", never as posted.
+  const posted = (p: Platform) => by(p).filter((x) => (x.status === "posted" || (p === "pinterest" && x.status === "scheduled" && x.scheduled_for && new Date(x.scheduled_for).getTime() <= now)) && whenOf(x));
+  const laterToday = (p: Platform) => by(p).filter((x) => x.status === "scheduled" && x.scheduled_for && new Date(x.scheduled_for).getTime() > now && etDay(x.scheduled_for) === today).length;
   const postedMap = (p: Platform) => countByDay(posted(p), (x) => etDay(whenOf(x)!));
   const lined = (p: Platform) => by(p).filter((x) => x.status === "scheduled" && x.scheduled_for && new Date(x.scheduled_for).getTime() > now);
   const tiktokJob = jobs.find((j) => j.job === "tiktok_post");
@@ -42,14 +46,14 @@ export default async function SocialOverviewPage() {
   const hooks = (tiktokJob?.details?.hook_photos ?? {}) as Record<string, number>;
   for (const [series, count] of Object.entries(hooks)) if (n(count) < 10) alerts.push({ level: "warn", text: `TikTok "${series}" is down to ${count} hook photos. Add more so hooks don't repeat.` });
   if (jobs.length && queued.pinterest === 0) alerts.push({ level: "warn", text: "Pinterest: no pins are lined up. The 5 AM run schedules the next batch." });
-  const igFailed = by("instagram").filter((x) => x.status === "failed" && x.scheduled_for && now - new Date(x.scheduled_for).getTime() < 7 * 86400000);
+  const igFailed = by("instagram").filter((x) => x.status === "failed" && x.scheduled_for && now - new Date(x.scheduled_for).getTime() < 2 * 86400000);
   if (igFailed.length) {
     const finished = by("instagram").filter((x) => (x.status === "posted" || x.status === "failed") && x.scheduled_for).sort((a, b) => +new Date(b.scheduled_for!) - +new Date(a.scheduled_for!));
     const latestFailed = finished[0]?.status === "failed";
     const sporadic = igFailed.length <= 3 && !latestFailed;
     alerts.push({
       level: sporadic ? "warn" : "bad",
-      text: `Instagram: ${igFailed.length} post(s) failed in the last 7 days (Postiz: "${String(igFailed[0].meta.error ?? "unknown error")}").${sporadic ? " The latest posts went out fine, so this looks like a one-off Instagram error." : " The most recent post failed too. Check Postiz."}`,
+      text: `Instagram: ${igFailed.length} post(s) failed in the last 2 days (Postiz: "${String(igFailed[0].meta.error ?? "unknown error")}").${sporadic ? " The latest posts went out fine, so this looks like a one-off Instagram error." : " The most recent post failed too. Check Postiz."}`,
     });
   }
   if (jobs.length && queued.instagram === 0) alerts.push({ level: "warn", text: "Instagram: nothing is queued in Postiz." });
@@ -70,7 +74,8 @@ export default async function SocialOverviewPage() {
   const top = posts.filter((x) => n(x.views) > 0).sort((a, b) => n(b.views) - n(a.views)).slice(0, 8);
 
   return (
-    <div>
+    <div className={styles.shell}>
+      <AdminNav active="/admin/social" />
       <div className={s.head}>
         <div><h1 className={styles.title}>Social growth</h1><p className={styles.subtitle}>What TikTok, Instagram and Pinterest did today, and what they sent to Street.</p></div>
         <div className={s.stamp}>Eastern time · as of {stamp}</div>
@@ -93,7 +98,7 @@ export default async function SocialOverviewPage() {
         />
       </div>
 
-      <div className={`${s.chans} u-mt-14`}>
+      <div className={s.chans} style={{ marginTop: 14 }}>
         {PLATFORMS.map((p) => (
           <ChannelCard
             key={p} ch={p} href={`/admin/social/${p}`}
@@ -101,7 +106,7 @@ export default async function SocialOverviewPage() {
             spark={lastNDays(traffic.sessions[p])}
             facts={[
               ["Clicks out today", String(per[p].clicks)],
-              ["Posted today", TARGET[p] ? `${n(postedMap(p)[today])} of ${TARGET[p]}` : String(n(postedMap(p)[today]))],
+              ["Posted today", `${TARGET[p] ? `${n(postedMap(p)[today])} of ${TARGET[p]}` : String(n(postedMap(p)[today]))}${laterToday(p) ? ` (+${laterToday(p)} later today)` : ""}`],
               ["Lined up", String(queued[p])],
               ["Next up", nextUp(p) ? fmtWhen(nextUp(p)) : "nothing queued"],
             ]}
@@ -117,14 +122,14 @@ export default async function SocialOverviewPage() {
         <SocialChart title="Visits by channel" series={sessionSeries} layout="stack" />
         <SocialChart title="Clicks out to brands" subtitle="what social visitors did next" series={outboundSeries} layout="stack" />
       </div>
-      <div className="u-mt-14">
+      <div style={{ marginTop: 14 }}>
         <CompareTable rows={[
           { label: "Visits from social", c: compareWindows(sessionsAll) },
           { label: "Clicks out to brands", c: compareWindows(outboundAll) },
           { label: "Posts published", c: compareWindows(postsAll) },
         ]} />
       </div>
-      {!Object.values(sessionsAll).some((v) => v > 0) ? <p className={`${s.note} u-mt-10`}>No social visits recorded yet. Pinterest pins are tagged utm_source=pinterest; TikTok and Instagram show up when the app passes a referrer.</p> : null}
+      {!Object.values(sessionsAll).some((v) => v > 0) ? <p className={s.note} style={{ marginTop: 10 }}>No social visits recorded yet. Pinterest pins are tagged utm_source=pinterest; TikTok and Instagram show up when the app passes a referrer.</p> : null}
 
       <SectionTitle title="Output" hint="Posts published per period" />
       <SocialChart title="Posts published" series={postSeries} layout="stack" height={200} />
@@ -142,7 +147,7 @@ export default async function SocialOverviewPage() {
             ))}</tbody>
           </table>
         </div>
-      ) : <div className={s.empty}>No post has view data yet. TikTok stats are pulled at 7:15 AM and 11:15 PM.</div>}
+      ) : <div className={s.empty}>No post has view data yet. TikTok stats are pulled every 2 hours.</div>}
     </div>
   );
 }

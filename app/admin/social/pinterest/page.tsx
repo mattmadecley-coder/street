@@ -1,5 +1,6 @@
 import styles from "@/app/admin/admin.module.css";
 import s from "@/app/admin/social/social.module.css";
+import { AdminNav } from "@/components/admin/admin-nav";
 import { SocialChart } from "@/components/admin/social-chart";
 import { TodayChart } from "@/components/admin/social-today-chart";
 import { Alerts, CompareTable, HealthList, Kpi, Meter, SectionTitle, SocialTabs, TodayHero } from "@/components/admin/social-ui";
@@ -21,7 +22,7 @@ export default async function PinterestDashboard() {
   const live = all.filter((p) => p.status === "posted");
   const lined = all.filter((p) => p.status === "scheduled" && p.scheduled_for && new Date(p.scheduled_for).getTime() > Date.now()).sort((a, b) => a.scheduled_for!.localeCompare(b.scheduled_for!));
   const failed = all.filter((p) => p.status === "failed");
-  const publishPerDay = countByDay(all.filter((p) => p.status !== "failed"), (p) => etDay(when(p)!)); // pins by their publish day
+  const publishPerDay = countByDay(all.filter((p) => p.status !== "failed" && when(p) && (p.status === "posted" || new Date(when(p)!).getTime() <= Date.now())), (p) => etDay(when(p)!)); // pins by their publish day; pins still waiting for their time aren't counted yet
   const livePerDay = countByDay(live, (p) => etDay(when(p)!));
   const sessions = traffic.sessions.pinterest;
   const visitors = traffic.visitors.pinterest;
@@ -56,7 +57,8 @@ export default async function PinterestDashboard() {
 
   const c7 = compareWindows(sessions);
   return (
-    <div>
+    <div className={styles.shell}>
+      <AdminNav active="/admin/social" />
       <div className={s.head}>
         <div><h1 className={styles.title}>Pinterest</h1><p className={styles.subtitle}>One clean product pin per product, 10 scheduled each morning across 10 category boards.</p></div>
         <div className={s.stamp}>Eastern time · as of {nowStamp()}</div>
@@ -71,9 +73,9 @@ export default async function PinterestDashboard() {
         <TodayChart title="Pinterest visits through the day" lines={[{ key: "pin", label: "Pinterest", color: C, today: t.todayCum }]} yesterday={t.yesterdayCum} />
       </div>
 
-      <div className={`${s.grid} u-mt-14`}>
+      <div className={s.grid} style={{ marginTop: 14 }}>
         <div className={s.kpi}>
-          <span>Pins publishing today</span><strong>{pubToday} <small className={s.kpiUnit}>of {TARGET}</small></strong>
+          <span>Pins publishing today</span><strong>{pubToday} <small style={{ fontSize: 15, fontWeight: 400 }}>of {TARGET}</small></strong>
           <Meter value={pubToday} max={TARGET} color={C} />
           <small>{n(publishPerDay[yesterday])} yesterday</small>
         </div>
@@ -92,7 +94,7 @@ export default async function PinterestDashboard() {
         <SocialChart title="Pins published" series={[buildSeries("p", "Pins", livePerDay, "sum", "int", C)]} height={210} />
         <SocialChart title="Visits sent to Street" series={[buildSeries("s", "Visits", sessions, "sum", "int", C), buildSeries("v", "Visitors", visitors, "sum", "int", C), buildSeries("o", "Clicks out", outbound, "sum", "int", C)]} height={210} />
       </div>
-      <div className="u-mt-14">
+      <div style={{ marginTop: 14 }}>
         <CompareTable rows={[
           { label: "Pins published", c: compareWindows(livePerDay) }, { label: "Visits to Street", c: compareWindows(sessions) },
           { label: "Visitors", c: compareWindows(visitors) }, { label: "Clicks out", c: compareWindows(outbound) },
@@ -117,8 +119,8 @@ export default async function PinterestDashboard() {
 
       <SectionTitle title="Coverage" hint="Products are pinned again only after a 60-day cooldown" />
       <div className={s.two}>
-        <div><h3 className={s.subHeading}>Pins per board</h3><div className={s.queue}>{[...pinsByBoard.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => <span key={k}>{k}: {v}</span>)}</div></div>
-        <div><h3 className={s.subHeading}>Most-pinned brands</h3><div className={s.queue}>{[...pinsByBrand.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => <span key={k}>{k}: {v}</span>)}</div></div>
+        <div><h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Pins per board</h3><div className={s.queue}>{[...pinsByBoard.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => <span key={k}>{k}: {v}</span>)}</div></div>
+        <div><h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Most-pinned brands</h3><div className={s.queue}>{[...pinsByBrand.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => <span key={k}>{k}: {v}</span>)}</div></div>
       </div>
 
       <SectionTitle title="Automation health" />

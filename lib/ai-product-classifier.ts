@@ -155,11 +155,20 @@ function validateClassification(value: unknown): ProductClassification {
   };
 }
 
-export async function classifyProductWithAI(product: ProductToClassify): Promise<{ classification: ProductClassification; model: string; usage?: { promptTokens?: number; completionTokens?: number } }> {
+/** Cheap vision-capable model used by the image fallback passes (2nd/3rd classifier). */
+export function visionClassifierModels() {
+  const primary = process.env.STREET_VISION_MODEL?.trim() || "google/gemini-2.5-flash-lite";
+  const fallbacks = (process.env.STREET_VISION_FALLBACK_MODELS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  return [...new Set([primary, ...fallbacks])];
+}
+
+/** Text-only pass by default; pass `imageUrl` for a vision pass (uses the vision model list). */
+export async function classifyProductWithAI(product: ProductToClassify, options: { imageUrl?: string } = {}): Promise<{ classification: ProductClassification; model: string; usage?: { promptTokens?: number; completionTokens?: number } }> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("AI classification is not configured. Add OPENROUTER_API_KEY in Vercel before running the classifier.");
 
-  const models = classifierModels();
+  const imageUrl = options.imageUrl;
+  const models = imageUrl ? visionClassifierModels() : classifierModels();
   const productContext = JSON.stringify({
     title: product.title,
     description: product.description.slice(0, 2000),
@@ -206,7 +215,15 @@ ${STREET_COLORS.join(", ")}
 
 Respond with ONLY a single raw JSON object — no markdown code fences, no commentary before or after. It must have exactly these keys: "group" (string), "category" (string), "type" (string, or "none"), "detail" (string, or "none"), "activity" (string, or "none"), "tags" (array of strings, up to 12), "colors" (array of strings, up to 3), "confidence" ("high", "medium", or "low"). Every string value must be copied exactly (case-sensitive) from the approved lists above — never invent a value that isn't in those lists.`,
         },
-        { role: "user", content: productContext },
+        {
+          role: "user",
+          content: imageUrl
+            ? [
+                { type: "text", text: `Product info (JSON). One product photo is attached; use it together with the text, and trust what the photo clearly shows over vague text:\n${productContext}` },
+                { type: "image_url", image_url: { url: imageUrl } },
+              ]
+            : productContext,
+        },
       ],
       // Plain JSON mode rather than a strict json_schema: once type/detail
       // enums cover the full 4-level taxonomy (hundreds of values), some
@@ -235,6 +252,91 @@ Respond with ONLY a single raw JSON object — no markdown code fences, no comme
   return {
     classification: validateClassification(parsed),
     model: payload.model ?? models[0],
+    usage: { promptTokens: payload.usage?.prompt_tokens, completionTokens: payload.usage?.completion_tokens },
+  };
+}
+
+export type SecondPassCandidate = { group: string; category: string; type: string; detail: string; reason: string };
+
+/**
+ * 2nd classifier pass, run ONE product at a time for products the 1st pass was
+ * unsure about (confidence "low"). The model sees the 1st pass's answer, writes
+ * down three candidate classifications (it may reuse the 1st answer as one of
+ * them), then picks the best. Text only, same cheap model list as pass 1.
+ */
+export async function classifyProductSecondPass(
+  product: ProductToClassify,
+  firstPass: ProductClassification,
+): Promise<{ classification: ProductClassification; model: string; chosen: number; candidates: SecondPassCandidate[]; usage?: { promptTokens?: number; completionTokens?: number } }> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("AI classification is not configured. Add OPENROUTER_API_KEY before running the classifier.");
+  const models = classifierModels();
+  const productContext = JSON.stringify({
+    title: product.title,
+    description: product.description.slice(0, 2000),
+    sourceCategory: product.sourceCategory,
+    sourceTags: product.sourceTags.slice(0, 30),
+    sourceColors: product.sourceColors.slice(0, 10),
+    firstClassifierAnswer: { group: firstPass.group, category: firstPass.category, type: firstPass.type, detail: firstPass.detail, confidence: firstPass.confidence },
+  });
+
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://streetdotcom.com",
+      "X-OpenRouter-Title": "Street catalog classifier (2nd pass)",
+    },
+    signal: AbortSignal.timeout(30_000),
+    body: JSON.stringify({
+      models,
+      temperature: 0.2,
+      max_tokens: 900,
+      provider: { sort: "throughput", allow_fallbacks: true, require_parameters: true },
+      messages: [
+        {
+          role: "system",
+          content: `You are the second-opinion classifier for Street, an independent streetwear catalog. A first classifier was unsure about this product (low confidence). You get the product text and the first classifier's answer.
+
+Step 1: write exactly 3 DIFFERENT candidate classifications (you may include the first classifier's answer as one of them). Each has "group", "category", "type" ("none" if the category has no types), "detail" ("none" if none) and a one-sentence "reason".
+Step 2: ask yourself which candidate describes what the product literally is best, and give its 0-based index as "best". Merchants' own categories are often wrong or generic; trust the title and description. Only use "low" confidence if even the best candidate is a poor fit.
+
+Use ONLY values from the taxonomy below, copied exactly. The category must belong to its group, the type to its category, the detail to its type. Taxonomy (Group: Category: Type (Detail, ...)):
+${taxonomyPrompt}
+
+For the chosen product also return "activity" (Footwear only: ${FOOTWEAR_ACTIVITIES.join(", ")}; otherwise "none"), "tags" (up to 12, from: ${STREET_TAGS.join(", ")}), "colors" (up to 3, from: ${STREET_COLORS.join(", ")}) and "confidence" ("high", "medium" or "low").
+
+Respond with ONLY one raw JSON object, no code fences: {"candidates":[{group,category,type,detail,reason} x3],"best":0|1|2,"activity":"...","tags":[...],"colors":[...],"confidence":"..."}.`,
+        },
+        { role: "user", content: productContext },
+      ],
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  const payload = (await response.json()) as OpenRouterResponse;
+  if (!response.ok) throw new Error(`OpenRouter request failed (${response.status}): ${JSON.stringify(payload).slice(0, 1500)}`);
+  const content = payload.choices?.[0]?.message?.content;
+  if (!content) throw new Error(`2nd pass returned no content. Raw payload: ${JSON.stringify(payload).slice(0, 1500)}`);
+  const jsonText = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(jsonText) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : "JSON parse failed"}. Raw content: ${jsonText.slice(0, 800)}`);
+  }
+  const candidates = Array.isArray(parsed.candidates) ? (parsed.candidates as SecondPassCandidate[]).slice(0, 3) : [];
+  const best = Number(parsed.best);
+  const chosen = Number.isInteger(best) && best >= 0 && best < candidates.length ? best : 0;
+  const pick = candidates[chosen];
+  if (!pick) throw new Error("2nd pass returned no candidates.");
+  const classification = validateClassification({
+    group: pick.group, category: pick.category, type: pick.type, detail: pick.detail,
+    activity: parsed.activity, tags: parsed.tags, colors: parsed.colors, confidence: parsed.confidence,
+  });
+  return {
+    classification, model: payload.model ?? models[0], chosen, candidates,
     usage: { promptTokens: payload.usage?.prompt_tokens, completionTokens: payload.usage?.completion_tokens },
   };
 }

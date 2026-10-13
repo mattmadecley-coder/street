@@ -1,5 +1,6 @@
 import styles from "@/app/admin/admin.module.css";
 import s from "@/app/admin/social/social.module.css";
+import { AdminNav } from "@/components/admin/admin-nav";
 import { SocialChart } from "@/components/admin/social-chart";
 import { TodayChart } from "@/components/admin/social-today-chart";
 import { Alerts, CompareTable, HealthList, Kpi, Meter, SectionTitle, SocialTabs, TodayHero } from "@/components/admin/social-ui";
@@ -68,7 +69,8 @@ export default async function InstagramDashboard() {
   const posted7 = compareWindows(postsMap);
   const followedToday = n(followsMade[today]);
   return (
-    <div>
+    <div className={styles.shell}>
+      <AdminNav active="/admin/social" />
       <div className={s.head}>
         <div><h1 className={styles.title}>Instagram</h1><p className={styles.subtitle}>@streetdotcomstreetwear: daily carousels and reels via Postiz, plus the follow-for-follow bot.</p></div>
         <div className={s.stamp}>Eastern time · as of {nowStamp()}</div>
@@ -86,7 +88,7 @@ export default async function InstagramDashboard() {
       <SectionTitle title="Follow-for-follow" hint={`${d.max_per_hour ?? "?"} follows/hour · ${cap}/day · ${d.max_likes_per_day ?? "?"} likes/day`} />
       <div className={s.grid}>
         <div className={s.kpi}>
-          <span>Followed today</span><strong>{followedToday} <small className={s.kpiUnit}>of {cap}</small></strong>
+          <span>Followed today</span><strong>{followedToday} <small style={{ fontSize: 15, fontWeight: 400 }}>of {cap}</small></strong>
           <Meter value={followedToday} max={cap} color={C} />
           <small>{n(followsMade[yesterday])} yesterday</small>
         </div>
@@ -96,7 +98,7 @@ export default async function InstagramDashboard() {
         <Kpi label="Follow-back rate" value={overallRate === null ? "n/a" : `${(overallRate * 100).toFixed(1)}%`} note={overallRate === null ? "Instagram doesn't expose the follower list without a deeper login" : `${backs.length} of ${checked.length} checked`} />
         <Kpi label="Unfollowed" value={int(Object.values(unfollows).reduce((a, v) => a + v, 0))} note={d.unfollow_enabled ? `auto-unfollow after ${d.unfollow_after_days} days` : "auto-unfollow is off"} />
       </div>
-      <div className={`${s.two} u-mt-14`}>
+      <div className={s.two} style={{ marginTop: 14 }}>
         <SocialChart title="People followed" series={[buildSeries("f", "Follows", followsMade, "sum", "int", C), buildSeries("u", "Unfollows", unfollows, "sum", "int", C)]} />
         {checked.length ? <SocialChart title="Follow-backs" subtitle="by the day we followed them" series={[buildSeries("b", "Follow-backs", followBackByDay, "sum", "int", C), buildSeries("r", "Follow-back rate", rateByDay, "last", "pct", C)]} /> : <SocialChart title="Followers" series={[buildSeries("fl", "Followers", followersMap, "last", "int", C), buildSeries("fg", "Following", followingMap, "last", "int", C)]} />}
       </div>
@@ -106,7 +108,7 @@ export default async function InstagramDashboard() {
 
       <SectionTitle title="Bot health" />
       <HealthList jobs={jobs.filter((j) => j.platform === "instagram" || j.job === "dashboard_sync")} />
-      {bot ? <p className={`${s.note} u-mt-10`}>Process running: {d.running ? "yes" : "NO"} · restarts in 7 days: {n(d.restarts_7d)} · scheduled daily at hour {d.run_at_hour ?? "?"} · last follow {fmtWhen(bot.last_success_at)}</p> : null}
+      {bot ? <p className={s.note} style={{ marginTop: 10 }}>Process running: {d.running ? "yes" : "NO"} · restarts in 7 days: {n(d.restarts_7d)} · scheduled daily at hour {d.run_at_hour ?? "?"} · last follow {fmtWhen(bot.last_success_at)}</p> : null}
 
       <SectionTitle title="Posting" />
       <div className={s.grid}>
@@ -115,11 +117,11 @@ export default async function InstagramDashboard() {
         <Kpi label="Lined up in Postiz" value={String(lined.length)} note={lined[0] ? `next: ${fmtWhen(lined[0].scheduled_for)}` : "queue is empty"} />
         <Kpi label="Reach, last 7 days" value={int(compareWindows(reach).last7)} cur={compareWindows(reach).last7} prev={compareWindows(reach).prev7} vs="the 7 before" spark={lastNDays(reach)} color={C} />
       </div>
-      <div className={`${s.two} u-mt-14`}>
+      <div className={s.two} style={{ marginTop: 14 }}>
         <SocialChart title="Posts and reach" series={[buildSeries("p", "Posts", postsMap, "sum", "int", C), buildSeries("r", "Reach", reach, "sum", "int", C)]} />
         <SocialChart title="Visits sent to Street" series={[buildSeries("s", "Visits", sessions, "sum", "int", C), buildSeries("o", "Clicks out", outbound, "sum", "int", C)]} />
       </div>
-      <div className="u-mt-14">
+      <div style={{ marginTop: 14 }}>
         <CompareTable rows={[
           { label: "People followed", c: compareWindows(followsMade) }, { label: "Posts", c: compareWindows(postsMap) }, { label: "Reach", c: compareWindows(reach) },
           { label: "Visits to Street", c: compareWindows(sessions) }, { label: "Clicks out", c: compareWindows(outbound) },
