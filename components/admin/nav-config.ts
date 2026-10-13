@@ -29,8 +29,17 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Marketing",
     items: [
       { href: "/admin/homepage", label: "Homepage", icon: "layout" },
-      { href: "/admin/reports", label: "Brand reports", icon: "mail" },
       { href: "/admin/social", label: "Social", icon: "share" },
+    ],
+  },
+  {
+    label: "Email",
+    items: [
+      { href: "/admin/email", label: "Overview", icon: "mail", exact: true },
+      { href: "/admin/email/analytics", label: "Email analytics", icon: "chart" },
+      { href: "/admin/email/contacts", label: "Customers", icon: "users" },
+      { href: "/admin/email/popup", label: "Signup popup", icon: "layout", also: ["/admin/email-popup"] },
+      { href: "/admin/reports", label: "Brand outreach", icon: "arrow" },
     ],
   },
   {

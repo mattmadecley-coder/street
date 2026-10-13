@@ -35,7 +35,7 @@ export function TodayChart({ lines, yesterday, title = "Visits through the day",
         <div><h3>{title}</h3><p>Running total since midnight (Eastern) · today vs yesterday</p></div>
         <div className={styles.legend} style={{ margin: 0 }}>
           {lines.map((l) => <span key={l.key}><i style={{ background: l.color, height: 3, borderRadius: 2 }} />{l.label}</span>)}
-          <span><i style={{ background: "#a9a79d", height: 3, borderRadius: 2 }} />Yesterday</span>
+          <span><i style={{ background: "var(--adm-text-3)", height: 3, borderRadius: 2 }} />Yesterday</span>
         </div>
       </div>
       <div ref={box} className={styles.plot} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
@@ -44,15 +44,15 @@ export function TodayChart({ lines, yesterday, title = "Visits through the day",
             <g key={r}><line x1={L} x2={W - R} y1={y(max * r)} y2={y(max * r)} className={styles.gridLine} /><text x={L - 8} y={y(max * r) + 3.5} textAnchor="end" className={styles.axis}>{Math.round(max * r)}</text></g>
           ))}
           {hover !== null ? <line x1={x(hover)} x2={x(hover)} y1={T} y2={T + ph} className={styles.cross} /> : null}
-          <polyline points={yesterday.map((v, i) => `${x(i)},${y(v)}`).join(" ")} fill="none" stroke="#a9a79d" strokeWidth="2" strokeLinejoin="round" />
+          <polyline points={yesterday.map((v, i) => `${x(i)},${y(v)}`).join(" ")} fill="none" stroke="var(--adm-text-3)" strokeWidth="2" strokeLinejoin="round" />
           {lines.map((l) => {
             const k = lastIdx(l);
             return (
               <g key={l.key}>
                 {single && k >= 0 ? <polygon points={`${x(0)},${T + ph} ${line(l.today)} ${x(k)},${T + ph}`} fill={l.color} opacity="0.1" /> : null}
                 <polyline points={line(l.today)} fill="none" stroke={l.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-                {k >= 0 ? <circle cx={x(k)} cy={y(l.today[k] as number)} r="4.5" fill={l.color} stroke="#fff" strokeWidth="2" /> : null}
-                {hover !== null && l.today[hover] !== null ? <circle cx={x(hover)} cy={y(l.today[hover] as number)} r="4.5" fill={l.color} stroke="#fff" strokeWidth="2" /> : null}
+                {k >= 0 ? <circle cx={x(k)} cy={y(l.today[k] as number)} r="4.5" fill={l.color} stroke="var(--adm-surface)" strokeWidth="2" /> : null}
+                {hover !== null && l.today[hover] !== null ? <circle cx={x(hover)} cy={y(l.today[hover] as number)} r="4.5" fill={l.color} stroke="var(--adm-surface)" strokeWidth="2" /> : null}
               </g>
             );
           })}
@@ -62,7 +62,7 @@ export function TodayChart({ lines, yesterday, title = "Visits through the day",
           <div className={styles.tip} style={{ left: `${(x(hover) / W) * 100}%`, transform: x(hover) > W * 0.62 ? "translateX(calc(-100% - 12px))" : "translateX(12px)" }}>
             <b>By end of {HOURS[hover]}</b>
             {lines.map((l) => (<div key={l.key}><i style={{ background: l.color }} /><strong>{l.today[hover] === null ? "-" : l.today[hover]}</strong> today{lines.length > 1 ? ` · ${l.label}` : ""}</div>))}
-            <div><i style={{ background: "#a9a79d" }} /><strong>{yesterday[hover]}</strong> yesterday</div>
+            <div><i style={{ background: "var(--adm-text-3)" }} /><strong>{yesterday[hover]}</strong> yesterday</div>
           </div>
         ) : null}
       </div>

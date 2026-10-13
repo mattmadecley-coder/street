@@ -164,7 +164,9 @@ button.adm-nav-link { width: 100%; border: 0; background: none; cursor: pointer;
 .adm-app[data-collapsed="true"] .adm-nav-label, .adm-app[data-collapsed="true"] .adm-nav-group, .adm-app[data-collapsed="true"] .adm-wordmark small, .adm-app[data-collapsed="true"] .adm-badge-count { display: none; }
 .adm-app[data-collapsed="true"] .adm-nav-link { justify-content: center; padding: 7px; }
 .adm-app[data-collapsed="true"] .adm-sidebar-head { justify-content: center; padding: 0 8px; }
-.adm-app[data-collapsed="true"] .adm-wordmark { font-size: 16px; }
+/* Collapsed: the head is only wide enough for one control, so show the expand button, not the wordmark. */
+.adm-app[data-collapsed="true"] .adm-wordmark { display: none; }
+.adm-app[data-collapsed="true"] .adm-collapse-btn svg { transform: rotate(180deg); }
 
 .adm-col { min-width: 0; display: flex; flex-direction: column; }
 .adm-topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 12px; height: var(--adm-topbar-h); padding: 0 24px; background: var(--adm-bg); border-bottom: 1px solid var(--adm-border); }
@@ -185,7 +187,7 @@ button.adm-nav-link { width: 100%; border: 0; background: none; cursor: pointer;
   .adm-app, .adm-app[data-collapsed="true"] { grid-template-columns: minmax(0, 1fr); }
   .adm-sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: min(300px, 86vw); transform: translateX(-102%); transition: transform .18s ease; box-shadow: var(--adm-shadow); }
   .adm-app[data-drawer="open"] .adm-sidebar { transform: none; }
-  .adm-app[data-collapsed="true"] .adm-nav-label, .adm-app[data-collapsed="true"] .adm-nav-group, .adm-app[data-collapsed="true"] .adm-wordmark small, .adm-app[data-collapsed="true"] .adm-badge-count { display: revert; }
+  .adm-app[data-collapsed="true"] .adm-nav-label, .adm-app[data-collapsed="true"] .adm-nav-group, .adm-app[data-collapsed="true"] .adm-wordmark, .adm-app[data-collapsed="true"] .adm-wordmark small, .adm-app[data-collapsed="true"] .adm-badge-count { display: revert; }
   .adm-app[data-collapsed="true"] .adm-nav-link { justify-content: flex-start; padding: 7px 10px; }
   .adm-drawer-scrim { position: fixed; inset: 0; z-index: 35; background: var(--adm-overlay); }
   .adm-menu-btn { display: inline-grid; }

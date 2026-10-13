@@ -33,19 +33,19 @@ export function Delta({ cur, prev, suffix = "" }: { cur: number; prev: number; s
   return <span className={styles[d.tone]}>{d.text}{suffix}</span>;
 }
 
-export function Spark({ values, color = "#101010", width = 132, height = 34 }: { values: number[]; color?: string; width?: number; height?: number }) {
+export function Spark({ values, color = "var(--adm-text)", width = 132, height = 34 }: { values: number[]; color?: string; width?: number; height?: number }) {
   const max = Math.max(1, ...values);
   const pts = values.map((v, i) => [3 + (i / Math.max(1, values.length - 1)) * (width - 8), height - 4 - (v / max) * (height - 9)]);
   const last = pts[pts.length - 1];
   return (
     <svg className={styles.spark} width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Last 14 days">
       <polyline points={pts.map((p) => p.join(",")).join(" ")} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" opacity={values.some((v) => v > 0) ? 1 : 0.35} />
-      {last ? <circle cx={last[0]} cy={last[1]} r="4" fill={color} stroke="#fff" strokeWidth="2" /> : null}
+      {last ? <circle cx={last[0]} cy={last[1]} r="4" fill={color} stroke="var(--adm-surface)" strokeWidth="2" /> : null}
     </svg>
   );
 }
 
-export function Meter({ value, max, color = "#101010" }: { value: number; max: number; color?: string }) {
+export function Meter({ value, max, color = "var(--adm-text)" }: { value: number; max: number; color?: string }) {
   return <div className={styles.meter} style={{ ["--c" as string]: color }} role="meter" aria-valuenow={value} aria-valuemax={max}><div style={{ width: `${Math.min(100, (value / Math.max(1, max)) * 100)}%` }} /></div>;
 }
 
