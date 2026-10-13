@@ -14,7 +14,8 @@ import { BulkBar, BULK_FORM_ID } from "@/components/admin/bulk-bar";
 import { requireUser } from "@/lib/admin-guard";
 import { loadSavedFilters, filterHref, cleanFilterParams } from "@/lib/saved-filters";
 import { STREET_TAXONOMY } from "@/lib/street-taxonomy";
-import { saveFilterViewAction, deleteFilterViewAction } from "./actions";
+import { saveFilterViewAction, deleteFilterViewAction, requeueFallbackAction } from "./actions";
+import { countFallbackProducts } from "@/lib/classification-requeue";
 
 export const dynamic = "force-dynamic";
 
@@ -102,17 +103,17 @@ function productsHref(q: string | undefined, status: string, brandSlug: string |
   return `/admin/products?${search.toString()}`;
 }
 
-export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; brand?: string; saved?: string; page?: string; bulkError?: string; group?: string; stock?: string; min?: string; max?: string; view?: string }> }) {
+export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; brand?: string; saved?: string; page?: string; bulkError?: string; group?: string; stock?: string; min?: string; max?: string; view?: string; requeued?: string }> }) {
   const principal = await requireUser();
   const trashOn = await trashSupported();
   const canWrite = can(principal.role, "catalog.write");
   const canDelete = can(principal.role, "catalog.delete");
   const canPurge = can(principal.role, "catalog.purge");
-  const { q, status: statusParam, brand: brandParam, saved, page: pageParam, bulkError, group: groupParam, stock: stockParam, min: minParam, max: maxParam, view } = await searchParams;
+  const { q, status: statusParam, brand: brandParam, saved, page: pageParam, bulkError, group: groupParam, stock: stockParam, min: minParam, max: maxParam, view, requeued } = await searchParams;
   const extra: ExtraFilters = { group: groupParam, stock: stockParam, min: minParam, max: maxParam };
   const status = statusParam ?? "needs_review";
   const requestedPage = Math.max(1, Math.floor(Number(pageParam) || 1));
-  const [{ products, total, page: currentPage }, brands, savedViews] = await Promise.all([searchProducts(q, status, brandParam, requestedPage, trashOn, extra), getAllBrands(), loadSavedFilters()]);
+  const [{ products, total, page: currentPage }, brands, savedViews, fallbackCount] = await Promise.all([searchProducts(q, status, brandParam, requestedPage, trashOn, extra), getAllBrands(), loadSavedFilters(), countFallbackProducts()]);
   const currentParams = cleanFilterParams({ status: status === "needs_review" ? "" : status, brand: brandParam, q, group: groupParam, stock: stockParam, min: minParam, max: maxParam });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const returnTo = productsHref(q, status, brandParam, currentPage, extra);
@@ -124,6 +125,20 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
       {status === "trash" ? <Banner tone="info">Deleted products stay here for {TRASH_RETENTION_DAYS} days so they can be restored. They are hidden from the site.{canPurge ? "" : " Only an owner can delete them permanently."}</Banner> : null}
       {!canWrite ? <Banner tone="info">You have view-only access to products.</Banner> : null}
       {bulkError ? <p className={styles.noticeError} role="alert">{bulkError}</p> : null}
+      {requeued ? <Banner tone="success">{Number(requeued) > 0 ? `${Number(requeued).toLocaleString()} products were sent back to the classifier. They will update over the next while.` : "Nothing to re-run."}</Banner> : null}
+      {fallbackCount > 0 && status !== "trash" ? (
+        <Banner tone="warn">
+          <strong>{fallbackCount.toLocaleString()} products only have a placeholder category</strong> because the AI service could not be reached when they were classified (most often the OpenRouter account ran out of credits). They were not judged by the AI at all.
+          {canWrite ? (
+            <form action={requeueFallbackAction} className="u-mt-14">
+              <input type="hidden" name="return_to" value={returnTo} />
+              <ConfirmSubmitButton confirmTitle="Re-run the AI on these products?" confirmText={`This sends ${fallbackCount.toLocaleString()} products back through the classifier. It uses OpenRouter credits, so make sure the account has credit first.`} confirmLabel="Re-run the AI" className={styles.button}>
+                Re-run the AI on these products
+              </ConfirmSubmitButton>
+            </form>
+          ) : null}
+        </Banner>
+      ) : null}
       <form action="/admin/products" className={styles.searchBar}>
         <input type="text" name="q" defaultValue={q} placeholder="Search by product title..." />
         <select name="brand" defaultValue={brandParam ?? ""}>

@@ -7,6 +7,7 @@ import {
   STREET_TAGS,
   STREET_TAXONOMY,
   groupForStreetCategory,
+  locateTaxonomyName,
   isFootwearActivity,
   isStreetCategory,
   isStreetDetail,
@@ -107,7 +108,16 @@ function cleanList(values: unknown, allowed: readonly string[]) {
   return [...new Set(values.filter((value): value is string => typeof value === "string" && allowed.includes(value)))];
 }
 
-function validateClassification(value: unknown): ProductClassification {
+/**
+ * True when a failure means the AI service itself is unavailable to us (out of credits, bad key, rate
+ * limited, unreachable), not that this one product is odd. Those products must be retried later, never
+ * given a guessed category.
+ */
+export function isAiOutage(message: string): boolean {
+  return /\((401|402|403|429|5\d\d)\)|insufficient credits|fetch failed|timed out|timeout|aborted|OPENROUTER_API_KEY|not configured/i.test(message);
+}
+
+export function validateClassification(value: unknown): ProductClassification {
   if (!value || typeof value !== "object") throw new Error("Classifier returned an invalid object.");
   const candidate = value as Record<string, unknown>;
 
@@ -116,7 +126,9 @@ function validateClassification(value: unknown): ProductClassification {
   if (candidate.confidence !== "high" && candidate.confidence !== "medium" && candidate.confidence !== "low") throw new Error("Classifier returned an invalid confidence level.");
 
   let group = candidate.group;
-  const category = candidate.category;
+  let category = candidate.category;
+  let locatedType: string | null = null;
+  let locatedDetail: string | null = null;
   let confidence: "high" | "medium" | "low" = candidate.confidence;
 
   // The model sometimes names a real category but pairs it with the wrong
@@ -125,9 +137,20 @@ function validateClassification(value: unknown): ProductClassification {
   // of throwing the classification away — just mark it down for review.
   if (!isStreetCategory(group, category)) {
     const correctedGroup = groupForStreetCategory(category);
-    if (!correctedGroup) throw new Error(`Classifier returned category "${category}", which doesn't exist under any group.`);
-    group = correctedGroup;
-    confidence = "low";
+    if (correctedGroup) {
+      group = correctedGroup;
+      confidence = "low";
+    } else {
+      // The model named a real level of the tree but not the category (e.g. "Knitwear", which is a type
+      // under Tops). If the name is unambiguous, file it where it belongs rather than discarding it.
+      const found = locateTaxonomyName(category);
+      if (!found) throw new Error(`Classifier returned category "${category}", which doesn't exist under any group.`);
+      group = found.group;
+      category = found.category;
+      locatedType = found.type;
+      locatedDetail = found.detail;
+      if (confidence === "high") confidence = "medium";
+    }
   }
 
   // Deeper levels degrade gracefully instead of failing the whole
@@ -135,10 +158,10 @@ function validateClassification(value: unknown): ProductClassification {
   // doesn't belong under that category just loses the type, rather than
   // the product going unclassified.
   const rawType = typeof candidate.type === "string" && candidate.type !== "none" ? candidate.type : null;
-  const type = rawType && isStreetType(group, category, rawType) ? rawType : null;
+  const type = rawType && isStreetType(group, category, rawType) ? rawType : locatedType;
 
   const rawDetail = typeof candidate.detail === "string" && candidate.detail !== "none" ? candidate.detail : null;
-  const detail = type && rawDetail && isStreetDetail(group, category, type, rawDetail) ? rawDetail : null;
+  const detail = type && rawDetail && isStreetDetail(group, category, type, rawDetail) ? rawDetail : type === locatedType ? locatedDetail : null;
 
   const rawActivity = typeof candidate.activity === "string" && candidate.activity !== "none" ? candidate.activity : null;
   const activity = group === "Footwear" && rawActivity && isFootwearActivity(rawActivity) ? rawActivity : null;

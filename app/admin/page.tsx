@@ -9,6 +9,7 @@ import { loadAlertView } from "@/lib/admin-alerts";
 import { describeChange, describeFractionChange, lowerIsBetter } from "@/lib/analytics-change";
 import { timeZoneLabel } from "@/lib/date-range";
 import { evaluateHealth, worstLevel } from "@/lib/system-health";
+import { countFallbackProducts } from "@/lib/classification-requeue";
 import { getRecentSiteEvents } from "@/lib/analytics";
 import { requireUser } from "@/lib/admin-guard";
 
@@ -37,7 +38,7 @@ function changeFor(snapshot: RangeSnapshot, pick: (stats: RangeSnapshot["current
 export default async function AdminHomePage({ searchParams }: { searchParams: Promise<{ range?: string; start?: string; end?: string; compare?: string; days?: string }> }) {
   await requireUser();
   const range = await getAdminRange(await searchParams);
-  const [snapshot, needsReview, pending, products, brands, syncStatuses, alerts, latestEvents] = await Promise.all([
+  const [snapshot, needsReview, pending, products, brands, syncStatuses, alerts, latestEvents, aiFallbackCount] = await Promise.all([
     loadRangeSnapshot(range),
     count("products?select=id&is_active=eq.true&classification_status=eq.needs_review"),
     count("products?select=id&is_active=eq.true&classification_status=eq.pending"),
@@ -46,6 +47,7 @@ export default async function AdminHomePage({ searchParams }: { searchParams: Pr
     getBrandSyncStatuses(),
     loadAlertView().catch(() => null),
     getRecentSiteEvents(1),
+    countFallbackProducts(),
   ]);
 
   const { current, compare } = snapshot;
@@ -61,6 +63,7 @@ export default async function AdminHomePage({ searchParams }: { searchParams: Pr
     failingImports: interruptedSyncs,
     pendingClassification: pending,
     needsReview,
+    aiFallbackCount,
     latestEventMs: latestEvents[0] ? new Date(latestEvents[0].created_at).getTime() : null,
   });
   const healthLevel = worstLevel(health);

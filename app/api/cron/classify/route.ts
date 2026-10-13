@@ -41,7 +41,8 @@ async function drainOneBatch(brandSlug?: string) {
     // after this bounded batch has completed and released the database lease.
     // Continuations are global so older queued products cannot be stranded by
     // a stream of newer brand-specific imports.
-    const shouldContinue = run.found >= run.limit;
+    // Never chain while the AI service is refusing requests: it would loop on the same products.
+    const shouldContinue = run.found >= run.limit && !run.outage;
     if (shouldContinue) {
       await triggerClassificationDrain();
     }
@@ -51,6 +52,8 @@ async function drainOneBatch(brandSlug?: string) {
       found: run.found,
       processed: run.results.length,
       fallbackCount: run.fallbackCount,
+      deferred: run.deferred,
+      outage: run.outage,
       continued: shouldContinue,
     });
   } catch (error) {

@@ -9,6 +9,8 @@ import { recordAudit } from "@/lib/audit";
 import { safeAdminPath } from "@/lib/safe-redirect";
 import { trashSupported } from "@/lib/trash";
 import { loadSavedFilters, saveSavedFilters, withSavedFilter, withoutSavedFilter, FILTER_PARAM_KEYS } from "@/lib/saved-filters";
+import { requeueFallbackProducts } from "@/lib/classification-requeue";
+import { triggerClassificationDrain } from "@/lib/classification-trigger";
 import { BULK_LABELS, isBulkIntent, parseBulkIds, runBulk } from "@/lib/product-bulk";
 
 type ProductSummary = { title: string; brands: { name: string } | null };
@@ -206,4 +208,16 @@ export async function deleteFilterViewAction(formData: FormData) {
   }
   revalidatePath("/admin/products");
   redirect(returnTo);
+}
+
+/** Sends products that only got a placeholder category (the AI was unavailable) back through the AI. */
+export async function requeueFallbackAction(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
+  const returnTo = safeAdminPath(formData.get("return_to"), "/admin/products");
+  const joiner = returnTo.includes("?") ? "&" : "?";
+  const queued = await requeueFallbackProducts();
+  await recordAudit(actorOf(actor), { action: "product.requeue_classification", summary: `Sent ${queued} placeholder-classified products back to the classifier`, targetType: "product", details: { queued } });
+  if (queued) await triggerClassificationDrain().catch((error) => console.error("Could not start the classifier after re-queue", error));
+  revalidatePath("/admin/products");
+  redirect(`${returnTo}${joiner}requeued=${queued}`);
 }

@@ -10,6 +10,8 @@ export type HealthInput = {
   failingImports: number;
   pendingClassification: number;
   needsReview: number;
+  /** Products that only have a placeholder category because the AI service was unavailable. */
+  aiFallbackCount?: number;
   /** Newest tracked analytics event, or null if none. */
   latestEventMs: number | null;
 };
@@ -29,6 +31,7 @@ export function ago(nowMs: number, thenMs: number): string {
 export function evaluateHealth(input: HealthInput): HealthItem[] {
   const { nowMs, lastCatalogSyncMs, failingImports, pendingClassification, needsReview, latestEventMs } = input;
   const items: HealthItem[] = [];
+  const aiFallbackCount = input.aiFallbackCount ?? 0;
 
   if (lastCatalogSyncMs === null) {
     items.push({ key: "catalog-sync", label: "Catalog sync", level: "bad", detail: "No successful sync recorded yet.", href: "/admin/brands" });
@@ -52,6 +55,16 @@ export function evaluateHealth(input: HealthInput): HealthItem[] {
     detail: pendingClassification === 0 ? "Nothing waiting." : `${pendingClassification.toLocaleString()} product${pendingClassification === 1 ? "" : "s"} waiting to be classified.`,
     href: "/admin/products?status=pending",
   });
+
+  if (aiFallbackCount > 0) {
+    items.push({
+      key: "ai-classifier",
+      label: "AI classifier",
+      level: "bad",
+      detail: `${aiFallbackCount.toLocaleString()} product${aiFallbackCount === 1 ? "" : "s"} got a placeholder category because the AI service refused the request (usually out of OpenRouter credits). Add credit, then re-run them from Products.`,
+      href: "/admin/products?status=needs_review",
+    });
+  }
 
   items.push({
     key: "review-queue",

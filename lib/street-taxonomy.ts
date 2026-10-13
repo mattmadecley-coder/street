@@ -283,3 +283,27 @@ export const ALL_STREET_DETAILS = Object.values(STREET_TAXONOMY).flatMap((catego
     Object.values(category as CategoryNode).flatMap((types) => (Array.isArray(types) ? types : [])),
   ),
 );
+
+export type TaxonomyLocation = { group: StreetGroup; category: string; type: string | null; detail: string | null };
+
+/**
+ * Finds where a name sits in the tree when a model put it at the wrong level (for example it answered
+ * category "Knitwear", which is a type under Tops). Only returns a result when the name is unambiguous:
+ * it must match exactly one place, so we never guess between two.
+ */
+export function locateTaxonomyName(name: string): TaxonomyLocation | null {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) return null;
+  const hits: TaxonomyLocation[] = [];
+  for (const [group, categories] of Object.entries(STREET_TAXONOMY as Record<string, Record<string, CategoryNode>>)) {
+    for (const [category, node] of Object.entries(categories)) {
+      if (category.toLowerCase() === wanted) hits.push({ group: group as StreetGroup, category, type: null, detail: null });
+      for (const [type, details] of Object.entries(node ?? {})) {
+        if (type.toLowerCase() === wanted) hits.push({ group: group as StreetGroup, category, type, detail: null });
+        if (Array.isArray(details)) for (const detail of details) if (detail.toLowerCase() === wanted) hits.push({ group: group as StreetGroup, category, type, detail });
+      }
+    }
+  }
+  const unique = new Map(hits.map((hit) => [`${hit.group}|${hit.category}|${hit.type}|${hit.detail}`, hit]));
+  return unique.size === 1 ? [...unique.values()][0] : null;
+}

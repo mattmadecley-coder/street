@@ -49,7 +49,7 @@ async function handleCatalogCron(request: NextRequest) {
       const brandSlug = request.nextUrl.searchParams.get("brand") ?? undefined;
       const run = await runClassificationWorkerBatch(Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined, brandSlug);
       if (run.results.length) revalidateTag(CATALOG_CACHE_TAG, { expire: CATALOG_REVALIDATE_SECONDS });
-      if (!run.busy && run.found >= run.limit) await triggerClassificationDrain();
+      if (!run.busy && !run.outage && run.found >= run.limit) await triggerClassificationDrain();
       return NextResponse.json({ ok: true, mode: "classify", classifiedAt: new Date().toISOString(), ...run }, { status: run.busy ? 202 : 200 });
     }
 

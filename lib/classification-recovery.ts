@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { classifyProductWithAI, type ProductClassification } from "@/lib/ai-product-classifier";
+import { classifyProductSecondPass, classifyProductWithAI, isAiOutage, type ProductClassification } from "@/lib/ai-product-classifier";
 import {
   ALL_STREET_CATEGORIES,
   STREET_COLORS,
@@ -19,14 +19,19 @@ const CLASSIFICATION_CONCURRENCY = 4;
 const CLASSIFICATION_BATCH_MAX = 8;
 const AI_ATTEMPTS = 1;
 const WORKER_LEASE_SECONDS = 55;
+// The 2nd pass can take up to 30s on its own, so it only starts while the batch still has this much
+// of its time budget left; otherwise the product keeps its 1st-pass answer and stays in review.
+const SECOND_PASS_START_BUDGET_MS = 18_000;
 
 export type RecoveryClassificationResult = {
   id: string;
   title: string;
-  status: "classified" | "needs_review";
+  /** "deferred" = the AI service was unavailable, so the product was left in the queue to retry later. */
+  status: "classified" | "needs_review" | "deferred";
   group: string;
   category: string;
   usedFallback: boolean;
+  secondPass?: boolean;
 };
 
 type QueuedProduct = {
@@ -43,9 +48,13 @@ type Rule = {
   group: StreetGroup;
   category: string;
   type?: string;
+  detail?: string;
 };
 
 const RULES: Rule[] = [
+  { pattern: /\b(sweaters?|pullover|jumper|knit(?:wear)?)\b/i, group: "Apparel", category: "Tops", type: "Knitwear", detail: "Sweaters" },
+  { pattern: /\b(cardigans?)\b/i, group: "Apparel", category: "Tops", type: "Knitwear", detail: "Cardigans" },
+  { pattern: /\b(turtlenecks?|mock ?neck)\b/i, group: "Apparel", category: "Tops", type: "Knitwear", detail: "Turtlenecks" },
   { pattern: /\b(jacket|bomber|puffer|varsity|windbreaker|track jacket|denim jacket|leather jacket)\b/i, group: "Apparel", category: "Outerwear", type: "Jackets" },
   { pattern: /\b(coat|trench|overcoat|peacoat)\b/i, group: "Apparel", category: "Outerwear", type: "Coats" },
   { pattern: /\b(vest|parka|anorak|poncho|cape)\b/i, group: "Apparel", category: "Outerwear" },
@@ -111,7 +120,7 @@ function broadFallback(product: QueuedProduct): ProductClassification {
   const haystack = [product.title, product.description, product.category, ...(product.tags ?? [])].join(" ");
   const rule = RULES.find((candidate) => candidate.pattern.test(haystack));
   if (rule) {
-    return { group: rule.group, category: rule.category, type: rule.type ?? null, detail: null, activity: null, tags: cleanTags(product.tags ?? []), colors: cleanColors(product.colors ?? []), confidence: "low" };
+    return { group: rule.group, category: rule.category, type: rule.type ?? null, detail: rule.detail ?? null, activity: null, tags: cleanTags(product.tags ?? []), colors: cleanColors(product.colors ?? []), confidence: "low" };
   }
 
   // Street catalogs are overwhelmingly apparel. This is intentionally broad,
@@ -119,23 +128,49 @@ function broadFallback(product: QueuedProduct): ProductClassification {
   return { group: "Apparel", category: "Tops", type: null, detail: null, activity: null, tags: cleanTags(product.tags ?? []), colors: cleanColors(product.colors ?? []), confidence: "low" };
 }
 
-async function classifyOne(product: QueuedProduct): Promise<RecoveryClassificationResult> {
+async function classifyOne(product: QueuedProduct, batchStartedAt: number = Date.now()): Promise<RecoveryClassificationResult> {
   let lastError = "";
+  const input = {
+    title: product.title,
+    description: product.description,
+    sourceCategory: product.category,
+    sourceTags: product.tags ?? [],
+    sourceColors: product.colors ?? [],
+  };
   for (let attempt = 1; attempt <= AI_ATTEMPTS; attempt += 1) {
     try {
-      const { classification, model } = await classifyProductWithAI({
-        title: product.title,
-        description: product.description,
-        sourceCategory: product.category,
-        sourceTags: product.tags ?? [],
-        sourceColors: product.colors ?? [],
-      });
+      const first = await classifyProductWithAI(input);
+      let classification = first.classification;
+      let model = first.model;
+      let pass = 1;
+      let firstGuess: ProductClassification | null = null;
+      // 2nd pass: only for products the 1st pass was unsure about, one at a time. If it fails, the
+      // 1st answer is kept and the product simply stays in review.
+      if (classification.confidence === "low" && Date.now() - batchStartedAt < SECOND_PASS_START_BUDGET_MS) {
+        try {
+          const second = await classifyProductSecondPass(input, first.classification);
+          firstGuess = first.classification;
+          classification = second.classification;
+          model = second.model;
+          pass = 2;
+        } catch (secondError) {
+          console.warn("2nd classification pass failed", product.id, secondError instanceof Error ? secondError.message : secondError);
+        }
+      }
       const status = classification.confidence === "low" ? "needs_review" : "classified";
-      await saveClassification(product.id, classification, status, model, null);
-      return { id: product.id, title: product.title, status, group: classification.group, category: classification.category, usedFallback: false };
+      await saveClassification(product.id, classification, status, model, null, pass, firstGuess);
+      return { id: product.id, title: product.title, status, group: classification.group, category: classification.category, usedFallback: false, secondPass: pass === 2 };
     } catch (error) {
       lastError = error instanceof Error ? error.message : "AI classification failed";
     }
+  }
+
+  // The AI service itself refused us (out of credits, bad key, rate limit, unreachable). That says
+  // nothing about this product, so do NOT guess a category: leave it in the queue with the reason
+  // and let a later run classify it properly.
+  if (isAiOutage(lastError)) {
+    await supabaseRest(`products?id=eq.${product.id}`, { method: "PATCH", body: { classification_error: `AI unavailable: ${lastError}`.slice(0, 500) }, prefer: "return=minimal" }).catch(() => undefined);
+    return { id: product.id, title: product.title, status: "deferred", group: "", category: "", usedFallback: false };
   }
 
   // Model/provider fallback is already attempted by OpenRouter. If every model
@@ -147,7 +182,7 @@ async function classifyOne(product: QueuedProduct): Promise<RecoveryClassificati
   return { id: product.id, title: product.title, status: "needs_review", group: fallback.group, category: fallback.category, usedFallback: true };
 }
 
-async function saveClassification(id: string, classification: ProductClassification, status: "classified" | "needs_review", model: string, note: string | null) {
+async function saveClassification(id: string, classification: ProductClassification, status: "classified" | "needs_review", model: string, note: string | null, pass = 1, firstGuess: ProductClassification | null = null) {
   await supabaseRest(`products?id=eq.${id}`, {
     method: "PATCH",
     body: {
@@ -162,6 +197,8 @@ async function saveClassification(id: string, classification: ProductClassificat
       classification_confidence: classification.confidence,
       classification_model: model,
       classification_version: 4,
+      classification_pass: pass,
+      classification_first_guess: firstGuess ? { group: firstGuess.group, category: firstGuess.category, type: firstGuess.type, detail: firstGuess.detail, confidence: firstGuess.confidence } : null,
       classified_at: new Date().toISOString(),
       classification_error: note,
     },
@@ -194,8 +231,10 @@ export async function recoverQueuedClassifications(requestedLimit = CLASSIFICATI
   if (brandSlug) params.set("brands.slug", `eq.${brandSlug}`);
 
   const queued = await supabaseRest<QueuedProduct[]>(`products?${params.toString()}`, { noStore: true });
-  const results = await mapConcurrent(queued, CLASSIFICATION_CONCURRENCY, classifyOne);
-  return { limit, found: queued.length, results, fallbackCount: results.filter((result) => result.usedFallback).length };
+  const startedAt = Date.now();
+  const results = await mapConcurrent(queued, CLASSIFICATION_CONCURRENCY, (product) => classifyOne(product, startedAt));
+  const deferred = results.filter((result) => result.status === "deferred").length;
+  return { limit, found: queued.length, results, fallbackCount: results.filter((result) => result.usedFallback).length, deferred, outage: queued.length > 0 && deferred === queued.length };
 }
 
 /**
@@ -212,7 +251,7 @@ export async function runClassificationWorkerBatch(requestedLimit = CLASSIFICATI
   });
 
   if (!acquired) {
-    return { limit: Math.min(requestedLimit, CLASSIFICATION_BATCH_MAX), found: 0, results: [] as RecoveryClassificationResult[], fallbackCount: 0, busy: true };
+    return { limit: Math.min(requestedLimit, CLASSIFICATION_BATCH_MAX), found: 0, results: [] as RecoveryClassificationResult[], fallbackCount: 0, deferred: 0, outage: false, busy: true };
   }
 
   let processed = 0;
@@ -232,3 +271,5 @@ export async function runClassificationWorkerBatch(requestedLimit = CLASSIFICATI
     }).catch((error) => console.error("Unable to release Street classification worker lease", error));
   }
 }
+
+export { classifyOne as classifyQueuedProduct };
