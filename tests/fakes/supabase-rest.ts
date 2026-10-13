@@ -113,7 +113,8 @@ export async function supabaseRest<T>(path: string, options: { method?: string; 
     const inputs: Row[] = Array.isArray(options.body) ? options.body : [options.body];
     const saved: Row[] = [];
     for (const input of inputs) {
-      const existing = conflict && merge ? rows.find((row) => row[conflict] === input[conflict]) : undefined;
+      const keys = conflict ? conflict.split(",") : [];
+      const existing = keys.length && merge ? rows.find((row) => keys.every((key) => row[key] === input[key])) : undefined;
       if (existing) { Object.assign(existing, input); saved.push(existing); continue; }
       const row = { ...(DEFAULTS[table]?.() ?? {}), ...input };
       checkUnique(table, rows, row);

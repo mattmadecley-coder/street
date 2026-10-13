@@ -8,6 +8,7 @@ import { actorOf, requirePermission } from "@/lib/admin-guard";
 import { recordAudit } from "@/lib/audit";
 import { safeAdminPath } from "@/lib/safe-redirect";
 import { trashSupported } from "@/lib/trash";
+import { loadSavedFilters, saveSavedFilters, withSavedFilter, withoutSavedFilter, FILTER_PARAM_KEYS } from "@/lib/saved-filters";
 import { BULK_LABELS, isBulkIntent, parseBulkIds, runBulk } from "@/lib/product-bulk";
 
 type ProductSummary = { title: string; brands: { name: string } | null };
@@ -172,4 +173,37 @@ export async function bulkProductAction(formData: FormData) {
   });
   refresh();
   redirect(`${returnTo}${join}bulk=${intent}:${result.changed}:${result.skipped}`);
+}
+
+/** Saves the current product list filters under a name so they can be reopened with one click. */
+export async function saveFilterViewAction(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
+  const returnTo = safeAdminPath(formData.get("return_to"), "/admin/products");
+  const params: Record<string, string> = {};
+  for (const key of FILTER_PARAM_KEYS) params[key] = String(formData.get(`p_${key}`) ?? "");
+  const joiner = returnTo.includes("?") ? "&" : "?";
+  try {
+    const { filters, available } = await loadSavedFilters();
+    if (!available) throw new Error("Saved views switch on after the admin storage migration is applied.");
+    const name = String(formData.get("name") ?? "");
+    await saveSavedFilters(withSavedFilter(filters, { name, params, createdBy: actor.email ?? actor.name ?? "" }));
+    await recordAudit(actorOf(actor), { action: "product.view_save", summary: `Saved the product view "${name.slice(0, 60)}"`, targetType: "saved_view" });
+  } catch (error) {
+    redirect(`${returnTo}${joiner}view=${encodeURIComponent(error instanceof Error ? error.message : "Could not save the view.")}`);
+  }
+  revalidatePath("/admin/products");
+  redirect(`${returnTo}${joiner}view=saved`);
+}
+
+export async function deleteFilterViewAction(formData: FormData) {
+  const actor = await requirePermission("catalog.write");
+  const returnTo = safeAdminPath(formData.get("return_to"), "/admin/products");
+  const id = String(formData.get("id") ?? "");
+  const { filters, available } = await loadSavedFilters();
+  if (available && filters.some((entry) => entry.id === id)) {
+    await saveSavedFilters(withoutSavedFilter(filters, id));
+    await recordAudit(actorOf(actor), { action: "product.view_delete", summary: "Deleted a saved product view", targetType: "saved_view", targetId: id });
+  }
+  revalidatePath("/admin/products");
+  redirect(returnTo);
 }

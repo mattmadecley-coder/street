@@ -5,7 +5,7 @@ import { AnalyticsControls } from "@/components/admin/analytics-controls";
 import { AnalyticsOverviewChart } from "@/components/admin/analytics-overview-chart";
 import { getAnalyticsRows, type SiteEventRow, type OutboundClickRow } from "@/lib/analytics";
 import { analyzeAudience, buildAnalyticsTrend, buildReturningTrend, summarizePurchaseIntent } from "@/lib/analytics-audience";
-import { cacheFriendlySinceMs, timeZoneLabel } from "@/lib/date-range";
+import { cacheFriendlySinceMs, timeZoneLabel, ymdToInputValue, easternYmdOf } from "@/lib/date-range";
 import { getAdminRange } from "@/lib/admin-range";
 import { buildWindowStats, inWindow } from "@/lib/analytics-metrics";
 import { describeChange, describeFractionChange, lowerIsBetter } from "@/lib/analytics-change";
@@ -15,6 +15,7 @@ import { loadAnnotations } from "@/lib/analytics-annotations";
 import { addAnnotationAction, deleteAnnotationAction } from "./actions";
 import { InfoTip } from "@/components/admin/info-tip";
 import { requireUser } from "@/lib/admin-guard";
+import { fillTrendFromSnapshots, loadDailySnapshots } from "@/lib/analytics-daily";
 import { RetentionChart } from "@/components/admin/retention-chart";
 
 export const dynamic = "force-dynamic";
@@ -314,7 +315,16 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
   }
   const checkoutByBrand = topCounts(checkoutClickEvents.map((event) => event.brand_slug), 12);
   const addToCartByBrand = topCounts(addToCartEvents.map((event) => event.brand_slug), 12);
-  const trend = buildAnalyticsTrend(rawEvents, rawOutboundClicks, { startMs: rangeInfo.startMs, endMs: rangeInfo.endMs, hourly: rangeInfo.hourly }, audience.likelyHumanIds, rangeInfo.timeZone);
+  let trend = buildAnalyticsTrend(rawEvents, rawOutboundClicks, { startMs: rangeInfo.startMs, endMs: rangeInfo.endMs, hourly: rangeInfo.hourly }, audience.likelyHumanIds, rangeInfo.timeZone);
+  let trendFromRollups = 0;
+  if (truncated && !rangeInfo.hourly && allEvents.length) {
+    // More traffic than we can load: days before the oldest loaded event come from the daily roll-ups.
+    const oldestLoadedMs = allEvents.reduce((min, event) => Math.min(min, Date.parse(event.created_at)), Number.POSITIVE_INFINITY);
+    const rollups = await loadDailySnapshots(rangeInfo.timeZone, ymdToInputValue(easternYmdOf(rangeInfo.startMs, rangeInfo.timeZone)), ymdToInputValue(easternYmdOf(rangeInfo.endMs - 1, rangeInfo.timeZone)));
+    const filled = fillTrendFromSnapshots(trend, rollups.snapshots, Number.isFinite(oldestLoadedMs) ? oldestLoadedMs : null, rangeInfo.timeZone);
+    trend = filled.points;
+    trendFromRollups = filled.filled;
+  }
   const compareChange = (pick: (value: typeof stats) => number) => (compareStats ? describeChange(pick(stats), pick(compareStats)) : undefined);
   const topSources = topCounts(events.filter((event) => event.event_type === "page_view").map(sourceLabel), 12);
   const topSearches = topCounts(searches.map((event) => event.query?.toLowerCase().trim()), 12);
@@ -363,7 +373,7 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
         {rangeInfo.label} · {rangeInfo.startDateInput === rangeInfo.endDateInput ? rangeInfo.startDateInput : `${rangeInfo.startDateInput} to ${rangeInfo.endDateInput}`} · {timeZoneLabel(rangeInfo.timeZone)}
         {rangeInfo.compare ? ` · vs ${rangeInfo.compare.label}` : ""}. Change the range with the date picker in the top bar.
       </p>
-      {truncated ? <Banner tone="warn">There is more traffic than the dashboard can load at once, so the oldest events are left out and totals for long ranges may be low. Pick a shorter range for exact numbers.</Banner> : null}
+      {truncated ? <Banner tone="warn">There is more traffic than the dashboard can load at once, so the oldest events are left out and totals for long ranges may be low. {trendFromRollups ? `The day-by-day chart uses the daily summaries for ${trendFromRollups} older day${trendFromRollups === 1 ? "" : "s"}, so it is complete. ` : ""}Pick a shorter range for exact numbers.</Banner> : null}
 
       <div className="u-mt-14"><AnalyticsControls range={rangeInfo.key} start={rangeInfo.startDateInput} end={rangeInfo.endDateInput} /></div>
 

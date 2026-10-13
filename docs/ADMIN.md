@@ -16,6 +16,9 @@ roll changes out safely, and what to do when something goes wrong.
 | Accounts | `lib/admin-guard.ts`, `lib/admin-users.ts`, `lib/admin-permissions.ts` | Personal logins, roles, two-step sign-in, revocable sessions |
 | Audit log | `lib/audit.ts`, `/admin/activity` | Who did what and when. Append-only |
 | Trash | `lib/trash.ts` | Deleting a product hides it and keeps it recoverable |
+| Saved views | `lib/saved-filters.ts`, `/admin/products` | Name a set of product filters (brand, status, group, availability, price) and reopen it in one click |
+| Smart collections | `lib/smart-collections.ts`, `lib/product-criteria.ts` | A collection can fill itself from rules (brands, category, tags, price, availability, newness, markdowns). Synced when saved and every morning |
+| Daily roll-ups | `lib/analytics-daily.ts`, `/api/cron/daily` | One row per day of headline numbers, so long ranges keep a complete day-by-day chart |
 
 ## Rules that keep the numbers trustworthy
 
@@ -24,7 +27,7 @@ roll changes out safely, and what to do when something goes wrong.
 - "Today" is compared with yesterday **up to the same time**. A range that includes today is compared with an equally long slice of the earlier period.
 - Repeat clicks by the same visitor on the same thing within 30 minutes count once.
 - "No prior data" is shown instead of a made-up +100% when there is nothing to compare with.
-- The raw-event loader holds at most 50,000 rows. If a range is bigger, a yellow banner says the oldest events were left out. The proper fix is SQL roll-ups (see "Later work").
+- The raw-event loader holds at most 50,000 rows. If a range is bigger, a yellow banner says the oldest events were left out. The day-by-day chart then fills those older days from the daily roll-ups (once the roll-up migration is applied and the daily job has run). Range totals such as unique visitors are still computed from loaded events, so use a shorter range for exact totals.
 
 ## Database changes (migrations)
 
@@ -32,6 +35,7 @@ roll changes out safely, and what to do when something goes wrong.
 |---|---|---|
 | `supabase/migrations/20261014_admin_state.sql` | `admin_state` table (service role only) | Editable alert thresholds, acknowledge/snooze, chart notes, alert digest memory, brand permission records, homepage history |
 | `supabase/migrations/20261015_admin_accounts.sql` | `admin_users`, `admin_sessions`, `audit_log`; `deleted_at` on products and brands | Personal accounts, activity log, product trash |
+| `supabase/migrations/20261016_analytics_daily.sql` | `analytics_daily` (service role only) | Daily roll-ups. Applied to staging; production pending sign-off |
 
 **Applied on 2026-10-13**, first to a staging database, then to production. Both are safe to run again.
 The admin degrades gracefully if a table is missing: each feature shows a "switches on after the migration" note.
@@ -89,8 +93,8 @@ CI runs both on every pull request (`.github/workflows/ci.yml`). Tests use an in
 
 ## Later work (not built yet)
 
-- SQL roll-ups so analytics no longer load raw rows (removes the 50,000-row limit). Needs a staged migration.
+- Making range totals (unique visitors, bounce) independent of raw rows. Roll-ups today cover the daily chart only, because unique counts cannot be added across days.
 - A fully separate staging deployment of the app (the staging database exists; the app is still only run locally against it).
 - Uptime monitoring, database backups with a tested restore, a real job queue for scheduled work.
-- Smart (rule-based) collections, saved product filters, brand bounce/unsubscribe stats.
+- Brand bounce/unsubscribe stats.
 - Moving secrets out of local notes into a secrets manager, and rotating the ones that have lived in plaintext.

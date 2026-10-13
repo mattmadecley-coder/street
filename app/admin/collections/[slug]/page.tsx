@@ -8,16 +8,32 @@ import { getCollectionBySlug, searchProductsForPicker } from "@/lib/collections-
 import { updateCollectionAction, deleteCollectionAction, addProductAction } from "../actions";
 import { CollectionProductList } from "@/components/admin/collection-product-list";
 import { requireUser } from "@/lib/admin-guard";
+import { SmartRulesForm } from "@/components/admin/smart-rules-form";
+import { Banner } from "@/components/admin/ui";
+import { loadSmartRules } from "@/lib/smart-collections";
+import { getAllBrands } from "@/lib/catalog-store";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminCollectionEditPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ saved?: string; q?: string }> }) {
+function smartMessage(value: string | undefined): { tone: "success" | "info" | "warn"; text: string } | null {
+  if (!value) return null;
+  if (value === "saved") return { tone: "success", text: "Rules saved. Automatic updates are off." };
+  if (value === "unavailable") return { tone: "warn", text: "Automatic collections need the admin storage migration first." };
+  const synced = /^synced:(\d+):(\d+):(\d+)$/.exec(value);
+  if (synced) return { tone: "success", text: `Updated from the rules: ${synced[1]} added, ${synced[2]} removed, ${synced[3]} products in total.` };
+  return { tone: "warn", text: value.slice(0, 200) };
+}
+
+export default async function AdminCollectionEditPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ saved?: string; q?: string; smart?: string }> }) {
   await requireUser();
   const { slug } = await params;
-  const { saved, q } = await searchParams;
+  const { saved, q, smart } = await searchParams;
   const collection = await getCollectionBySlug(slug);
   if (!collection) return notFound();
 
+  const [{ rules: smartRules, available: smartAvailable }, allBrands] = await Promise.all([loadSmartRules(), getAllBrands()]);
+  const smartOn = Boolean(smartRules[collection.id]?.enabled);
+  const smartNotice = smartMessage(smart);
   const searchResults = q?.trim() ? await searchProductsForPicker(q, 12) : [];
   const inCollectionIds = new Set(collection.products.map((product) => product.id.slice(product.brandSlug.length + 1)));
 
@@ -30,6 +46,7 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
         </div>
       </div>
 
+      {smartNotice ? <Banner tone={smartNotice.tone}>{smartNotice.text}</Banner> : null}
       <div className={`${styles.section} u-mt-0`}>
         <div className={styles.sectionHead}><h2>Details</h2></div>
         <form action={updateCollectionAction} className={styles.form}>
@@ -67,6 +84,12 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
         </form>
       </div>
 
+      <div className={styles.section}>
+        <div className={styles.sectionHead}><h2>Automatic rules</h2></div>
+        <SmartRulesForm collectionId={collection.id} slug={collection.slug} rules={smartRules[collection.id]} brands={allBrands.map((brand) => ({ slug: brand.slug, name: brand.name }))} available={smartAvailable} />
+      </div>
+
+      {smartOn ? null : (
       <div className={styles.section}>
         <div className={styles.sectionHead}><h2>Add products</h2></div>
         <form action={`/admin/collections/${collection.slug}`} className={styles.searchBar}>
@@ -108,6 +131,7 @@ export default async function AdminCollectionEditPage({ params, searchParams }: 
           )
         ) : null}
       </div>
+      )}
 
       <ScrollMemory>
       <div className={styles.section}>

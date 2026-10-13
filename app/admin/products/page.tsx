@@ -12,6 +12,9 @@ import { trashSupported, TRASH_RETENTION_DAYS } from "@/lib/trash";
 import { Banner } from "@/components/admin/ui";
 import { BulkBar, BULK_FORM_ID } from "@/components/admin/bulk-bar";
 import { requireUser } from "@/lib/admin-guard";
+import { loadSavedFilters, filterHref, cleanFilterParams } from "@/lib/saved-filters";
+import { STREET_TAXONOMY } from "@/lib/street-taxonomy";
+import { saveFilterViewAction, deleteFilterViewAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +46,9 @@ const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
 ];
 
-function productsPath(q: string | undefined, status: string, brandSlug: string | undefined, trashOn: boolean) {
+type ExtraFilters = { group?: string; stock?: string; min?: string; max?: string };
+
+function productsPath(q: string | undefined, status: string, brandSlug: string | undefined, trashOn: boolean, extra: ExtraFilters = {}) {
   const params = new URLSearchParams();
   params.set("select", "id,title,price,primary_image_url,street_group,street_category,street_type,street_detail,street_activity,street_tags,classification_status,classification_pass,is_hidden,stock_status,brands!inner(slug,name)");
   params.set("is_active", "eq.true");
@@ -55,12 +60,18 @@ function productsPath(q: string | undefined, status: string, brandSlug: string |
   }
   if (q?.trim()) params.set("title", `ilike.*${q.trim().replace(/[%,()]/g, " ")}*`);
   if (brandSlug) params.set("brands.slug", `eq.${brandSlug}`);
+  if (extra.group && extra.group in STREET_TAXONOMY) params.set("street_group", `eq.${extra.group}`);
+  if (extra.stock === "in_stock" || extra.stock === "sold_out") params.set("stock_status", `eq.${extra.stock}`);
+  const priceFilters: string[] = [];
+  if (extra.min && Number.isFinite(Number(extra.min)) && Number(extra.min) >= 0) priceFilters.push(`price.gte.${Number(extra.min)}`);
+  if (extra.max && Number.isFinite(Number(extra.max)) && Number(extra.max) >= 0) priceFilters.push(`price.lte.${Number(extra.max)}`);
+  if (priceFilters.length) params.set("and", `(${priceFilters.join(",")})`);
   return `products?${params.toString()}`;
 }
 
 /** Paginated instead of a flat 30-row cap — the review queue can run well past 30 items, and the old version made everything past the newest 30 invisible with no way to page to it. */
-async function searchProducts(q: string | undefined, status: string, brandSlug: string | undefined, requestedPage: number, trashOn: boolean): Promise<{ products: AdminProductRow[]; total: number; page: number }> {
-  const path = productsPath(q, status, brandSlug, trashOn);
+async function searchProducts(q: string | undefined, status: string, brandSlug: string | undefined, requestedPage: number, trashOn: boolean, extra: ExtraFilters): Promise<{ products: AdminProductRow[]; total: number; page: number }> {
+  const path = productsPath(q, status, brandSlug, trashOn, extra);
   try {
     let page = requestedPage;
     let from = (page - 1) * PAGE_SIZE;
@@ -78,27 +89,33 @@ async function searchProducts(q: string | undefined, status: string, brandSlug: 
   }
 }
 
-function productsHref(q: string | undefined, status: string, brandSlug: string | undefined, page: number) {
+function productsHref(q: string | undefined, status: string, brandSlug: string | undefined, page: number, extra: ExtraFilters = {}) {
   const search = new URLSearchParams();
   search.set("status", status);
+  if (extra.group) search.set("group", extra.group);
+  if (extra.stock) search.set("stock", extra.stock);
+  if (extra.min) search.set("min", extra.min);
+  if (extra.max) search.set("max", extra.max);
   if (brandSlug) search.set("brand", brandSlug);
   if (q) search.set("q", q);
   if (page > 1) search.set("page", String(page));
   return `/admin/products?${search.toString()}`;
 }
 
-export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; brand?: string; saved?: string; page?: string; bulkError?: string }> }) {
+export default async function AdminProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; brand?: string; saved?: string; page?: string; bulkError?: string; group?: string; stock?: string; min?: string; max?: string; view?: string }> }) {
   const principal = await requireUser();
   const trashOn = await trashSupported();
   const canWrite = can(principal.role, "catalog.write");
   const canDelete = can(principal.role, "catalog.delete");
   const canPurge = can(principal.role, "catalog.purge");
-  const { q, status: statusParam, brand: brandParam, saved, page: pageParam, bulkError } = await searchParams;
+  const { q, status: statusParam, brand: brandParam, saved, page: pageParam, bulkError, group: groupParam, stock: stockParam, min: minParam, max: maxParam, view } = await searchParams;
+  const extra: ExtraFilters = { group: groupParam, stock: stockParam, min: minParam, max: maxParam };
   const status = statusParam ?? "needs_review";
   const requestedPage = Math.max(1, Math.floor(Number(pageParam) || 1));
-  const [{ products, total, page: currentPage }, brands] = await Promise.all([searchProducts(q, status, brandParam, requestedPage, trashOn), getAllBrands()]);
+  const [{ products, total, page: currentPage }, brands, savedViews] = await Promise.all([searchProducts(q, status, brandParam, requestedPage, trashOn, extra), getAllBrands(), loadSavedFilters()]);
+  const currentParams = cleanFilterParams({ status: status === "needs_review" ? "" : status, brand: brandParam, q, group: groupParam, stock: stockParam, min: minParam, max: maxParam });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const returnTo = productsHref(q, status, brandParam, currentPage);
+  const returnTo = productsHref(q, status, brandParam, currentPage, extra);
 
   return (
     <div>
@@ -116,8 +133,45 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
         <select name="status" defaultValue={status}>
           {(trashOn ? [...STATUS_OPTIONS, { value: "trash", label: "Trash" }] : STATUS_OPTIONS).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
+        <select name="group" defaultValue={groupParam ?? ""} aria-label="Group">
+          <option value="">Any group</option>
+          {Object.keys(STREET_TAXONOMY).map((group) => <option key={group} value={group}>{group}</option>)}
+        </select>
+        <select name="stock" defaultValue={stockParam ?? ""} aria-label="Availability">
+          <option value="">Any availability</option>
+          <option value="in_stock">In stock</option>
+          <option value="sold_out">Sold out</option>
+        </select>
+        <input type="number" name="min" min="0" step="0.01" defaultValue={minParam ?? ""} placeholder="Min $" aria-label="Lowest price" style={{ width: 90 }} />
+        <input type="number" name="max" min="0" step="0.01" defaultValue={maxParam ?? ""} placeholder="Max $" aria-label="Highest price" style={{ width: 90 }} />
         <button type="submit">Search</button>
       </form>
+
+      {savedViews.available ? (
+        <div className="u-row" style={{ flexWrap: "wrap", gap: 8, margin: "0 0 14px" }} aria-label="Saved views">
+          {savedViews.filters.map((filter) => (
+            <span key={filter.id} className="u-row" style={{ gap: 4 }}>
+              <Link className={styles.pill} href={filterHref(filter)}>{filter.name}</Link>
+              {canWrite ? (
+                <form action={deleteFilterViewAction}>
+                  <input type="hidden" name="id" value={filter.id} />
+                  <input type="hidden" name="return_to" value={returnTo} />
+                  <button type="submit" className="link-small" aria-label={`Delete saved view ${filter.name}`} title="Delete this view">×</button>
+                </form>
+              ) : null}
+            </span>
+          ))}
+          {canWrite && Object.keys(currentParams).length ? (
+            <form action={saveFilterViewAction} className="u-row" style={{ gap: 6 }}>
+              {Object.entries(currentParams).map(([key, value]) => <input key={key} type="hidden" name={`p_${key}`} value={value} />)}
+              <input type="text" name="name" placeholder="Name this view" maxLength={60} required aria-label="Name for this saved view" />
+              <SubmitButton pendingText="Saving…" className={styles.buttonSecondary}>Save view</SubmitButton>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
+      {view === "saved" ? <Banner tone="success">View saved.</Banner> : null}
+      {view && view !== "saved" && view !== "deleted" ? <p className={styles.noticeError} role="alert">{view}</p> : null}
 
       <p className={`${styles.rowMeta} u-mb-14`}>{total.toLocaleString()} product{total === 1 ? "" : "s"} match — showing {products.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}–{(currentPage - 1) * PAGE_SIZE + products.length} (page {currentPage} of {totalPages}).</p>
 
@@ -218,9 +272,9 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
       </ScrollMemory>
       {totalPages > 1 ? (
         <nav aria-label="Product pages" className={styles.pager}>
-          {currentPage > 1 ? <Link className="link-small" href={productsHref(q, status, brandParam, currentPage - 1)}>← Previous</Link> : <span />}
+          {currentPage > 1 ? <Link className="link-small" href={productsHref(q, status, brandParam, currentPage - 1, extra)}>← Previous</Link> : <span />}
           <span className={styles.rowMeta}>Page {currentPage} of {totalPages}</span>
-          {currentPage < totalPages ? <Link className="link-small" href={productsHref(q, status, brandParam, currentPage + 1)}>Next →</Link> : <span />}
+          {currentPage < totalPages ? <Link className="link-small" href={productsHref(q, status, brandParam, currentPage + 1, extra)}>Next →</Link> : <span />}
         </nav>
       ) : null}
     </div>
