@@ -7,8 +7,11 @@ import { findUserById, listActiveSessions } from "@/lib/admin-users";
 import { otpauthUrl } from "@/lib/admin-totp";
 import { qrSvg } from "@/lib/admin-qr";
 import { ROLE_LABELS, requiresTwoFactor } from "@/lib/admin-permissions";
-import { changePassword, confirmTotpSetup, disableTotp, signOutDevice, signOutOtherDevices, startTotpSetup } from "./actions";
+import { createAiTokenAction, revokeAiTokenAction, changePassword, confirmTotpSetup, disableTotp, signOutDevice, signOutOtherDevices, startTotpSetup } from "./actions";
 import { redirect } from "next/navigation";
+import { listTokens, tokensAvailable, MAX_TOKEN_DAYS } from "@/lib/mcp-tokens";
+import { takeOneTimeSecret } from "@/lib/one-time-secrets";
+import { can } from "@/lib/admin-permissions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Your account" };
@@ -20,8 +23,8 @@ function shortAgent(agent: string | null) {
   return os ? `${browser} on ${os}` : browser;
 }
 
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; aitoken?: string }> }) {
+  const { error, aitoken } = await searchParams;
   const principal = await getPrincipal();
   if (!principal) redirect("/admin/login?next=%2Fadmin%2Faccount");
 
@@ -39,6 +42,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const sessions = await listActiveSessions(user.id).catch(() => []);
   const pendingSecret = !user.totp_enabled ? user.totp_secret : null;
   const mustTwoFactor = requiresTwoFactor(user.role);
+  const newToken = takeOneTimeSecret(aitoken);
+  const [tokens, tokensOn] = await Promise.all([listTokens(user.id), tokensAvailable()]);
+  const canSendEmail = can(user.role, "email.send");
+  const mcpUrl = "https://streetdotcom.com/api/mcp";
   const setupUrl = pendingSecret ? otpauthUrl(pendingSecret, user.email) : null;
   const qr = setupUrl ? await qrSvg(setupUrl) : null;
 
@@ -93,6 +100,56 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           </div>
         ) : (
           <form action={startTotpSetup}><SubmitButton pendingText="Starting…" className={styles.button}>Set up two-step sign-in</SubmitButton></form>
+        )}
+      </section>
+
+      <section className={styles.section} id="ai-access">
+        <div className={styles.sectionHead}><div><h2>AI access</h2><p className={styles.rowMeta}>Let an AI assistant (Claude, ChatGPT and others that support MCP) work in the admin as you. It can build segments, email templates and campaign drafts. It can never do more than your role allows, and it cannot email customers unless you turn that on for the token.</p></div></div>
+        {!tokensOn ? <Banner tone="warn">AI access switches on after the admin tokens migration is applied (see docs/ADMIN.md).</Banner> : (
+          <>
+            {newToken ? (
+              <Banner tone="success">
+                <strong>Your new token</strong> (copy it now; it is shown only once):
+                <code className="adm-secret" style={{ display: "block", margin: "8px 0", wordBreak: "break-all" }}>{newToken}</code>
+                Treat it like a password. Anyone with it can act as you in the email tools until it expires or you revoke it.
+                <details style={{ marginTop: 10 }}>
+                  <summary>How to connect it</summary>
+                  <p className={styles.rowMeta}><strong>Claude Code:</strong></p>
+                  <code className="adm-secret" style={{ display: "block", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{`claude mcp add --transport http street-admin ${mcpUrl} --header "Authorization: Bearer ${newToken}"`}</code>
+                  <p className={styles.rowMeta}><strong>Claude Desktop</strong> (settings file, needs Node installed):</p>
+                  <code className="adm-secret" style={{ display: "block", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{`{"mcpServers":{"street-admin":{"command":"npx","args":["-y","mcp-remote","${mcpUrl}","--header","Authorization:${'$'}{AUTH}"],"env":{"AUTH":"Bearer ${newToken}"}}}}`}</code>
+                  <p className={styles.rowMeta}>Server address for any other MCP client: <code>{mcpUrl}</code> with the header <code>Authorization: Bearer your-token</code>. Then ask the assistant to call <code>email_guide</code> first.</p>
+                </details>
+              </Banner>
+            ) : null}
+            <form action={createAiTokenAction} className={styles.form}>
+              <div className={styles.field}><label htmlFor="ai-name">Name</label><input id="ai-name" name="name" type="text" maxLength={60} placeholder="e.g. Claude on my laptop" required /></div>
+              <div className={styles.field}><label htmlFor="ai-days">Expires after</label><select id="ai-days" name="days" defaultValue="90"><option value="30">30 days</option><option value="90">90 days</option><option value={MAX_TOKEN_DAYS}>1 year</option></select></div>
+              {canSendEmail ? <label className={styles.checkboxField}><input type="checkbox" name="can_send" /> Allow this token to schedule and send campaigns to customers (leave off unless you need it; the assistant still must be told to send)</label> : null}
+              <div className={styles.field}><label htmlFor="ai-password">Your password</label><input id="ai-password" name="password" type="password" autoComplete="current-password" required /></div>
+              <SubmitButton pendingText="Creating…" className={styles.button}>Create token</SubmitButton>
+            </form>
+            {tokens.length ? (
+              <table className={styles.table} style={{ marginTop: 14 }}>
+                <thead><tr><th scope="col">Name</th><th scope="col">Token</th><th scope="col">Can send</th><th scope="col">Last used</th><th scope="col">Expires</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                  {tokens.map((token) => {
+                    const inactive = Boolean(token.revoked_at) || Date.parse(token.expires_at) <= Date.now();
+                    return (
+                      <tr key={token.id} style={inactive ? { opacity: 0.55 } : undefined}>
+                        <th scope="row">{token.name}{token.revoked_at ? " (revoked)" : inactive ? " (expired)" : ""}</th>
+                        <td><code>{token.token_prefix}…</code></td>
+                        <td>{token.can_send ? "Yes" : "No"}</td>
+                        <td>{token.last_used_at ? new Date(token.last_used_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Never"}</td>
+                        <td>{new Date(token.expires_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
+                        <td>{inactive ? null : <form action={revokeAiTokenAction}><input type="hidden" name="token_id" value={token.id} /><ConfirmSubmitButton confirmTitle="Revoke this token?" confirmText="Any assistant using it stops working immediately." confirmLabel="Revoke" danger className={styles.buttonSecondary}>Revoke</ConfirmSubmitButton></form>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : null}
+          </>
         )}
       </section>
 

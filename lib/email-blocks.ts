@@ -370,3 +370,51 @@ export function renderEmail(template: EmailTemplateData, ctx: RenderContext): { 
   textParts.push(`Unsubscribe: ${unsubscribe}`);
   return { html, text: textParts.join("\n\n"), subject: applyMergeTags(template.subject, values) };
 }
+
+// ---------------------------------------------------------------------------
+// Strict checking for API callers (the MCP server)
+
+const URL_FIELDS: Record<string, string[]> = {
+  logo: ["imageUrl", "linkUrl"], image: ["url", "linkUrl"], button: ["url"], feature: ["imageUrl", "buttonUrl"],
+};
+
+/**
+ * Unlike cleanTemplate, which quietly repairs input for the editor, this lists every problem so an AI
+ * caller can fix its request instead of silently getting a different email than it asked for.
+ */
+export function findTemplateProblems(input: unknown): string[] {
+  const problems: string[] = [];
+  const raw = (typeof input === "object" && input ? input : {}) as Record<string, unknown>;
+  if (raw.blocks !== undefined && !Array.isArray(raw.blocks)) problems.push("blocks must be an array.");
+  const blocks = Array.isArray(raw.blocks) ? raw.blocks : [];
+  if (blocks.length > MAX_BLOCKS) problems.push(`An email can have at most ${MAX_BLOCKS} blocks (got ${blocks.length}).`);
+  const known = new Set(BLOCK_TYPES.map((entry) => entry.type));
+  blocks.slice(0, MAX_BLOCKS).forEach((item, index) => {
+    const where = `blocks[${index}]`;
+    if (typeof item !== "object" || !item) { problems.push(`${where} must be an object.`); return; }
+    const block = item as Record<string, unknown>;
+    if (typeof block.type !== "string" || !known.has(block.type as BlockType)) { problems.push(`${where}.type must be one of: ${[...known].join(", ")}.`); return; }
+    for (const field of URL_FIELDS[block.type] ?? []) {
+      const value = block[field];
+      if (typeof value === "string" && value.trim() && !cleanUrl(value)) problems.push(`${where}.${field} is not a valid link. Use https://… (or {{site_url}}).`);
+    }
+    if ((block.type === "image" || block.type === "feature" || block.type === "logo") && typeof (block.url ?? block.imageUrl) === "string") {
+      const value = String(block.url ?? block.imageUrl);
+      if (value.trim() && !/^https?:\/\//i.test(value.trim()) && !URL_TAG.test(value.trim())) problems.push(`${where} image URLs must start with http:// or https://.`);
+    }
+    if (block.type === "products" && typeof block.criteria === "object" && block.criteria) {
+      const cleaned = cleanBlock({ ...block, id: "x" })?.type === "products" ? (cleanBlock({ ...block, id: "x" }) as Extract<EmailBlock, { type: "products" }>).criteria : {};
+      for (const key of Object.keys(block.criteria as object)) if (!(key in cleaned)) problems.push(`${where}.criteria.${key} was not understood or has an invalid value.`);
+    }
+  });
+  const design = raw.design;
+  if (typeof design === "object" && design) {
+    for (const key of ["background", "contentBackground", "textColor", "accent"]) {
+      const value = (design as Record<string, unknown>)[key];
+      if (value !== undefined && !(typeof value === "string" && HEX.test(value))) problems.push(`design.${key} must be a #rrggbb colour.`);
+    }
+    const font = (design as Record<string, unknown>).font;
+    if (font !== undefined && !(typeof font === "string" && font in FONTS)) problems.push(`design.font must be one of: ${Object.keys(FONTS).join(", ")}.`);
+  }
+  return problems;
+}

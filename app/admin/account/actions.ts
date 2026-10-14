@@ -8,6 +8,9 @@ import { hashPassword, passwordProblem, verifyPassword } from "@/lib/admin-passw
 import { generateTotpSecret, verifyTotp } from "@/lib/admin-totp";
 import { requiresTwoFactor } from "@/lib/admin-permissions";
 import { recordAudit } from "@/lib/audit";
+import { createToken, revokeToken } from "@/lib/mcp-tokens";
+import { stashOneTimeSecret } from "@/lib/one-time-secrets";
+import { can } from "@/lib/admin-permissions";
 
 function fail(message: string, hash = ""): never {
   redirect(`/admin/account?error=${encodeURIComponent(message)}${hash}`);
@@ -87,4 +90,29 @@ export async function signOutDevice(formData: FormData) {
   await revokeSession(id);
   await recordAudit(actorOf(principal), { action: "account.session_revoked", targetType: "user", targetId: user.id, summary: "Signed out one device" });
   redirect("/admin/account?saved=1#sessions");
+}
+
+/** Creates an access token for AI assistants. Needs the current password again, like changing a password would. */
+export async function createAiTokenAction(formData: FormData) {
+  const { principal, user } = await currentUser();
+  if (!(await verifyPassword(String(formData.get("password") ?? ""), user.password_hash))) fail("Your password is not right.", "#ai-access");
+  const wantsSend = formData.get("can_send") === "on";
+  if (wantsSend && !can(user.role, "email.send")) fail("Your role cannot send email, so a token for you cannot either.", "#ai-access");
+  let created: { token: string };
+  try {
+    created = await createToken({ userId: user.id, name: formData.get("name"), canSend: wantsSend, days: formData.get("days") });
+  } catch (error) {
+    fail(error instanceof Error ? error.message : "Could not create the token.", "#ai-access");
+  }
+  await recordAudit(actorOf(principal), { action: "account.ai_token_create", targetType: "user", targetId: user.id, summary: `Created an AI access token "${String(formData.get("name") ?? "").slice(0, 60)}"${wantsSend ? " that can send email" : ""}`, details: { canSend: wantsSend } });
+  revalidatePath("/admin/account");
+  redirect(`/admin/account?aitoken=${stashOneTimeSecret(created!.token)}#ai-access`);
+}
+
+export async function revokeAiTokenAction(formData: FormData) {
+  const { principal, user } = await currentUser();
+  const revoked = await revokeToken(user.id, String(formData.get("token_id") ?? ""));
+  if (revoked) await recordAudit(actorOf(principal), { action: "account.ai_token_revoke", targetType: "user", targetId: user.id, summary: "Revoked an AI access token" });
+  revalidatePath("/admin/account");
+  redirect("/admin/account?saved=1#ai-access");
 }

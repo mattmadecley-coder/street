@@ -10,6 +10,8 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier === "@/lib/supabase-rest") {
     return nextResolve(pathToFileURL(path.join(root, "tests", "fakes", "supabase-rest.ts")).href, context);
   }
+  // Next ships CommonJS entry points without file extensions, which Node's ESM resolver will not guess.
+  if (["next/server", "next/headers", "next/cache", "next/navigation"].includes(specifier)) return nextResolve(`${specifier}.js`, context);
   if (specifier.startsWith("@/")) {
     const base = path.join(root, specifier.slice(2));
     const candidates = [`${base}.ts`, `${base}.tsx`, path.join(base, "index.ts"), path.join(base, "index.tsx"), base];

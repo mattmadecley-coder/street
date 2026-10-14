@@ -21,6 +21,7 @@ roll changes out safely, and what to do when something goes wrong.
 | Email segments | `lib/email-segments-core.ts`, `/admin/email/segments` | Saved rules over customers (signup date, opens, clicks, tags, source, phone). Live audience count. Only subscribed people are ever counted as emailable |
 | Email templates | `lib/email-blocks.ts`, `/admin/email/templates` | Block-based email layouts (header, text, image, button, image+text, product grid) with drag-and-drop editor, live preview and starter templates. The unsubscribe footer is always added |
 | Email campaigns | `lib/email-send.ts`, `lib/email-campaigns.ts`, `/admin/email/campaigns` | One-off sends to a segment: test send, send now or schedule, per-recipient results (delivered, opened, clicked, bounced, unsubscribed). Sent from `mail.streetdotcom.com` through Resend with one-click unsubscribe headers |
+| AI access (MCP) | `lib/mcp/`, `lib/mcp-tokens.ts`, `/api/mcp`, Your account → AI access | Lets Claude, ChatGPT and other MCP clients build segments, templates and campaign drafts as the person who made the token. Draft-only unless the token was created with sending enabled |
 | Daily roll-ups | `lib/analytics-daily.ts`, `/api/cron/daily` | One row per day of headline numbers, so long ranges keep a complete day-by-day chart |
 
 ## Rules that keep the numbers trustworthy
@@ -41,6 +42,7 @@ roll changes out safely, and what to do when something goes wrong.
 | `supabase/migrations/20261016_analytics_daily.sql` | `analytics_daily` (service role only) | Daily roll-ups. Applied to production 2026-10-13 |
 | `supabase/migrations/20261017_email_platform.sql` | `email_segments`, `email_templates` (service role only) | Email segments and templates. Applied to production 2026-10-13 |
 | `supabase/migrations/20261018_email_campaigns.sql` | `email_campaigns`, `email_campaign_sends` (service role only) | Email campaigns. Applied to staging; production pending sign-off |
+| `supabase/migrations/20261019_admin_api_tokens.sql` | `admin_api_tokens` (service role only) | AI access tokens. Applied to staging; production pending sign-off |
 
 **Applied on 2026-10-13**, first to a staging database, then to production. Both are safe to run again.
 The admin degrades gracefully if a table is missing: each feature shows a "switches on after the migration" note.
@@ -65,6 +67,17 @@ The admin degrades gracefully if a table is missing: each feature shows a "switc
 - The job `/api/cron/email-send` (every 10 minutes from GitHub Actions) starts scheduled campaigns and keeps sends moving. "Send now" starts immediately in the background.
 - Required in every email: the mailing address (`BRAND_REPORTS_MAILING_ADDRESS`) and an unsubscribe link. Sending is blocked without the address.
 - Results come from the Resend webhook (delivered, opened, clicked, bounced, spam complaint). Open counts are inflated by Apple Mail privacy features, so treat clicks as the more honest signal.
+
+## AI access (MCP)
+
+The admin has an MCP server at `https://streetdotcom.com/api/mcp` so an AI assistant can do email work for you.
+
+- **Tokens:** each person creates their own in *Your account → AI access* (needs their password). The token is shown once; only a hash is stored. It expires (default 90 days) and can be revoked at any time.
+- **Same limits as the person:** a token can never do more than its owner's role. An analyst's token is read-only.
+- **Draft-only by default:** assistants can create segments, templates and campaign *drafts*, preview them, and send a test to the token owner. Scheduling or sending to customers needs a token created with *Allow sending*, a role that can send, and an exact audience-size confirmation on every send. There are no delete tools.
+- **Everything is audited:** the Activity log records `owner@… via MCP token “name”` for every change.
+- **Connecting:** Claude Code and Claude Desktop use the token directly (the account page shows the exact command). claude.ai and ChatGPT web connectors need a sign-in flow (OAuth), which is the next piece to build.
+- **Tools:** `email_guide` (call first), `email_overview`, segments (`list/get/preview/create/update`), templates (`list/get/preview/create/update/duplicate`), `search_products`, `list_brands`, campaigns (`list/get/create_campaign_draft/update_campaign_draft/send_test_email`) and, only for send-enabled tokens, `schedule_campaign`, `send_campaign`, `cancel_campaign`.
 
 ## Roles
 

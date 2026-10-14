@@ -48,12 +48,13 @@ const DEFAULTS: Record<string, () => Row> = {
   admin_login_attempts: () => ({ fail_count: 0, locked_until: null, updated_at: new Date().toISOString() }),
   email_contacts: () => ({ id: randomUUID(), token: randomUUID(), phone: null, tags: [], emails_sent: 0, open_count: 0, click_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   email_contact_events: () => ({ id: randomUUID(), created_at: new Date().toISOString() }),
+  admin_api_tokens: () => ({ id: randomUUID(), created_at: new Date().toISOString(), last_used_at: null, revoked_at: null }),
   email_campaigns: () => ({ id: randomUUID(), status: "draft", subject: "", preheader: "", template_id: null, segment_id: null, content: null, segment_definition: null, scheduled_at: null, started_at: null, completed_at: null, canceled_at: null, recipients_total: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   email_campaign_sends: () => ({ id: randomUUID(), status: "queued", attempts: 0, resend_id: null, error: null, sent_at: null, delivered_at: null, first_opened_at: null, open_count: 0, first_clicked_at: null, click_count: 0, bounced_at: null, complained_at: null, last_event: null, last_event_at: null, created_at: new Date().toISOString() }),
   email_segments: () => ({ id: randomUUID(), description: "", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
   email_templates: () => ({ id: randomUUID(), subject: "", preheader: "", design: {}, blocks: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(), archived_at: null }),
 };
-const UNIQUE: Record<string, string[]> = { admin_users: ["email"], admin_state: ["key"], admin_login_attempts: ["ip"], email_segments: ["name"], email_contacts: ["email"] };
+const UNIQUE: Record<string, string[]> = { admin_users: ["email"], admin_state: ["key"], admin_login_attempts: ["ip"], email_segments: ["name"], email_contacts: ["email"], admin_api_tokens: ["token_hash"] };
 
 function parse(path: string) {
   const [table, query = ""] = path.split("?");
