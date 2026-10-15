@@ -22,6 +22,7 @@ roll changes out safely, and what to do when something goes wrong.
 | Email templates | `lib/email-blocks.ts`, `/admin/email/templates` | Block-based email layouts (header, text, image, button, image+text, product grid) with drag-and-drop editor, live preview and starter templates. The unsubscribe footer is always added |
 | Email campaigns | `lib/email-send.ts`, `lib/email-campaigns.ts`, `/admin/email/campaigns` | One-off sends to a segment: test send, send now or schedule, per-recipient results (delivered, opened, clicked, bounced, unsubscribed). Sent from `mail.streetdotcom.com` through Resend with one-click unsubscribe headers |
 | AI access (MCP) | `lib/mcp/`, `lib/mcp-tokens.ts`, `/api/mcp`, Your account → AI access | Lets Claude, ChatGPT and other MCP clients build segments, templates and campaign drafts as the person who made the token. Draft-only unless the token was created with sending enabled |
+| Bot-burst filter | `supabase/migrations/20261021_bot_burst_rules.sql`, `lib/bot-guard.ts`, `/admin/analytics/flagged` | Spots crawler bursts that look like thousands of visitors and leaves them out of analytics. Rows are kept; rules can be released |
 | Daily roll-ups | `lib/analytics-daily.ts`, `/api/cron/daily` | One row per day of headline numbers, so long ranges keep a complete day-by-day chart |
 
 ## Rules that keep the numbers trustworthy
@@ -78,6 +79,10 @@ The admin has an MCP server at `https://streetdotcom.com/api/mcp` so an AI assis
 - **Everything is audited:** the Activity log records `owner@… via MCP token “name”` for every change.
 - **Connecting:** Claude Code and Claude Desktop use the token directly (the account page shows the exact command). claude.ai and ChatGPT web connectors need a sign-in flow (OAuth), which is the next piece to build.
 - **Tools:** `email_guide` (call first), `email_overview`, segments (`list/get/preview/create/update`), templates (`list/get/preview/create/update/duplicate`), `search_products`, `list_brands`, campaigns (`list/get/create_campaign_draft/update_campaign_draft/send_test_email`) and, only for send-enabled tokens, `schedule_campaign`, `send_campaign`, `cancel_campaign`.
+
+## Crawler bursts
+
+Some crawlers run real browsers, rotate their identities and arrive as thousands of one-page "visitors" (2,383 on 2026-10-14, all reporting the Asia/Shanghai time zone and a 1280px screen). A database function, `detect_bot_bursts`, runs every ten minutes from `/api/cron/frequent`. It acts only when one time-zone + screen-width fingerprint is at least 100 visitors in about 90 minutes, at least half of all traffic, mostly without a referrer, desktop-only, across 3 or more browser identities, and nearly unseen in the previous week. It then records a rule, marks matching rows `excluded` (never deleted) and excludes matching new rows on insert. Rules expire after 30 days. The Flagged visitors page lists them with "Count them again" and "Exclude again".
 
 ## Roles
 

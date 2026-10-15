@@ -12,6 +12,7 @@ export const CATALOG_REVALIDATE_SECONDS = 3600;
 
 export function __reset() {
   tables.clear();
+  rpcs.clear();
   identity = 0;
 }
 /** Registers a table (so it "exists") and optionally seeds rows. */
@@ -21,6 +22,9 @@ export function __table(name: string, rows: Row[] = []) {
 export function __rows(name: string): Row[] {
   return (tables.get(name) ?? []).map((row) => ({ ...row }));
 }
+/** Test helper: register a stored procedure (called as rpc/<name>). */
+const rpcs = new Map<string, (body: any) => unknown>();
+export function __rpc(name: string, handler: (body: any) => unknown) { rpcs.set(name, handler); }
 /** Test helper: change rows in place (the rows __rows returns are copies). */
 export function __update(name: string, match: (row: Row) => boolean, patch: Row) {
   for (const row of tables.get(name) ?? []) if (match(row)) Object.assign(row, patch);
@@ -113,8 +117,13 @@ function checkUnique(table: string, rows: Row[], candidate: Row, ignore?: Row) {
   }
 }
 
-export async function supabaseRest<T>(path: string, options: { method?: string; body?: any; prefer?: string } = {}): Promise<T> {
+export async function supabaseRest<T>(path: string, options: { method?: string; body?: any; prefer?: string; noStore?: boolean } = {}): Promise<T> {
   const { table, params } = parse(path);
+  if (table.startsWith("rpc/")) {
+    const handler = rpcs.get(table.slice(4));
+    if (!handler) throw new Error(`Could not find the function public.${table.slice(4)} in the schema cache`);
+    return handler(options.body) as T;
+  }
   const rows = tables.get(table) ?? missing(table);
   const method = options.method ?? "GET";
   const minimal = (options.prefer ?? "").includes("return=minimal");
