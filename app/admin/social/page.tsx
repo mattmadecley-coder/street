@@ -42,7 +42,7 @@ export default async function SocialOverviewPage() {
   }
   const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date())) % 24;
   const ttToday = n(postedMap("tiktok")[today]);
-  if (hour >= 11 && ttToday === 0 && tiktokJob) alerts.push({ level: "bad", text: "TikTok: nothing has been posted yet today." });
+  if (hour >= 11 && ttToday === 0 && tiktokJob && tiktokJob.last_status !== "paused") alerts.push({ level: "bad", text: "TikTok: nothing has been posted yet today." });
   const hooks = (tiktokJob?.details?.hook_photos ?? {}) as Record<string, number>;
   for (const [series, count] of Object.entries(hooks)) if (n(count) < 10) alerts.push({ level: "warn", text: `TikTok "${series}" is down to ${count} hook photos. Add more so hooks don't repeat.` });
   if (jobs.length && queued.pinterest === 0) alerts.push({ level: "warn", text: "Pinterest: no pins are lined up. The 5 AM run schedules the next batch." });

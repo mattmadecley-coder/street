@@ -238,6 +238,7 @@ export function lastNDays(map: Record<string, number>, days = 14): number[] {
 export type Health = "ok" | "warn" | "bad" | "pending";
 export function jobHealth(job: AutomationJob): { level: Health; label: string } {
   const status = (job.last_status ?? "").toLowerCase();
+  if (status === "paused") return { level: "pending", label: "Paused on purpose" };
   if (status === "pending") return { level: "pending", label: "Waiting for first run" };
   if (status === "failed") return { level: "bad", label: "Failed" };
   const exp = (job.expected_every_minutes ?? 0) * 60000;

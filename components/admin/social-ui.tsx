@@ -7,6 +7,7 @@ import {
 
 const TABS: Array<{ href: string; label: string; ch?: Platform }> = [
   { href: "/admin/social", label: "Overview" },
+  { href: "/admin/social/report", label: "Report" },
   { href: "/admin/social/tiktok", label: "TikTok", ch: "tiktok" },
   { href: "/admin/social/instagram", label: "Instagram", ch: "instagram" },
   { href: "/admin/social/pinterest", label: "Pinterest", ch: "pinterest" },
