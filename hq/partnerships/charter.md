@@ -8,7 +8,7 @@ department, because brands are the product.
 
 ## Runs
 
-Daily at 8:35 ET (not yet scheduled — Phase 2).
+Daily at 8:35 ET.
 
 ## Checks every run
 

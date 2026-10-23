@@ -7,7 +7,7 @@ queue, brand name/handle cleanup, homepage curation.
 
 ## Runs
 
-Daily at 8:20 ET (not yet scheduled — Phase 2).
+Daily at 8:20 ET.
 
 ## Checks every run
 
