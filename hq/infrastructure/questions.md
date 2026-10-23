@@ -1,5 +1,18 @@
 # Questions for Matthew
 
+## Assigned by Matthew
+
+- 2026-10-23: Set up separate git worktrees (or standalone clones) per
+  department so department agents stop sharing one checked-out working
+  directory -- this is what caused today's branch-collision and stale
+  `.git/*.lock` incidents (see Product's questions.md for the detail).
+  Matthew has approved doing this; decide worktree vs. clone and roll it
+  out for all departments. (assigned by Matthew, chat)
+- 2026-10-23: Look into the `gh auth status` credential mismatch between
+  the scheduled-run sandbox and an interactive shell on the same machine
+  (your own open question above) -- Matthew wants this actually
+  investigated, not just re-flagged next run. (assigned by Matthew, chat)
+
 ## Open
 
 - **Q:** Separately from the env file: when I ran `gh auth status`, I got
