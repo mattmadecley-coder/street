@@ -5,4 +5,9 @@ Format: `- [ ] <goal>` or `- [x] <goal> (done YYYY-MM-DD)` or
 weekly review; a department can add a goal mid-week if something real comes
 up, but shouldn't remove one Matthew hasn't seen moved.
 
-(not yet set — first run proposes these)
+- [ ] First run: review the brand-application queue and `brand_contacts`
+  for brands still missing a working email
+- [ ] Run "Find missing emails" to try to replace the two known-bounced
+  addresses (support@brokenplanet.com, info.hmddla@gmail.com)
+- [ ] Draft the first batch of brand performance reports for Matthew's
+  approval in `/admin/reports`

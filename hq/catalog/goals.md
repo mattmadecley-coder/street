@@ -5,4 +5,8 @@ Format: `- [ ] <goal>` or `- [x] <goal> (done YYYY-MM-DD)` or
 weekly review; a department can add a goal mid-week if something real comes
 up, but shouldn't remove one Matthew hasn't seen moved.
 
-(not yet set — first run proposes these)
+- [ ] First run: check the `classification_status = needs_review` backlog
+  in `/admin/products` and clear what's safely fixable
+- [ ] Audit for knitwear misfiled under the wrong `street_type`
+- [ ] Confirm `trigger_url`/`trigger_token` are set for every product that
+  should be classified

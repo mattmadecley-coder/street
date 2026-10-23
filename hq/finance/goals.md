@@ -5,4 +5,10 @@ Format: `- [ ] <goal>` or `- [x] <goal> (done YYYY-MM-DD)` or
 weekly review; a department can add a goal mid-week if something real comes
 up, but shouldn't remove one Matthew hasn't seen moved.
 
-(not yet set — first run proposes these)
+- [ ] First run: confirm/expand the known paid-tools list (Postiz,
+  OpenRouter, GoDaddy, Netcup, Claude) and their renewal dates from
+  billing emails
+- [ ] Check status of the free tiers to watch (Apify's cap, Resend,
+  Upstash QStash, Cloudflare, GitHub Actions minutes)
+- [ ] Produce the first weekly open-items rollup across departments in
+  `hq/finance/reports/`

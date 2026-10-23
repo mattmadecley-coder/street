@@ -5,4 +5,7 @@ Format: `- [ ] <goal>` or `- [x] <goal> (done YYYY-MM-DD)` or
 weekly review; a department can add a goal mid-week if something real comes
 up, but shouldn't remove one Matthew hasn't seen moved.
 
-(not yet set — first run proposes these)
+- [ ] First run (Monday): read current compliance state — mailing address
+  set, unsubscribe honored, brand permission on file
+- [ ] Draft the SMS-consent and mailing-address wording that's blocking
+  Growth: Lifecycle from sending any real campaign
