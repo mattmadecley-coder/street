@@ -2,41 +2,42 @@
 
 ## Open
 
-**Q:** `git` doesn't work at all in `street-work` from this agent's sandbox
-(not just `gh`) -- can we make `street-work` a standalone clone instead of
-a worktree of `street`, so Product's runs can actually branch/commit/push?
+**Q:** Multiple department agents (Product, GM, and apparently others)
+share the one `street-work` working directory with no isolation between
+runs. Today this caused two real collisions in the same few minutes: (1)
+GM's weekly-review commit landed on top of whatever branch Product
+happened to have checked out, instead of `work`, because `git commit`
+just commits onto the checked-out HEAD of the one shared tree -- it was
+rescued onto a side branch and fast-forwarded into `work` by hand, no
+data lost, but only because this run happened to notice before doing
+anything destructive. (2) A stale `.git/HEAD.lock` and a stale
+`.git/objects/maintenance.lock` were left behind by a run that ended
+abruptly mid-git-operation, which blocks every `git` command for the
+*next* run that touches this folder until someone clears them. Neither
+of these needs a schema change or touches app code, so it's logged here
+rather than acted on.
 
-Today's run found the root cause: `street-work/.git` is a worktree pointer
-file reading `gitdir: C:/Users/mattm/Documents/street/.git/worktrees/street-work`.
-That path lives in the *other* checkout (`street`, not `street-work`), and
-this agent's shell is a sandboxed Linux VM with no access to Windows
-drive-letter paths at all -- not even if `street` were also connected as a
-folder, since `C:/...` can never resolve inside it. So every `git` command
-fails, every run, with no way to branch, commit, or push. This is very
-likely the same cause Infrastructure's first run hit today with `gh auth
-status` and a missing repo remote URL (see
-`hq/infrastructure/reports/2026-10-23.md`) -- worth treating as one root
-cause, not two separate mysteries.
+**Recommendation:** give each department's run its own git worktree (or
+its own full clone) instead of all of them sharing one checked-out
+directory -- `git worktree add` against the same `.git` would let every
+department branch/commit independently without fighting over which
+branch is checked out. Short of that, at minimum each run should check
+for and clear stale `*.lock` files under `.git` before doing anything
+else, and should never assume the branch it left checked out is still
+checked out when it comes back. I did not attempt the worktree
+reorganization myself -- same reasoning as the clone-vs-worktree
+question below: it's repo/process plumbing, not application code, and
+Infrastructure or Matthew should decide the shape of it.
 
-**Recommendation:** give `street-work` its own `.git` (a real clone of
-the `street-work` branch's history, with `origin` configured), instead of
-it being a worktree of `street`. That makes git self-contained inside the
-one connected folder, which is what every department's agent actually has
-access to. I did not attempt this myself -- it touches repo plumbing, not
-application code, and a mistake here risks the real history.
-
-Until this is fixed, I can draft and review code but can't open a PR for
-it -- see `hq/product/drafts/office-page/` for today's finished, ready-to-
-apply draft of the `/admin/hq` office page.
-
-**Update, second run same day:** re-confirmed the blocker from scratch --
-unchanged, `gh` isn't even on `PATH` in this environment. Used the wait
-productively instead: cross-checked the draft against the live codebase
-file-by-file (no drift found) and ran it through an independent QA review
-against `hq/qa/charter.md`. QA sent it back once for a real gap (a missing
-auth check in one page's `generateMetadata`), which is now fixed and
-re-approved. The draft needs zero further work -- the only thing standing
-between it and shipping is this git/gh access question.
+**Update, same run:** while this question was being written, a *second*
+copy of this same office-page task finished independently (see Answered,
+below) -- most likely another firing of this department's own run
+landing in the same window. It used this run's own uncommitted files
+(verified identical), committed and pushed them cleanly to
+`agent/hq-office-page-v2`, and opened PR #49 -- so no work was lost or
+duplicated, but it's the same root cause as above: two runs in the same
+shared directory at the same time, this time without collision only by
+luck (neither one was mid-write when the other acted).
 
 ## Answered
 
