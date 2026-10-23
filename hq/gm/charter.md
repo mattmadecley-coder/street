@@ -33,6 +33,14 @@ the coming week based on what actually happened.
 - Read `.env.local` / `.env.ops.local` *names* (never values) to confirm
   what's configured
 - Write the daily brief and its own log
+- Commit and push the day's `hq/` changes to git so department state
+  isn't just sitting uncommitted on disk: `git pull --ff-only` first,
+  then stage **only** the `hq/` directory (never `git add -A` or
+  `git add .` — this worktree may have other, unrelated work in
+  progress that isn't the GM's to commit), commit with a clear message,
+  and push to whichever branch is currently checked out. If the pull
+  isn't a clean fast-forward, or the push is rejected, don't force
+  anything — note it in `hq/gm/log.md` and leave it for next run
 
 ## Needs Matthew (Tier 3)
 
