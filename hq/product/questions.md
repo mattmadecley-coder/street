@@ -29,6 +29,15 @@ Until this is fixed, I can draft and review code but can't open a PR for
 it -- see `hq/product/drafts/office-page/` for today's finished, ready-to-
 apply draft of the `/admin/hq` office page.
 
+**Update, second run same day:** re-confirmed the blocker from scratch --
+unchanged, `gh` isn't even on `PATH` in this environment. Used the wait
+productively instead: cross-checked the draft against the live codebase
+file-by-file (no drift found) and ran it through an independent QA review
+against `hq/qa/charter.md`. QA sent it back once for a real gap (a missing
+auth check in one page's `generateMetadata`), which is now fixed and
+re-approved. The draft needs zero further work -- the only thing standing
+between it and shipping is this git/gh access question.
+
 ## Answered
 
 Format once answered: move the question under here with

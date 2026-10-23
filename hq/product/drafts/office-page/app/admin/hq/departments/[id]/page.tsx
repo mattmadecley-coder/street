@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import styles from "@/app/admin/admin.module.css";
 import { Badge, Banner, EmptyState, PageHeader } from "@/components/admin/ui";
-import { requireUser } from "@/lib/admin-guard";
+import { getPrincipal, requireUser } from "@/lib/admin-guard";
 import { can } from "@/lib/admin-permissions";
 import { getAdminTimeZone } from "@/lib/admin-timezone";
 import { goalTone, loadHqDepartment, questionTone, statusTone } from "@/lib/admin-hq";
@@ -9,6 +9,12 @@ import { goalTone, loadHqDepartment, questionTone, statusTone } from "@/lib/admi
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  // generateMetadata runs its own render pass, independent of the page body below --
+  // it must repeat the same auth gate, or an unauthenticated/unauthorized request could
+  // resolve a real department name into page metadata before the page body ever redirects.
+  const principal = await getPrincipal();
+  if (!principal || !can(principal.role, "hq.view")) return { title: "Department" };
+
   const { id } = await params;
   const { detail } = await loadHqDepartment(id);
   return { title: detail.department?.display_name ?? "Department" };

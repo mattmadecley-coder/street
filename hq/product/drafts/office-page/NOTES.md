@@ -121,6 +121,23 @@ Optionally also add to `PALETTE_PAGES` (⌘K):
   { href: "/admin/hq/gm", label: "HQ: GM briefs", hint: "Office" },
 ```
 
+## Update, second run same day: QA-reviewed and one bug fixed
+
+Cross-checked every file in this folder against the live codebase again
+(no drift since it was written) and ran the whole change through an
+independent review against `hq/qa/charter.md`. First pass was sent back:
+`app/admin/hq/departments/[id]/page.tsx`'s `generateMetadata` called
+`loadHqDepartment(id)` with no `requireUser()`/`can(role, "hq.view")`
+check, unlike the page body below it and every other page here --
+`generateMetadata` runs its own render pass independent of the page
+body's redirect, so it could leak a department's `display_name` into
+page metadata for an unauthenticated or wrong-role request. Fixed: it now
+calls `getPrincipal()` (the existing non-redirecting lookup from
+`lib/admin-guard.ts`) and checks `can(principal.role, "hq.view")` before
+touching the data, falling back to a generic "Department" title
+otherwise. Re-reviewed and approved. The file in this folder already has
+the fix -- this note is just the record of it.
+
 ## To apply, next run (once git works here, or by hand)
 
 1. Copy `lib/admin-hq.ts` and the `app/admin/hq/**` tree from this folder
