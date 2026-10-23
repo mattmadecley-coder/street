@@ -40,5 +40,16 @@ between it and shipping is this git/gh access question.
 
 ## Answered
 
+**Q:** `git` doesn't work at all in `street-work` from this agent's
+sandbox (not just `gh`) -- can we make `street-work` a standalone clone
+instead of a worktree of `street`? **A:** Yes, done. `street-work` is now
+a real standalone clone with its own `.git`, `origin` remote, and local
+git identity configured -- the old worktree is preserved untouched at
+`street-work-old` as a safety net until Matthew deletes it himself. Git
+and `gh` both work from this sandbox now. The office-page draft was
+applied on top of this fix: branch `agent/hq-office-page-v2`, pushed, PR
+opened at https://github.com/mattmadecley-coder/street/pull/49 against
+`work`. (2026-10-23)
+
 Format once answered: move the question under here with
 `**Q:** ... **A:** ... (YYYY-MM-DD)`.

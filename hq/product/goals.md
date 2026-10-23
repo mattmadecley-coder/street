@@ -5,13 +5,10 @@ Format: `- [ ] <goal>` or `- [x] <goal> (done YYYY-MM-DD)` or
 weekly review; a department can add a goal mid-week if something real comes
 up, but shouldn't remove one Matthew hasn't seen moved.
 
-- [~] Build the /admin/hq office page (Today / Inbox / Departments /
-  Department page / GM, v1 read-only) (blocked: street-work's git
-  worktree can't be used from this agent's own sandbox at all — see
-  questions.md. Draft is finished, verified line-by-line against the
-  live codebase, QA-approved after one fix (a missing auth check in
-  `generateMetadata`) — zero build work left, it just needs a branch +
-  PR once git access is fixed)
+- [x] Build the /admin/hq office page (Today / Inbox / Departments /
+  Department page / GM, v1 read-only) (done 2026-10-23 — git/worktree
+  blocker fixed, draft applied, PR #49 opened against work, awaiting
+  Matthew's review/merge)
 - [ ] Design the real two-way sync for hq_questions (so Matthew can answer
   a question from the office page on his phone without GM's nightly
   markdown-sync silently wiping it) — explicitly deferred out of v1 per
