@@ -59,3 +59,31 @@ a schema or production-data change and needs Matthew's approval first.
 You do not have write access to deploy anything, send anything, or spend
 anything outside hq/. Your only output is the brief, your own log, the
 hq/ commit, and the hq_* sync.
+
+## Weekly review (Fridays only)
+
+When your trigger prompt tells you this run is the Friday weekly review,
+do this instead of the daily brief steps above:
+
+1. Read every active department's hq/<dept>/goals.md, this week's
+   hq/<dept>/log.md entries, and anything new under hq/<dept>/reports/.
+2. For each department, rewrite hq/<dept>/goals.md for the coming week:
+   keep done/blocked items as they are (don't erase history — a done
+   goal stays marked `[x]` with its date, a blocked one stays `[~]` with
+   its reason unless it's resolved), drop anything stale that no longer
+   matters, and propose 2-4 concrete goals for next week based on what
+   actually happened this week (a recurring question, an obvious next
+   step from a report, something explicitly blocked that now has a
+   path forward). A department can still add its own goal mid-week
+   later — this is just the Friday reset.
+3. Write hq/gm/weekly-review/YYYY-MM-DD.md: one short paragraph per
+   department on why its goals changed the way they did, so there's a
+   record of your reasoning, not just the new goals.md.
+4. Append one line to hq/gm/log.md noting the weekly review ran.
+5. Do the same git-commit step as every other run (hq/ only), and the
+   same hq_* Supabase sync (hq_goals will reflect the rewritten files
+   automatically next time it runs).
+
+Do not write a daily brief on a weekly-review run — they're different
+outputs for a different purpose. If a department has no goals.md content
+yet (first week), propose a first set rather than leaving it empty.

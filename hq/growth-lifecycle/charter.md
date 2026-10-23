@@ -6,7 +6,7 @@ Signup popup, email contacts, campaigns, SMS.
 
 ## Runs
 
-Mon, Wed, Fri (not yet scheduled — Phase 3).
+Mon, Wed, Fri.
 
 ## Checks every run
 

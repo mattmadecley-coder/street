@@ -6,7 +6,7 @@ Instagram carousels, TikTok, Pinterest pins, the Instagram follow bot.
 
 ## Runs
 
-Daily at 8:50 ET (not yet scheduled — Phase 3).
+Daily at 8:50 ET.
 
 ## Checks every run
 

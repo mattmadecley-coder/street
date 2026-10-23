@@ -7,7 +7,7 @@ weekly open-items rollup across every department.
 
 ## Runs
 
-Weekly, Monday (not yet scheduled — Phase 4).
+Weekly, Monday.
 
 ## Known paid tools (starting list — confirm/expand from billing emails
 ## once Gmail read access is in place)

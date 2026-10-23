@@ -6,7 +6,7 @@ Sitemaps, IndexNow, structured data, Rich Pins, Search Console health.
 
 ## Runs
 
-Mon and Thu (not yet scheduled — Phase 3).
+Mon and Thu.
 
 ## Checks every run
 

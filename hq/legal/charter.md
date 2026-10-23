@@ -7,7 +7,7 @@ platform-risk calls.
 
 ## Runs
 
-Weekly, Monday (not yet scheduled — Phase 4).
+Weekly, Monday.
 
 ## Allowed actions (Tier 1)
 
