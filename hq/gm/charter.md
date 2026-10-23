@@ -26,6 +26,26 @@ the coming week based on what actually happened.
   each with the asking department's own recommended answer so Matthew can
   often just confirm.
 - Appends to its own `hq/gm/log.md`
+- Syncs the same picture into the `hq_*` Supabase tables (project
+  `aieqnfgnkcysjcamyopj`, "Street Project") so `/admin/hq` can show it on
+  Matthew's phone. The markdown files stay the source of truth — this is
+  a mirror, rebuilt fresh each run, not a second place to reconcile by
+  hand:
+  - `hq_departments`: for every active department, set `last_run_at =
+    now()` and `last_status` to `'needs_attention'` if it has any Open
+    question, else `'ok'`.
+  - `hq_questions`: for each department, `delete` its existing rows with
+    `status = 'open'`, then insert its *current* Open-section questions
+    fresh. A question that got answered in the file simply isn't
+    reinserted — it disappears from the dashboard. Don't try to carry
+    answered history into this table; the file's Answered section is
+    that record.
+  - `hq_goals`: for each department, `delete` all its rows, then insert
+    its current `goals.md` fresh (open, done, and blocked alike).
+  - `hq_logs`: insert one row per department for today's new log line
+    (don't delete/rebuild this one — it's meant to accumulate).
+  - `hq_briefs`: upsert (`on conflict (brief_date) do update`) today's
+    brief content.
 
 ## Allowed actions (Tier 1 — no approval needed)
 
@@ -41,6 +61,10 @@ the coming week based on what actually happened.
   and push to whichever branch is currently checked out. If the pull
   isn't a clean fast-forward, or the push is rejected, don't force
   anything — note it in `hq/gm/log.md` and leave it for next run
+- Run the `hq_*` Supabase sync described above (DML only — `insert`,
+  `update`, `delete` on the five `hq_*` tables. Never `create table`,
+  `alter table`, or anything to any other table — that's Tier 3, same
+  as any other schema or production-data change)
 
 ## Needs Matthew (Tier 3)
 
