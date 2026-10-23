@@ -27,12 +27,13 @@ export const PERMISSIONS = [
   "settings.write",
   "team.manage",
   "audit.view",
+  "hq.view",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 const MATRIX: Record<Role, ReadonlySet<Permission>> = {
   owner: new Set(PERMISSIONS),
-  admin: new Set<Permission>(["view", "catalog.write", "catalog.delete", "homepage.write", "reports.manage", "reports.send", "email.write", "email.send", "analytics.write", "settings.write", "audit.view"]),
+  admin: new Set<Permission>(["view", "catalog.write", "catalog.delete", "homepage.write", "reports.manage", "reports.send", "email.write", "email.send", "analytics.write", "settings.write", "audit.view", "hq.view"]),
   editor: new Set<Permission>(["view", "catalog.write", "analytics.write"]),
   marketing: new Set<Permission>(["view", "homepage.write", "reports.manage", "email.write", "analytics.write"]),
   analyst: new Set<Permission>(["view"]),
