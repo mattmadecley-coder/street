@@ -8,55 +8,35 @@
   `.git/*.lock` incidents (see Product's questions.md for the detail).
   Matthew has approved doing this; decide worktree vs. clone and roll it
   out for all departments. (assigned by Matthew, chat)
-- 2026-10-23: Look into the `gh auth status` credential mismatch between
-  the scheduled-run sandbox and an interactive shell on the same machine
-  (your own open question above) -- Matthew wants this actually
-  investigated, not just re-flagged next run. (assigned by Matthew, chat)
-  **GM's diagnosis, done live in chat 2026-10-24:** this isn't a
-  credential mismatch, it's two different machines. Every scheduled/chat
-  run executes inside its own fresh, isolated Linux sandbox
-  (`/sessions/rcw-...`) that only has the mounted `street-work` folder --
-  it never sees Matthew's actual Windows programs, PATH, or Windows
-  Credential Manager. `gh` isn't even installed in that sandbox by
-  default (`gh: command not found`); the one time it returned "invalid
-  token" it must have been freshly `apt-get install`ed with no saved
-  auth. Matthew installing/logging into `gh` on his own Windows machine
-  does nothing for these runs -- `gh auth login`'s interactive
-  browser/device-code flow can't complete in a one-off headless sandbox
-  anyway. Network from the sandbox to github.com works fine (confirmed
-  `curl` 200), and `apt-get` is available, so the only missing piece is
-  a non-interactive credential. **Recommendation:** Matthew generates a
-  fine-grained GitHub PAT for `mattmadecley-coder/street` (Contents:
-  read/write, Pull requests: read/write, Actions: read) and adds it to
-  `.env.ops.local` as `GH_TOKEN=...` (gitignored, same pattern as
-  `COOLIFY_API_TOKEN` -- this is the Tier 3 "change .env.ops.local
-  structure" step only Matthew can do). Once that exists, each
-  department's run should: `apt-get install -y gh` if missing, then
-  `export GH_TOKEN=<value from .env.ops.local>` before any `git`/`gh`
-  call -- `gh` reads `GH_TOKEN` natively with no `gh auth login` needed,
-  and `git push`/`pull` can use
-  `https://x-access-token:$GH_TOKEN@github.com/mattmadecley-coder/street.git`
-  as the remote (or a tiny credential helper) instead of the default
-  HTTPS prompt that's been failing with "could not read Username." This
-  also fixes the push failures GM and Product hit today on two
-  unpushed `work` commits.
 
 ## Open
 
-- **Q:** Separately from the env file: when I ran `gh auth status`, I got
-  "invalid token." Matthew (via chat), running the same command on this
-  machine through a different shell, saw a valid logged-in account. So
-  `gh` itself may be fine, but whatever shell/environment my Bash tool
-  actually runs in during a scheduled run doesn't see the same credential
-  — possibly no access to the Windows credential manager/keyring that
-  `gh auth status` depends on in that context. This will keep blocking the
-  GitHub Actions cron check even with `.env.ops.local` now in place.
-  **Recommendation:** try `gh auth status` again on the next scheduled
-  run now that `.env.ops.local` exists; if it still fails, this needs
-  investigating as an execution-environment issue, not a credentials
-  issue. (reopened 2026-10-23, split out from the original question below)
+(none)
 
 ## Answered
+
+**Q:** `gh auth status` returns "invalid token" during scheduled/chat
+runs even though Matthew is logged in via `gh` on the same machine.
+**A:** Root cause was never a credential mismatch -- every run executes
+in its own fresh, isolated Linux sandbox that only has the mounted
+`street-work` folder; it never sees Matthew's Windows `gh` install,
+PATH, or Credential Manager, and a one-off headless sandbox can't
+complete `gh auth login`'s interactive flow anyway. Fix: Matthew
+generated a fine-grained GitHub PAT for `mattmadecley-coder/street`
+(Contents, Pull requests: read/write; Actions: read) and added it to
+`.env.ops.local` as `GH_TOKEN=...`. Verified end-to-end live in chat
+2026-10-24: `curl` with the token against the GitHub API returns the
+repo with push permission; `git push` using the token as an inline
+`x-access-token` credential successfully pushed the three commits that
+had been stuck local-only on `work`; `gh` has no apt/root access in
+this sandbox (`apt-get`/`sudo` both fail -- not a root user), so it has
+to be fetched as a standalone binary instead (download the matching
+`gh_<version>_linux_amd64.tar.gz` from
+`https://api.github.com/repos/cli/cli/releases/latest`, extract, and
+put `gh` on `PATH` -- it isn't installed persistently, so this is a
+per-run step); once `GH_TOKEN` is exported, `gh auth status`, `gh pr
+list`, and `gh run list` all worked and correctly showed PR #49 and a
+clean GitHub Actions cron history. (2026-10-24)
 
 **Q:** This agent runs from the `street-work` worktree, which has no
 `.env.ops.local`, so Coolify's URL/token couldn't be read.
