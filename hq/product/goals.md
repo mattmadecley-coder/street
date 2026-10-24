@@ -13,3 +13,11 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   a question from the office page on his phone without GM's nightly
   markdown-sync silently wiping it) — explicitly deferred out of v1 per
   the charter; needs the GM's sync logic redesigned too, not just a form
+- [x] Replace the hq_* Supabase mirror/sync behind `/admin/hq` with a
+  git-committed JSON snapshot (done 2026-10-24 — `agent/hq-office-page-v2`
+  now reads `hq/_shared/dashboard.json` via the GitHub Contents API
+  instead of querying `hq_*`; QA-approved; pushed, PR #49 updated. Not
+  fully live yet: needs Infrastructure to provision
+  `HQ_DASHBOARD_GITHUB_TOKEN` and the GM to update its write step to
+  actually commit the file — both flagged in questions.md for GM to
+  relay, not Product's to do)

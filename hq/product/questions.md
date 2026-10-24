@@ -1,45 +1,20 @@
 # Questions for Matthew
 
-## Assigned by Matthew
-
-- 2026-10-24: Replace the hq_* Supabase mirror/sync that feeds
-  `/admin/hq` with something that doesn't need a separate database
-  write step. Root problem: the GM's nightly sync writes to
-  `hq_departments`/`hq_questions`/`hq_goals`/`hq_logs`/`hq_briefs` via
-  the Supabase MCP tool, and the DELETE+INSERT calls keep hanging on an
-  unanswered destructive-operation confirmation from that tool and
-  timing out -- happened twice in a row, including once live in chat
-  with Matthew present. Matthew asked (via chat, through the GM) to get
-  off Supabase for this specific piece -- not the app's actual database,
-  just this dashboard-sync mechanism.
-
-  Proposed direction (yours to scope, not a fixed spec): have the GM
-  commit one aggregated JSON snapshot into the repo each run (e.g.
-  `hq/_shared/dashboard.json`, built from the same department
-  log.md/questions.md/goals.md data it already reads for the daily
-  brief) -- that rides along on the git push the GM already does
-  reliably every run, no separate write step needed. `/admin/hq` would
-  then read that file's content (e.g. via the GitHub API) instead of
-  querying the `hq_*` tables, so the markdown files stay the single
-  source of truth end to end and there's nothing left to keep in sync
-  by hand.
-
-  Things to work out: the deployed app doesn't currently have a GitHub
-  read token available to it (only `.env.ops.local`'s `GH_TOKEN`, which
-  is ops-only) -- adding a new, narrowly-scoped one to `.env.local` is a
-  Tier 1 env-var addition, but check with Infrastructure on scoping it
-  safely (read-only, this repo only). Don't drop the `hq_*` tables
-  yourself even once this works -- that's a schema change, Tier 3, come
-  back to Matthew first; leaving them unused in the meantime is fine.
-  The GM's own agent definition (`.claude/agents/gm.md`) and charter
-  will need updating once this ships to swap its Supabase sync step for
-  whatever the new write step is -- flag that rather than shipping it
-  silently, since it changes what the GM does every run.
-
-  Open on a branch, PR against `work`, QA review before calling it done
-  -- same as any other code change. (assigned by Matthew, chat)
-
 ## Open
+
+**Q:** Two follow-ups from the hq_* dashboard-sync replacement (see
+Answered, below) need action outside Product -- flagging here for GM to
+relay rather than editing those departments' files directly. (1)
+Infrastructure needs to provision a real value for
+`HQ_DASHBOARD_GITHUB_TOKEN` in `.env.local` -- a GitHub token scoped
+read-only to this repo's contents on the `work` branch, deliberately
+separate from `.env.ops.local`'s push-capable `GH_TOKEN`. (2) The GM's
+own write step (`.claude/agents/gm.md` and `hq/gm/charter.md`) needs
+updating to commit `hq/_shared/dashboard.json` each run per the contract
+in `hq/_shared/dashboard-schema.md`, replacing its old Supabase
+DELETE+INSERT sync -- until that lands, `/admin/hq` keeps reading the
+placeholder seed. **Recommendation:** no action needed from Matthew
+directly; routing this to Infrastructure and GM is the ask. (2026-10-24)
 
 **Q:** Multiple department agents (Product, GM, and apparently others)
 share the one `street-work` working directory with no isolation between
@@ -79,6 +54,35 @@ shared directory at the same time, this time without collision only by
 luck (neither one was mid-write when the other acted).
 
 ## Answered
+
+**Q:** Replace the hq_* Supabase mirror/sync that feeds `/admin/hq` with
+something that doesn't need a separate database write step (GM's
+DELETE+INSERT sync kept hanging on an unanswered destructive-operation
+confirmation). **A:** Shipped on `agent/hq-office-page-v2` (commit
+154c92c8, merged with latest `work`, pushed, PR #49 updated).
+`/admin/hq` now reads `hq/_shared/dashboard.json` live off the GitHub
+Contents API (`lib/hq-dashboard-source.ts`, gated on a new read-only
+`HQ_DASHBOARD_GITHUB_TOKEN` env var, deliberately separate from the
+ops-only push-capable `GH_TOKEN`) instead of querying the `hq_*` tables;
+`lib/admin-hq.ts` parses that file into the same typed shape the pages
+already consume, so no page changed its data-fetching calls. Contract
+documented in `hq/_shared/dashboard-schema.md`. QA review (2026-10-24):
+approved `lib/hq-dashboard-source.ts`, `lib/admin-hq.ts`, the schema doc,
+and the page banner changes with no blocking issues on first pass; sent
+this entry itself back once for an inaccurate claim in an earlier draft
+(it had described the Infra/GM follow-ups below as already "filed" in
+those departments' own files, which hadn't happened) -- that claim is
+removed and the entry now only states what actually shipped. Does not touch
+`supabase/migrations/20261023_hq_tables.sql` or drop the `hq_*` tables
+(Tier 3, needs Matthew) -- unused in place until you say otherwise. Two
+things still need someone else before this is fully live -- flagged here
+rather than written directly into those departments' own files (not
+Product's to touch): Infrastructure needs to provision the actual
+`HQ_DASHBOARD_GITHUB_TOKEN` value (read-only, scoped to just this repo's
+contents on `work`); the GM's own write step (`.claude/agents/gm.md`/
+charter) needs updating to actually commit `hq/_shared/dashboard.json`
+each run instead of the old Supabase sync. Until that lands, the page
+reads the placeholder seed committed alongside this code. (2026-10-24)
 
 **Q:** `git` doesn't work at all in `street-work` from this agent's
 sandbox (not just `gh`) -- can we make `street-work` a standalone clone
