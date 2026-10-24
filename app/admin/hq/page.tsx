@@ -34,8 +34,9 @@ export default async function HqTodayPage() {
 
       {!available ? (
         <Banner tone="info">
-          The HQ tables haven&apos;t synced yet, or the <code>20261023_hq_tables</code> migration hasn&apos;t reached this
-          database. Nothing to show until the GM&apos;s nightly sync runs.
+          The HQ dashboard snapshot isn&apos;t available yet -- either <code>HQ_DASHBOARD_GITHUB_TOKEN</code> isn&apos;t
+          configured, or <code>hq/_shared/dashboard.json</code> hasn&apos;t been written yet. Nothing to show until the
+          GM&apos;s next run.
         </Banner>
       ) : (
         <>

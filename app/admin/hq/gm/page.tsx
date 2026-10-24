@@ -22,7 +22,7 @@ export default async function HqGmPage() {
       <Tabs label="Office sections" active="/admin/hq/gm" tabs={OFFICE_TABS} />
 
       {!available ? (
-        <Banner tone="info">The HQ tables haven&apos;t synced yet. Nothing to show until the GM&apos;s nightly sync runs.</Banner>
+        <Banner tone="info">The HQ dashboard snapshot isn&apos;t available yet. Nothing to show until it&apos;s configured and the GM writes its next <code>hq/_shared/dashboard.json</code>.</Banner>
       ) : briefs.length === 0 ? (
         <EmptyState title="No briefs yet">The General Manager writes one after its first run.</EmptyState>
       ) : (

@@ -43,7 +43,7 @@ export default async function HqDepartmentPage({ params }: { params: Promise<{ i
       />
 
       {!available ? (
-        <Banner tone="info">The HQ tables haven&apos;t synced yet. Nothing to show until the GM&apos;s nightly sync runs.</Banner>
+        <Banner tone="info">The HQ dashboard snapshot isn&apos;t available yet. Nothing to show until it&apos;s configured and the GM writes its next <code>hq/_shared/dashboard.json</code>.</Banner>
       ) : (
         <>
           <section className={styles.section}>
