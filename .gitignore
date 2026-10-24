@@ -23,6 +23,10 @@ next-env.d.ts
 # Sensitive session-briefing doc with live credentials -- never commit
 PROJECT_BRIEFING.md
 
+# Live Google service-account key + OAuth client secret, copied in locally for
+# Analytics' GSC/GA4 access -- never commit
+street-secrets/
+
 # Local scratch archive and dev logs
 _archive/
 dev*.log
