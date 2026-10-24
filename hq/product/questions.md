@@ -1,5 +1,44 @@
 # Questions for Matthew
 
+## Assigned by Matthew
+
+- 2026-10-24: Replace the hq_* Supabase mirror/sync that feeds
+  `/admin/hq` with something that doesn't need a separate database
+  write step. Root problem: the GM's nightly sync writes to
+  `hq_departments`/`hq_questions`/`hq_goals`/`hq_logs`/`hq_briefs` via
+  the Supabase MCP tool, and the DELETE+INSERT calls keep hanging on an
+  unanswered destructive-operation confirmation from that tool and
+  timing out -- happened twice in a row, including once live in chat
+  with Matthew present. Matthew asked (via chat, through the GM) to get
+  off Supabase for this specific piece -- not the app's actual database,
+  just this dashboard-sync mechanism.
+
+  Proposed direction (yours to scope, not a fixed spec): have the GM
+  commit one aggregated JSON snapshot into the repo each run (e.g.
+  `hq/_shared/dashboard.json`, built from the same department
+  log.md/questions.md/goals.md data it already reads for the daily
+  brief) -- that rides along on the git push the GM already does
+  reliably every run, no separate write step needed. `/admin/hq` would
+  then read that file's content (e.g. via the GitHub API) instead of
+  querying the `hq_*` tables, so the markdown files stay the single
+  source of truth end to end and there's nothing left to keep in sync
+  by hand.
+
+  Things to work out: the deployed app doesn't currently have a GitHub
+  read token available to it (only `.env.ops.local`'s `GH_TOKEN`, which
+  is ops-only) -- adding a new, narrowly-scoped one to `.env.local` is a
+  Tier 1 env-var addition, but check with Infrastructure on scoping it
+  safely (read-only, this repo only). Don't drop the `hq_*` tables
+  yourself even once this works -- that's a schema change, Tier 3, come
+  back to Matthew first; leaving them unused in the meantime is fine.
+  The GM's own agent definition (`.claude/agents/gm.md`) and charter
+  will need updating once this ships to swap its Supabase sync step for
+  whatever the new write step is -- flag that rather than shipping it
+  silently, since it changes what the GM does every run.
+
+  Open on a branch, PR against `work`, QA review before calling it done
+  -- same as any other code change. (assigned by Matthew, chat)
+
 ## Open
 
 **Q:** Multiple department agents (Product, GM, and apparently others)
