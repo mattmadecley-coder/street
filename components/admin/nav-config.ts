@@ -60,6 +60,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/settings", label: "Settings", icon: "settings", permission: "settings.write" },
       { href: "/admin/team", label: "Team", icon: "users", permission: "team.manage" },
       { href: "/admin/activity", label: "Activity", icon: "clock", permission: "audit.view" },
+      { href: "/admin/hq", label: "Office", icon: "office", also: ["/admin/hq/inbox", "/admin/hq/departments", "/admin/hq/gm"], permission: "hq.view" },
     ],
   },
 ];
@@ -80,4 +81,7 @@ export const PALETTE_PAGES: Array<{ href: string; label: string; hint: string }>
   { href: "/admin/social/tiktok", label: "Social: TikTok", hint: "Marketing" },
   { href: "/admin/social/instagram", label: "Social: Instagram", hint: "Marketing" },
   { href: "/admin/social/pinterest", label: "Social: Pinterest", hint: "Marketing" },
+  { href: "/admin/hq/inbox", label: "HQ: Inbox", hint: "Office" },
+  { href: "/admin/hq/departments", label: "HQ: Departments", hint: "Office" },
+  { href: "/admin/hq/gm", label: "HQ: GM briefs", hint: "Office" },
 ];

@@ -1,0 +1,22 @@
+{
+  "_note": "Placeholder seed, committed by Product (not the GM) alongside the code that reads this file -- see hq/_shared/dashboard-schema.md and hq/product/questions.md (2026-10-24). last_run_at/last_status are left null and logs/questions/goals/briefs empty rather than guessed from each department's freeform markdown, which needs reading comprehension (the GM's job each run), not a script. Safe to overwrite wholesale on the GM's first real write under the new scheme.",
+  "generated_at": "2026-10-24T00:00:00Z",
+  "departments": [
+    { "id": "gm", "display_name": "General Manager", "last_run_at": null, "last_status": null },
+    { "id": "infrastructure", "display_name": "Infrastructure & Security", "last_run_at": null, "last_status": null },
+    { "id": "analytics", "display_name": "Analytics & Insights", "last_run_at": null, "last_status": null },
+    { "id": "catalog", "display_name": "Catalog & Merchandising", "last_run_at": null, "last_status": null },
+    { "id": "partnerships", "display_name": "Brand Partnerships", "last_run_at": null, "last_status": null },
+    { "id": "qa", "display_name": "QA Reviewer", "last_run_at": null, "last_status": null },
+    { "id": "product", "display_name": "Product & Engineering", "last_run_at": null, "last_status": null },
+    { "id": "growth-social", "display_name": "Growth: Social", "last_run_at": null, "last_status": null },
+    { "id": "growth-seo", "display_name": "Growth: SEO", "last_run_at": null, "last_status": null },
+    { "id": "growth-lifecycle", "display_name": "Growth: Lifecycle", "last_run_at": null, "last_status": null },
+    { "id": "legal", "display_name": "Legal & Compliance", "last_run_at": null, "last_status": null },
+    { "id": "finance", "display_name": "Finance & Operations", "last_run_at": null, "last_status": null }
+  ],
+  "logs": {},
+  "questions": {},
+  "goals": {},
+  "briefs": []
+}
