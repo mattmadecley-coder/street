@@ -83,6 +83,45 @@ It has the exact same house rules and Tier 1/2/3 approval boundaries as
 the cloud version always did -- running locally removes the access
 problems, not the guardrails.
 
-A nicer UI on top of this terminal (so it feels like an actual app instead
-of a terminal window) is a separate, later step -- the mechanism above is
-the part that actually needed to work first.
+There's now an actual desktop app on top of this -- see section 6 below
+for the one-time setup. The terminal above still works exactly the same
+way if you ever just want to talk to the GM directly.
+
+## 6. The Street HQ desktop app (one-time setup)
+
+This is the actual app: one window, a chat with the GM on one side, your
+departments listed on the other with a live status dot. It runs on the
+exact same local `claude` you just signed into above -- there's no API
+key anywhere in it, so there's no extra cost beyond the subscription you
+already have.
+
+```
+cd C:\Users\mattm\Documents\street-work\office-app
+npm install
+npm start
+```
+
+The first `npm install` will take a minute (it's downloading Electron).
+After that, `npm start` opens the app. Leave the terminal window open
+while the app is running -- closing it closes the app too.
+
+Try it: type something like "what's the status of infrastructure?" and
+the GM should answer from the real hq/infrastructure files. Then try
+something that should actually get done, e.g. "ask infrastructure to
+check the site is up and log it" -- you should see a line appear in the
+chat like "-> Sent to Infrastructure HQ", then "... Infrastructure HQ is
+working", then "Infrastructure HQ replied: ...". The matching department
+card on the right will show the same thing as a colored dot (gray = idle,
+amber = working, green = done, red = needs attention).
+
+If `npm start` errors out, paste the error into a `claude` session in
+this same folder (or back to me) -- it'll very likely be something
+platform-specific like the Windows launch-path bug that came up testing
+`fire-department.ps1`, and it gets fixed the same way: read the error,
+patch the file, try again.
+
+Nothing about how departments actually work changed -- same Tier 1/2/3
+rules, same file-based reporting, same "## Assigned by Matthew" (or now
+"## Assigned by GM" when the app itself sends the task) convention in
+each department's questions.md. The app is just a friendlier front door
+onto all of that.

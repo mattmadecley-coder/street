@@ -73,4 +73,8 @@ phased out) and native APIs (Instagram, Pinterest).
    questions.md instead of attempting it. When you've handled one, move
    it from `## Assigned by Matthew` into your log.md with what you did
    (don't just delete it silently) and note the result in your next
-   report if there is one.
+   report if there is one. You may also see a `## Assigned by GM`
+   section -- that's the same thing, written when the Street HQ desktop
+   app fires you directly for something Matthew asked the GM for in
+   chat. Treat it with the same Tier 1 weight and the same
+   move-to-log.md-when-done rule.

@@ -3,6 +3,10 @@
     "playwright": {
       "command": "npx",
       "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "office": {
+      "command": "node",
+      "args": ["office-app/mcp-server.js"]
     }
   }
 }

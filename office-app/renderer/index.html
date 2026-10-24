@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Street HQ</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">Street HQ</div>
+    </header>
+
+    <main class="layout">
+      <section class="chat">
+        <div id="messages" class="messages"></div>
+        <form id="composer" class="composer">
+          <textarea id="input" rows="1" placeholder="Tell the GM what you need..." autofocus></textarea>
+          <button id="send" type="submit">Send</button>
+        </form>
+      </section>
+
+      <aside class="sidebar">
+        <div class="sidebar-title">Departments</div>
+        <div id="departments" class="departments"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
