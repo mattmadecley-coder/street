@@ -1,5 +1,23 @@
 # Questions for Matthew
 
+## Assigned by Matthew
+
+- 2026-10-24: Cley application -- Matthew confirmed this was him testing
+  the application flow (his own address, not a real applicant). Ignore
+  it entirely: no onboarding, no reply. (assigned by Matthew, chat)
+
+- 2026-10-24: AMBYTION application -- Matthew reviewed their storefront
+  himself and decided not to approve them. Decline the application
+  (don't onboard). Replace the existing holding/acknowledgment Gmail
+  draft with a decline email instead, as a new Gmail draft (per charter,
+  draft only -- Matthew sends). Keep the tone soft and general, do not
+  spell out that it's about their creative/design choices -- something
+  like: thank them for applying, let them know that at the moment the
+  team doesn't think the brand is quite ready to fit the site yet, and
+  that they're welcome to submit another application down the line.
+  QA it the same way the other drafts get QA'd. (assigned by Matthew,
+  chat)
+
 ## Open
 
 - **2026-10-24 — New application: Cley (cley.com).** Applicant on file is "Matthew Radford" at mattmadecley@icloud.com. That inbox already receives Google Merchant Center emails addressed to "Cley" ("Cley, enable your store ratings") and your Instagram feed suggests "cley.us" as an account you'd follow — this looks like it may be your own store, not a third-party applicant. Standing rule still requires your explicit approval before onboarding any brand, your own or not, so: is this your own Cley store, and do you want it onboarded? No reply has been drafted to the applicant since it's your own address. **Recommendation:** confirm ownership, then either approve onboarding (sanctioned, you own the feed) or decline/withdraw if it was a test submission.

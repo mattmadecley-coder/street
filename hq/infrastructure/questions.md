@@ -24,6 +24,25 @@
     as still open/unassigned rather than guessing at a layout no one's
     reviewed.
 
+- 2026-10-24: Go ahead and look into the DB connection-pool-exhaustion
+  issue (the 120+ "Timed out acquiring connection from connection pool"
+  errors) -- Matthew approved investigating and fixing this, not just
+  flagging it. Check real Postgres `max_connections` / PostgREST
+  `db-pool`/`db-pool-timeout` settings against actual concurrent load
+  (Adminer/SSH), and whether staggering the cron jobs further apart
+  would help on the 3.8GB VPS. Per charter, fixing a config issue on a
+  branch and opening a PR is already Tier 1 for you -- actually
+  deploying it to production still needs Matthew's sign-off, same as
+  always. (assigned by Matthew, chat)
+
+- 2026-10-24: Matthew doesn't know what the cron watchdog is or does --
+  look into `authorize_cron_watchdog` (the missing Postgres function
+  behind the storefront-health/catalog watchdog auth failures) and
+  explain in plain terms what it's for and what breaks without it,
+  alongside drafting the migration to add/expose it. Applying a DB
+  migration is still Tier 3 -- draft it and ask Matthew to approve
+  applying it, don't apply it yourself. (assigned by Matthew, chat)
+
 ## Open
 
 - **Repeated DB connection-pool-exhaustion errors in the live app logs

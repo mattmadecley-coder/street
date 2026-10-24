@@ -2,21 +2,19 @@
 
 ## Open
 
-- 2026-10-24: Can't verify Search Console / GA4 access from this
-  environment, in either of the two ways available to me. (1) The
-  service account key `.env.ops.local` points to
-  (`GOOGLE_APPLICATION_CREDENTIALS`) lives on your OneDrive, outside the
-  `street-work` folder this sandbox can see -- I can't read it from
-  here. (2) A GSC Wizard MCP connector is available in this session and
-  would cover both GSC and GA4 in one place, but every call returns
-  "payment_required" -- no active trial or subscription on that
-  account. Options as I see them: subscribe to GSC Wizard (costs
-  money -- your call), or get the service-account JSON copied somewhere
-  this environment can read (same pattern as the `.env.ops.local` copy
-  Infrastructure needed) so I can hit the Search Console/GA4 APIs
-  directly the way `.env.ops.local` already intends. Either unblocks
-  this goal; happy to proceed once you pick one. (Tier 3 -- needs your
-  decision, possibly your money.)
+- 2026-10-24 update: Confirmed via chat that the credentials are
+  already configured, exactly as Matthew expected -- `.env.ops.local`
+  does have `GA4_PROPERTY_ID` and `GOOGLE_APPLICATION_CREDENTIALS` set.
+  The gap isn't a missing env var, it's that `GOOGLE_APPLICATION_CREDENTIALS`
+  is a file path (`C:\Users\mattm\OneDrive\Documents\street-secrets\
+  new-project-496518-7ef47606461b.json`) pointing at a file on OneDrive,
+  outside the `street-work` folder this sandbox can mount -- same shape
+  of problem as Infrastructure's original `.env.ops.local`-missing
+  issue, one level deeper. The GM requested access to that OneDrive
+  folder from Matthew's device on 2026-10-24 to copy the JSON key into
+  `street-work` (gitignored) and point the env var at the copy; pending
+  his approval of that folder-access prompt. Once that's done this
+  should just work -- no GSC Wizard subscription needed.
 
 ## Answered
 
