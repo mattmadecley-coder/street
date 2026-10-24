@@ -143,4 +143,21 @@ and departments stop working until you open it again. There's a
 "Clocked in" toggle at the bottom of the department list if you want to
 pause all of this (e.g. to stop a run mid-task, or just go quiet for a
 while) without closing the app; flip it back and the next check-in
-happens on the following poll.
+happens on the following poll. Each department card also shows when it's
+next due ("Next check-in 3:10 PM") so you can see at a glance when
+something's actually going to move -- it goes quiet ("Paused") if you've
+clocked everyone out, and QA always shows "On demand only" since it's
+reactive, not scheduled.
+
+### Voice to text
+
+There's a mic button next to Send. Click it, talk, click it again (or
+just pause) and it fills in the message box -- click Send as normal. It
+uses the voice recognition built into the app's browser engine, so
+there's no extra setup and no added cost. The one thing to know: that
+built-in engine sometimes can't reach its recognition service inside an
+app like this one (a known rough edge, not something wrong with your
+mic) -- if that happens you'll see a message in the chat saying so. If
+it ever doesn't work, Windows' own dictation is a reliable fallback and
+needs nothing from this app: click into the message box and press
+Win+H.

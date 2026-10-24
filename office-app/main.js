@@ -1,13 +1,26 @@
 const path = require("path");
 const fs = require("fs");
-const { app, BrowserWindow, ipcMain, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, session } = require("electron");
 const { listDepartments } = require("./lib/departments");
 const { STATUS_DIR, ensureDir, readAll } = require("./lib/status-store");
 const { REPO_ROOT } = require("./lib/departments");
 const { buildGmPrompt, runClaudeOnce } = require("./lib/claude-runner");
 const { fireDepartment } = require("./lib/fire.js");
-const { startScheduler, CHECK_IN_INTERVAL_MS, WORK_START_HOUR, WORK_END_HOUR } = require("./lib/scheduler");
+const {
+  startScheduler,
+  nextCheckInAt,
+  CHECK_IN_INTERVAL_MS,
+  WORK_START_HOUR,
+  WORK_END_HOUR,
+  AUTO_EXCLUDE,
+} = require("./lib/scheduler");
 const { readSettings, writeSettings } = require("./lib/settings-store");
+
+// How often we refresh "Next check-in ..." in the UI even when nothing has
+// actually changed -- a status file write triggers an immediate broadcast
+// (see watchStatusDir below), this just keeps the predicted time from going
+// stale while everyone's idle.
+const SCHEDULE_REFRESH_MS = 60 * 1000;
 
 const HISTORY_FILE = path.join(__dirname, "chat-history.json");
 const MAX_HISTORY_TURNS = 30;
@@ -50,10 +63,18 @@ function createWindow() {
   if (process.env.STREET_HQ_DEBUG) mainWindow.webContents.openDevTools();
 }
 
+function withSchedule(statuses) {
+  const out = {};
+  for (const [key, status] of Object.entries(statuses)) {
+    out[key] = { ...status, nextCheckInAt: nextCheckInAt(key) };
+  }
+  return out;
+}
+
 function broadcastStatus() {
   const deptKeys = listDepartments().map((d) => d.key);
   const statuses = readAll(deptKeys);
-  if (mainWindow) mainWindow.webContents.send("dept:status-all", statuses);
+  if (mainWindow) mainWindow.webContents.send("dept:status-all", withSchedule(statuses));
 }
 
 function watchStatusDir() {
@@ -74,13 +95,14 @@ ipcMain.handle("app:init", async () => {
   const settings = readSettings();
   return {
     departments,
-    statuses,
+    statuses: withSchedule(statuses),
     history,
     scheduler: {
       paused: !!settings.schedulerPaused,
       intervalHours: CHECK_IN_INTERVAL_MS / (60 * 60 * 1000),
       workStartHour: WORK_START_HOUR,
       workEndHour: WORK_END_HOUR,
+      autoExcluded: AUTO_EXCLUDE,
     },
   };
 });
@@ -110,6 +132,15 @@ ipcMain.handle("gm:send", async (_event, message) => {
 });
 
 app.whenReady().then(() => {
+  // The only permission this app ever needs is the microphone, for the
+  // chat composer's voice-to-text button. Deny everything else by default.
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === "media");
+  });
+  if (session.defaultSession.setPermissionCheckHandler) {
+    session.defaultSession.setPermissionCheckHandler((_webContents, permission) => permission === "media");
+  }
+
   loadHistory();
   watchStatusDir();
   createWindow();
@@ -117,6 +148,7 @@ app.whenReady().then(() => {
     fireAutoCheckin: (deptKey) => fireDepartment(deptKey, { trigger: "auto" }),
     isPaused: () => !!readSettings().schedulerPaused,
   });
+  setInterval(broadcastStatus, SCHEDULE_REFRESH_MS);
 });
 
 app.on("window-all-closed", () => app.quit());

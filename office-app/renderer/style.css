@@ -283,3 +283,40 @@ html, body {
 .toggle.on::after {
   transform: translateX(16px);
 }
+
+.dept-next {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  opacity: 0.8;
+}
+
+.mic-btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-muted);
+  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.mic-btn:hover {
+  color: var(--text);
+}
+
+.mic-btn.listening {
+  color: white;
+  background: var(--dot-error);
+  border-color: var(--dot-error);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.mic-btn.unsupported {
+  opacity: 0.35;
+  cursor: default;
+}

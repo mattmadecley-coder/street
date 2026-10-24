@@ -33,6 +33,32 @@ function isDue(deptKey) {
   return Date.now() - new Date(last).getTime() >= CHECK_IN_INTERVAL_MS;
 }
 
+// A clock time, not a countdown -- pushed to the UI so the app can say
+// "Next check-in 3:10 PM" next to a department instead of just a dot.
+// Pure prediction based on the same inputs the scheduler itself uses
+// (last run time, the interval, work hours) -- it doesn't reserve a slot
+// or change what actually fires; the poll tick above is still the only
+// thing that decides that.
+function clampToWorkHours(date) {
+  const d = new Date(date);
+  if (d.getHours() < WORK_START_HOUR) {
+    d.setHours(WORK_START_HOUR, 0, 0, 0);
+  } else if (d.getHours() >= WORK_END_HOUR) {
+    d.setDate(d.getDate() + 1);
+    d.setHours(WORK_START_HOUR, 0, 0, 0);
+  }
+  return d;
+}
+
+function nextCheckInAt(deptKey, now = new Date()) {
+  if (AUTO_EXCLUDE.has(deptKey)) return null; // QA -- no autonomous check-in to predict
+  const status = readStatus(deptKey);
+  if (status.status === "sent" || status.status === "working") return null; // busy right now, not "next"
+  const last = status.finishedAt || status.startedAt;
+  const due = last ? new Date(new Date(last).getTime() + CHECK_IN_INTERVAL_MS) : now;
+  return clampToWorkHours(due).toISOString();
+}
+
 // fireAutoCheckin(deptKey) -> void. isPaused() -> bool, checked fresh on
 // every tick so a pause/resume from the UI takes effect immediately.
 function startScheduler({ fireAutoCheckin, isPaused }) {
@@ -57,7 +83,9 @@ function startScheduler({ fireAutoCheckin, isPaused }) {
 
 module.exports = {
   startScheduler,
+  nextCheckInAt,
   CHECK_IN_INTERVAL_MS,
   WORK_START_HOUR,
   WORK_END_HOUR,
+  AUTO_EXCLUDE: Array.from(AUTO_EXCLUDE),
 };
