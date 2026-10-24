@@ -26,3 +26,5 @@ PROJECT_BRIEFING.md
 # Local scratch archive and dev logs
 _archive/
 dev*.log
+
+hq/*/live-runs/

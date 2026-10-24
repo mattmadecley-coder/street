@@ -87,12 +87,27 @@ Write-Host "Task: $Task"
 Write-Host "Raw output -> $LogFile"
 Write-Host "Normal report -> hq\$Department\log.md and hq\$Department\questions.md"
 
-$ArgList = @("-p", $Prompt, "--dangerously-skip-permissions")
+# Start-Process can't launch npm's extensionless "claude" shim (not a Win32
+# app), so resolve the real claude.exe that the shims point to.
+$ClaudeExe = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe"
+if (-not (Test-Path $ClaudeExe)) {
+    $ClaudeExe = (Get-Command claude.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+}
+if (-not $ClaudeExe) {
+    Write-Error "Could not find claude.exe -- is Claude Code installed?"
+    exit 1
+}
 
-Start-Process -FilePath "claude" `
-    -ArgumentList $ArgList `
+# PowerShell 5.1's Start-Process doesn't quote -ArgumentList elements, so a
+# multi-line prompt would be split into words. Feed it via stdin instead.
+$PromptFile = Join-Path $RunsDir "$Timestamp.prompt.txt"
+Set-Content -Path $PromptFile -Value $Prompt -Encoding UTF8
+
+Start-Process -FilePath $ClaudeExe `
+    -ArgumentList "-p --dangerously-skip-permissions" `
     -WorkingDirectory $RepoRoot `
     -WindowStyle Hidden `
+    -RedirectStandardInput $PromptFile `
     -RedirectStandardOutput $LogFile `
     -RedirectStandardError $ErrFile
 
