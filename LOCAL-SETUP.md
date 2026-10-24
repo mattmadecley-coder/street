@@ -125,3 +125,22 @@ rules, same file-based reporting, same "## Assigned by Matthew" (or now
 "## Assigned by GM" when the app itself sends the task) convention in
 each department's questions.md. The app is just a friendlier front door
 onto all of that.
+
+### Departments clock in and keep working on their own
+
+While the app is open, every department (except QA, which is reactive by
+design) clocks itself in and checks in again every 2 hours, 9am-5pm, on
+its own -- no task from you required. Each check-in is the same as a
+normal run: it looks for anything assigned in its questions.md first,
+does its usual Tier 1 checks, and if nothing's urgent it picks the next
+item off its own goals.md and makes real progress on it, logging what it
+did (or logging "nothing new this check-in" if there's genuinely nothing
+to do). You'll see these in the chat as "X HQ clocking in" / "X HQ
+checking in on its own work", same status dots as anything else.
+
+This only runs while the app itself is open on this machine -- close it
+and departments stop working until you open it again. There's a
+"Clocked in" toggle at the bottom of the department list if you want to
+pause all of this (e.g. to stop a run mid-task, or just go quiet for a
+while) without closing the app; flip it back and the next check-in
+happens on the following poll.

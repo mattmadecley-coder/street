@@ -1,24 +1,31 @@
 #!/usr/bin/env node
 // Detached worker: runs ONE department's Claude Code session to completion
-// and keeps its status file up to date the whole way. Launched by
-// mcp-server.js and left to run on its own -- it outlives that single GM
-// turn, which is exactly what lets a department "work on it" in the
-// background while Matthew keeps talking to the GM.
+// and keeps its status file up to date the whole way. Launched either by
+// lib/fire.js for a specific task from the GM, or by lib/scheduler.js for a
+// plain check-in. Either way it outlives whatever fired it -- that's what
+// lets a department "work on it" in the background, including the
+// continuous, self-directed check-ins Matthew asked for.
 //
-// Usage: node dept-runner.js <departmentKey> <taskFilePath>
+// Usage:
+//   node dept-runner.js <departmentKey> assigned <taskFilePath>
+//   node dept-runner.js <departmentKey> auto
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 const { getDepartment, REPO_ROOT } = require("./lib/departments");
 const { writeStatus } = require("./lib/status-store");
-const { resolveClaudeExe, buildDepartmentPrompt } = require("./lib/claude-runner");
+const {
+  resolveClaudeExe,
+  buildDepartmentPrompt,
+  buildAutoCheckinPrompt,
+} = require("./lib/claude-runner");
 
 const TIMEOUT_MS = 10 * 60 * 1000; // a department gets 10 minutes before we give up
 
 async function main() {
-  const [deptKey, taskFilePath] = process.argv.slice(2);
-  if (!deptKey || !taskFilePath) {
-    console.error("usage: dept-runner.js <departmentKey> <taskFilePath>");
+  const [deptKey, mode, taskFilePath] = process.argv.slice(2);
+  if (!deptKey || (mode !== "assigned" && mode !== "auto")) {
+    console.error("usage: dept-runner.js <departmentKey> assigned <taskFilePath> | auto");
     process.exit(1);
   }
 
@@ -28,12 +35,13 @@ async function main() {
     process.exit(1);
   }
 
-  const task = fs.readFileSync(taskFilePath, "utf8");
+  const task = mode === "assigned" ? fs.readFileSync(taskFilePath, "utf8") : null;
   const startedAt = new Date().toISOString();
   writeStatus(dept.key, {
     displayName: dept.displayName,
     status: "working",
     task,
+    trigger: mode === "auto" ? "auto" : "manual",
     startedAt,
   });
 
@@ -43,7 +51,10 @@ async function main() {
   const logFile = path.join(liveRunsDir, `${timestamp}.log`);
   const errFile = path.join(liveRunsDir, `${timestamp}.err.log`);
 
-  const prompt = buildDepartmentPrompt(dept.key, dept.agentFile, task);
+  const prompt =
+    mode === "assigned"
+      ? buildDepartmentPrompt(dept.key, dept.agentFile, task)
+      : buildAutoCheckinPrompt(dept.key, dept.agentFile);
   const { exe, useShell } = resolveClaudeExe();
   const args = ["-p", prompt, "--dangerously-skip-permissions"];
 
@@ -90,10 +101,12 @@ async function main() {
       summary,
       finishedAt: new Date().toISOString(),
     });
-    try {
-      fs.unlinkSync(taskFilePath);
-    } catch {
-      // not fatal
+    if (taskFilePath) {
+      try {
+        fs.unlinkSync(taskFilePath);
+      } catch {
+        // not fatal
+      }
     }
   });
 }

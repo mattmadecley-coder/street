@@ -127,9 +127,30 @@ function extractReplyText(stdout) {
   return lines.length ? lines[lines.length - 1] : "(no reply)";
 }
 
+function buildAutoCheckinPrompt(dept, agentFile) {
+  return `You are starting a scheduled check-in for this department, running locally in the Street HQ desktop app on Matthew's own machine. This is not a specific assignment from the GM -- it is your regular, continuous check-in. The app fires one of these for every department on its own, repeatedly, for as long as Matthew leaves it open during the work day, so this department keeps making progress without him having to ask.
+
+Before doing anything: read hq/_shared/company.md, your own agent definition at .claude/agents/${agentFile}, and your own hq/${dept}/charter.md, goals.md, questions.md, and log.md.
+
+Steps:
+1. Check hq/${dept}/questions.md for anything under "## Assigned by Matthew" or "## Assigned by GM" that you haven't acted on yet -- that always comes first, same as any other run.
+2. Run your normal Tier 1 checks from your charter and act on anything within Tier 1.
+3. If nothing above was urgent or assigned, look at your own goals.md, pick the next concrete item on it, and make real progress on it this run -- not just restate it -- then update goals.md with what moved.
+4. If there is genuinely nothing to do this check-in (checks clean, nothing assigned, every goal blocked on Matthew or already done), just log "nothing new this check-in" in one line and stop -- don't invent work to look busy.
+
+Rules that don't change just because this is a scheduled check-in:
+- Respect your own Tier 1/2/3 boundaries from your charter. Anything Tier 2 or Tier 3 goes to hq/${dept}/questions.md under "## Assigned by GM" with your own recommendation -- never act on it directly.
+- Never write a secret, API key, or credential value into any hq/ file.
+- Append exactly one line to hq/${dept}/log.md summarizing this check-in. That line is what Matthew sees in the app, so make it specific.
+- Don't touch other departments' files.
+
+Go.`;
+}
+
 module.exports = {
   resolveClaudeExe,
   buildGmPrompt,
   buildDepartmentPrompt,
+  buildAutoCheckinPrompt,
   runClaudeOnce,
 };

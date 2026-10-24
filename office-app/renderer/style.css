@@ -225,3 +225,61 @@ html, body {
   color: var(--text-muted);
   margin-top: 1px;
 }
+
+.clock-in {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.clock-in-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.clock-in-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.clock-in-detail {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.toggle {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: none;
+  background: var(--dot-idle);
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s ease;
+}
+
+.toggle.on {
+  background: var(--dot-done);
+}
+
+.toggle.on::after {
+  transform: translateX(16px);
+}

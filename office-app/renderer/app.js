@@ -3,9 +3,13 @@ const departmentsEl = document.getElementById("departments");
 const composerEl = document.getElementById("composer");
 const inputEl = document.getElementById("input");
 const sendEl = document.getElementById("send");
+const clockInToggleEl = document.getElementById("clockInToggle");
+const clockInLabelEl = document.getElementById("clockInLabel");
+const clockInDetailEl = document.getElementById("clockInDetail");
 
 let departments = [];
 let lastStatus = {}; // dept key -> last status string we already showed a line for
+let scheduler = { paused: false, intervalHours: 2, workStartHour: 9, workEndHour: 17 };
 
 function addBubble(role, text) {
   const div = document.createElement("div");
@@ -67,10 +71,11 @@ function applyStatusUpdate(statuses, { announce }) {
     const s = statuses[dept.key] || { status: "idle" };
     const prev = lastStatus[dept.key] || "idle";
     if (s.status !== prev) {
+      const isAuto = s.trigger === "auto";
       if (s.status === "sent") {
-        addStatusLine(`→ Sent to ${dept.displayName}`);
+        addStatusLine(isAuto ? `→ ${dept.displayName} clocking in` : `→ Sent to ${dept.displayName}`);
       } else if (s.status === "working" && prev !== "sent") {
-        addStatusLine(`⋯ ${dept.displayName} is working`);
+        addStatusLine(isAuto ? `⋯ ${dept.displayName} checking in on its own work` : `⋯ ${dept.displayName} is working`);
       } else if (s.status === "done") {
         addStatusLine(`✓ ${dept.displayName} replied: ${s.summary || "done."}`, "done");
       } else if (s.status === "error") {
@@ -81,10 +86,27 @@ function applyStatusUpdate(statuses, { announce }) {
   }
 }
 
+function renderClockIn() {
+  clockInToggleEl.classList.toggle("on", !scheduler.paused);
+  clockInToggleEl.setAttribute("aria-checked", String(!scheduler.paused));
+  clockInLabelEl.textContent = scheduler.paused ? "Clocked out" : "Clocked in";
+  clockInDetailEl.textContent = scheduler.paused
+    ? "Departments won't start work on their own until you clock them back in."
+    : `Checks in every ${scheduler.intervalHours}h, ${formatHour(scheduler.workStartHour)}–${formatHour(scheduler.workEndHour)}, while this app is open.`;
+}
+
+function formatHour(h) {
+  const period = h >= 12 ? "pm" : "am";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}${period}`;
+}
+
 async function init() {
   const data = await window.streetHQ.init();
   departments = data.departments;
+  if (data.scheduler) scheduler = data.scheduler;
   renderDepartments(data.statuses);
+  renderClockIn();
   lastStatus = Object.fromEntries(
     departments.map((d) => [d.key, (data.statuses[d.key] || {}).status || "idle"])
   );
@@ -95,6 +117,12 @@ async function init() {
 
   window.streetHQ.onStatusUpdate((statuses) => applyStatusUpdate(statuses, { announce: true }));
 }
+
+clockInToggleEl.addEventListener("click", async () => {
+  const result = await window.streetHQ.toggleScheduler(!scheduler.paused);
+  scheduler.paused = result.paused;
+  renderClockIn();
+});
 
 composerEl.addEventListener("submit", async (e) => {
   e.preventDefault();

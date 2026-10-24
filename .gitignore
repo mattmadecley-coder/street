@@ -38,3 +38,4 @@ office-app/node_modules/
 office-app/status/*.json
 office-app/tmp/
 office-app/chat-history.json
+office-app/settings.json

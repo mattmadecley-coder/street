@@ -5,6 +5,9 @@ const { listDepartments } = require("./lib/departments");
 const { STATUS_DIR, ensureDir, readAll } = require("./lib/status-store");
 const { REPO_ROOT } = require("./lib/departments");
 const { buildGmPrompt, runClaudeOnce } = require("./lib/claude-runner");
+const { fireDepartment } = require("./lib/fire.js");
+const { startScheduler, CHECK_IN_INTERVAL_MS, WORK_START_HOUR, WORK_END_HOUR } = require("./lib/scheduler");
+const { readSettings, writeSettings } = require("./lib/settings-store");
 
 const HISTORY_FILE = path.join(__dirname, "chat-history.json");
 const MAX_HISTORY_TURNS = 30;
@@ -68,7 +71,23 @@ ipcMain.handle("app:init", async () => {
     displayName: d.displayName,
   }));
   const statuses = readAll(departments.map((d) => d.key));
-  return { departments, statuses, history };
+  const settings = readSettings();
+  return {
+    departments,
+    statuses,
+    history,
+    scheduler: {
+      paused: !!settings.schedulerPaused,
+      intervalHours: CHECK_IN_INTERVAL_MS / (60 * 60 * 1000),
+      workStartHour: WORK_START_HOUR,
+      workEndHour: WORK_END_HOUR,
+    },
+  };
+});
+
+ipcMain.handle("scheduler:toggle", async (_event, paused) => {
+  const settings = writeSettings({ schedulerPaused: !!paused });
+  return { paused: !!settings.schedulerPaused };
 });
 
 ipcMain.handle("gm:send", async (_event, message) => {
@@ -94,6 +113,10 @@ app.whenReady().then(() => {
   loadHistory();
   watchStatusDir();
   createWindow();
+  startScheduler({
+    fireAutoCheckin: (deptKey) => fireDepartment(deptKey, { trigger: "auto" }),
+    isPaused: () => !!readSettings().schedulerPaused,
+  });
 });
 
 app.on("window-all-closed", () => app.quit());
