@@ -23,6 +23,19 @@ next-env.d.ts
 # Sensitive session-briefing doc with live credentials -- never commit
 PROJECT_BRIEFING.md
 
+# Live Google service-account key + OAuth client secret, copied in locally for
+# Analytics' GSC/GA4 access -- never commit
+street-secrets/
+
 # Local scratch archive and dev logs
 _archive/
 dev*.log
+
+hq/*/live-runs/
+
+# Street HQ desktop app (office-app) -- runtime-only files, never commit
+office-app/node_modules/
+office-app/status/*.json
+office-app/tmp/
+office-app/chat-history.json
+office-app/settings.json

@@ -64,3 +64,17 @@ phased out) and native APIs (Instagram, Pinterest).
 4. Read hq/_shared/decisions.md every run. A decision there overrides
    anything in your own charter that conflicts with it.
 5. Keep your log.md entries to one line per run. Reports go in reports/.
+6. Check your own hq/<dept>/questions.md for a `## Assigned by Matthew`
+   section every run, before anything else on your to-do list. Anything
+   there came straight from Matthew talking to the GM in chat — treat
+   it as a Tier 1 action item for this run, not something to leave for
+   later, unless it's clearly Tier 2/3 for you (needs money, a real
+   decision, or something outside hq/), in which case say so in
+   questions.md instead of attempting it. When you've handled one, move
+   it from `## Assigned by Matthew` into your log.md with what you did
+   (don't just delete it silently) and note the result in your next
+   report if there is one. You may also see a `## Assigned by GM`
+   section -- that's the same thing, written when the Street HQ desktop
+   app fires you directly for something Matthew asked the GM for in
+   chat. Treat it with the same Tier 1 weight and the same
+   move-to-log.md-when-done rule.
