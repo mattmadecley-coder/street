@@ -9,10 +9,15 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   Department page / GM, v1 read-only) (done 2026-10-23 — git/worktree
   blocker fixed, draft applied, PR #49 opened against work, awaiting
   Matthew's review/merge)
-- [ ] Design the real two-way sync for hq_questions (so Matthew can answer
+- [~] Design the real two-way sync for hq_questions (so Matthew can answer
   a question from the office page on his phone without GM's nightly
-  markdown-sync silently wiping it) — explicitly deferred out of v1 per
-  the charter; needs the GM's sync logic redesigned too, not just a form
+  markdown-sync silently wiping it) (blocked: design drafted
+  2026-10-24 at hq/product/drafts/two-way-sync-design.md — recommends a
+  pending-answers.json overlay the GM consumes each run rather than the
+  app writing freeform markdown directly; filed to questions.md for a
+  direction call, since it needs the GM's own charter changed and a new
+  write-scoped GitHub credential from Infrastructure before Product can
+  build the office-page form)
 - [x] Replace the hq_* Supabase mirror/sync behind `/admin/hq` with a
   git-committed JSON snapshot (done 2026-10-24 — `agent/hq-office-page-v2`
   now reads `hq/_shared/dashboard.json` via the GitHub Contents API

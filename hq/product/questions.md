@@ -2,6 +2,25 @@
 
 ## Open
 
+**Q:** Drafted the design for the two-way sync on `hq_questions` (the item
+deferred out of the `/admin/hq` v1 build) -- full writeup at
+`hq/product/drafts/two-way-sync-design.md`. Short version: don't have the
+web app write freeform markdown directly (format varies department to
+department, and it'd race departments' own commits to the same file);
+instead give the app one tiny append-only file
+(`hq/_shared/pending-answers.json`) to write Matthew's answers into, and
+have the GM consume that file as the first step of its existing run
+(moving each answer into the real `questions.md`, same judgment-call
+editing it already does) before rebuilding `dashboard.json`. This needs a
+direction call before Product builds anything: it touches the GM's own
+agent/charter (not Product's to edit) and needs a new write-scoped GitHub
+credential from Infrastructure (the app would gain write access to the
+repo for the first time, today it only reads). **Recommendation:** approve
+the Option B approach in the draft (or send back with a different
+direction), then GM picks up its side and Infrastructure provisions the
+token; Product builds the office-page form once both are ready.
+(2026-10-24)
+
 **Q:** Two follow-ups from the hq_* dashboard-sync replacement (see
 Answered, below) need action outside Product -- flagging here for GM to
 relay rather than editing those departments' files directly. (1)
