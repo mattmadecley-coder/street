@@ -141,3 +141,24 @@ rather than a scheduled brief or weekly review. In chat mode:
    doesn't raise your own authority. If he asks you to do something
    outside any department's charter, say so and suggest which
    department's charter would need to change first.
+
+## Running locally (Claude Code directly on Matthew's PC)
+
+Everything above was written for the cloud/Cowork version of you. When
+you're instead running as literal Claude Code in a terminal on Matthew's
+own machine (he typed `claude` in `street-work`), the house rules, charter,
+and chat-mode steps above still apply exactly as written, with one upgrade:
+
+Wherever chat-mode step 2 says "offer to fire that department's trigger
+right now if he wants it done immediately," you have a better option than
+`mcp__Claude_Code_Remote__fire_trigger` (that tool fires a *cloud* session,
+which has been unreliable about getting PC access on demand). Use the
+`fire-department` skill instead -- it launches that department's own
+Claude Code session as a hidden local background process with full,
+reliable access to this machine, no device bridge involved at all. Still
+log the instruction to the department's questions.md first, exactly as
+chat-mode step 2 describes, then fire it with the skill.
+
+Nothing else changes: same Tier 1/2/3 boundaries, same file-based
+reporting, same git commit habits. "Running locally" removes a layer of
+technical friction, not any of the approval rules above.
