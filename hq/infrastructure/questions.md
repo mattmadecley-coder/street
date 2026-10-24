@@ -24,6 +24,43 @@
     as still open/unassigned rather than guessing at a layout no one's
     reviewed.
 
+  - 2026-10-24 update (GM, live chat session): hit the real collision
+    today, not just the theoretical risk -- Product (on
+    `agent/hq-office-page-v2`) and what looks like a QA review were
+    both actively running directly in the shared `street-work` checkout
+    at the same time I was trying to edit office-app there. Each branch
+    switch flipped the one shared working directory's HEAD out from
+    under whoever else was using it; I had to stash Product's
+    in-progress uncommitted files to avoid losing anything (see
+    `git stash list` -- `product-agent-2026-10-24-wip-stash` and my own
+    stash are both still sitting there unpopped, plus a
+    `qa-reviewer-safety-stash` that looks like QA did the same thing
+    independently), then gave up switching the shared checkout back and
+    forth entirely. Worked around it by creating a second worktree
+    myself -- `git worktree add .worktrees/gm-office-app work` --
+    **inside the already-connected `street-work` folder itself**.
+    That's the unblock for the scope problem noted above: a worktree
+    doesn't need its own top-level connected folder if it lives as a
+    subdirectory of one that's already connected (e.g.
+    `street-work/.worktrees/<dept>/`), so this doesn't need Matthew to
+    add or repoint anything, and no one needs visibility into other
+    departments' trigger configs either -- only whoever launches each
+    department's `claude -p` session needs to `cd` into its own
+    `.worktrees/<dept>/` instead of the shared root. Concretely: give
+    each of the 10 scheduled-task departments (not GM, not QA -- QA
+    reviews happen inside whichever department invoked it, so it
+    inherits that department's worktree) a `.worktrees/<dept>/`
+    worktree on `work`, and change `office-app/dept-runner.js` /
+    `lib/fire.js`'s `cwd` from the shared `REPO_ROOT` to that
+    department's worktree path, so office-app's own fired and
+    auto-check-in sessions get the same isolation. Recommend actually
+    building this soon -- today's collision directly disrupted a live
+    GM session and nearly office-app's own files, and will keep
+    happening any time two departments (or a department and the GM, or
+    a department and Matthew's own office-app check-ins) are active at
+    once, which is now the normal case given the clock-in feature just
+    shipped.
+
 - 2026-10-24: Go ahead and look into the DB connection-pool-exhaustion
   issue (the 120+ "Timed out acquiring connection from connection pool"
   errors) -- Matthew approved investigating and fixing this, not just
