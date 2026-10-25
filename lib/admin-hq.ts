@@ -16,6 +16,7 @@
 // place, unused, until Matthew says to drop them (that's a schema change).
 import { cache } from "react";
 import { fetchHqDashboardRaw, hasHqDashboardSource } from "@/lib/hq-dashboard-source";
+import { hqQuestionId } from "@/lib/hq-question-id";
 
 export type HqDepartment = {
   id: string;
@@ -190,8 +191,8 @@ function parseDashboard(raw: RawDashboard): ParsedDashboard {
   for (const department of Object.keys(questionsRaw)) {
     const entries = asArray(questionsRaw[department])
       .map((entry) => entry as RawQuestion)
-      .map((entry, index) => ({
-        id: `${department}:question:${index}`,
+      .map((entry) => ({
+        id: hqQuestionId(department, str(entry.question)),
         department,
         question: str(entry.question),
         recommendation: strOrNull(entry.recommendation),

@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/admin-guard";
 import { can } from "@/lib/admin-permissions";
 import { getAdminTimeZone } from "@/lib/admin-timezone";
 import { OFFICE_TABS, loadHqQuestions, questionTone, type HqQuestionStatus } from "@/lib/admin-hq";
+import { answerHqQuestion } from "@/app/admin/hq/actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Inbox" };
@@ -15,11 +16,16 @@ const STATUSES: Array<{ value: HqQuestionStatus | ""; label: string }> = [
   { value: "", label: "All" },
 ];
 
-export default async function HqInboxPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export default async function HqInboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; hqAnswerStaged?: string; hqAnswerError?: string }>;
+}) {
   const principal = await requireUser();
   if (!can(principal.role, "hq.view")) redirect("/admin/forbidden?needs=hq.view");
+  const canAnswer = can(principal.role, "hq.answer");
 
-  const { status: statusParam } = await searchParams;
+  const { status: statusParam, hqAnswerStaged, hqAnswerError } = await searchParams;
   const status = STATUSES.some((item) => item.value === statusParam) ? (statusParam as HqQuestionStatus | "") : "open";
 
   const [{ questions }, timeZone] = await Promise.all([loadHqQuestions(status), getAdminTimeZone()]);
@@ -29,9 +35,15 @@ export default async function HqInboxPage({ searchParams }: { searchParams: Prom
     <div>
       <PageHeader
         title="Inbox"
-        subtitle="Every department's questions for Matthew, across the whole business. Still answered by editing that department's questions.md (or in chat) — this page doesn't take answers yet."
+        subtitle={
+          canAnswer
+            ? "Every department's questions for Matthew, across the whole business. Answering here stages the answer for that department's next run to fold into its own questions.md — it doesn't land there instantly."
+            : "Every department's questions for Matthew, across the whole business. Still answered by editing that department's questions.md (or in chat)."
+        }
       />
       <Tabs label="Office sections" active="/admin/hq/inbox" tabs={OFFICE_TABS} />
+      {hqAnswerStaged ? <p className={styles.rowMeta}>Answer staged — it'll be folded into that department's questions.md on its next run.</p> : null}
+      {hqAnswerError ? <p className={styles.rowMeta}>Could not stage that answer: {hqAnswerError}</p> : null}
 
       <form className={styles.searchBar} action="/admin/hq/inbox">
         <select name="status" defaultValue={status} aria-label="Question status">
@@ -62,6 +74,18 @@ export default async function HqInboxPage({ searchParams }: { searchParams: Prom
                     Answer: {question.answer ?? "(logged as answered, no answer text)"}
                     {question.answered_at ? ` · ${stamp.format(new Date(question.answered_at))}` : ""}
                   </p>
+                ) : null}
+                {question.status === "open" && canAnswer ? (
+                  <form action={answerHqQuestion} className={styles.field}>
+                    <input type="hidden" name="department" value={question.department} />
+                    <input type="hidden" name="question" value={question.question} />
+                    <input type="hidden" name="return_to" value="/admin/hq/inbox" />
+                    <label htmlFor={`answer-${question.id}`}>Answer</label>
+                    <textarea id={`answer-${question.id}`} name="answer" placeholder="Write your answer…" required />
+                    <div className={styles.actions}>
+                      <button type="submit" className={styles.button}>Send answer</button>
+                    </div>
+                  </form>
                 ) : null}
               </div>
             </details>

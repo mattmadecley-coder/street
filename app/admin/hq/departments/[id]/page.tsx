@@ -5,6 +5,7 @@ import { getPrincipal, requireUser } from "@/lib/admin-guard";
 import { can } from "@/lib/admin-permissions";
 import { getAdminTimeZone } from "@/lib/admin-timezone";
 import { goalTone, loadHqDepartment, questionTone, statusTone } from "@/lib/admin-hq";
+import { answerHqQuestion } from "@/app/admin/hq/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,19 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: detail.department?.display_name ?? "Department" };
 }
 
-export default async function HqDepartmentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function HqDepartmentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ hqAnswerStaged?: string; hqAnswerError?: string }>;
+}) {
   const principal = await requireUser();
   if (!can(principal.role, "hq.view")) redirect("/admin/forbidden?needs=hq.view");
+  const canAnswer = can(principal.role, "hq.answer");
 
   const { id } = await params;
+  const { hqAnswerStaged, hqAnswerError } = await searchParams;
   const [{ available, detail }, timeZone] = await Promise.all([loadHqDepartment(id), getAdminTimeZone()]);
 
   if (available && !detail.department) return notFound();
@@ -41,6 +50,8 @@ export default async function HqDepartmentPage({ params }: { params: Promise<{ i
         crumbs={[{ label: "Office", href: "/admin/hq" }, { label: "Departments", href: "/admin/hq/departments" }, { label: detail.department?.display_name ?? id }]}
         actions={detail.department?.last_status ? <Badge tone={statusTone(detail.department.last_status)}>{detail.department.last_status}</Badge> : undefined}
       />
+      {hqAnswerStaged ? <p className={styles.rowMeta}>Answer staged — it&apos;ll be folded into this department&apos;s questions.md on its next run.</p> : null}
+      {hqAnswerError ? <p className={styles.rowMeta}>Could not stage that answer: {hqAnswerError}</p> : null}
 
       {!available ? (
         <Banner tone="info">The HQ dashboard snapshot isn&apos;t available yet. Nothing to show until it&apos;s configured and the GM writes its next <code>hq/_shared/dashboard.json</code>.</Banner>
@@ -63,6 +74,18 @@ export default async function HqDepartmentPage({ params }: { params: Promise<{ i
                     </summary>
                     <div className={styles.rowBody}>
                       {question.recommendation ? <p className={styles.rowMeta}>Recommendation: {question.recommendation}</p> : <p className={styles.rowMeta}>No recommendation given.</p>}
+                      {canAnswer ? (
+                        <form action={answerHqQuestion} className={styles.field}>
+                          <input type="hidden" name="department" value={question.department} />
+                          <input type="hidden" name="question" value={question.question} />
+                          <input type="hidden" name="return_to" value={`/admin/hq/departments/${id}`} />
+                          <label htmlFor={`answer-${question.id}`}>Answer</label>
+                          <textarea id={`answer-${question.id}`} name="answer" placeholder="Write your answer…" required />
+                          <div className={styles.actions}>
+                            <button type="submit" className={styles.button}>Send answer</button>
+                          </div>
+                        </form>
+                      ) : null}
                     </div>
                   </details>
                 ))}
