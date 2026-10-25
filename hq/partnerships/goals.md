@@ -12,6 +12,15 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   automated finder returns the same address from each brand's own site —
   no alternate found; needs a different contact route or Matthew's input,
   see questions.md)
+- [x] Go beyond the automated email-only finder for the 6 missing-email +
+  2 bounced-address brands: manually checked each storefront for a social/
+  WhatsApp contact route and for whether the storefront itself is even up
+  (done 2026-10-25 — found Instagram for hmdd and Instagram+WhatsApp for
+  emestudios; found 2 storefronts that look dead (unknown-london 404,
+  madebycozyus 402/"Store unavailable") and flagged those to the GM as a
+  Tier 2 broken-feed check; slawn-made only has a contact form, no email/
+  social; plus-one-usa, broken-planet, roidetout have no lead. All written
+  to questions.md for Matthew/GM.)
 - [x] Draft the first batch of brand performance reports for Matthew's
   approval in `/admin/reports` (done 2026-10-24 — 4 drafts for 2026-10-23,
   QA-cleared; update: all 4 were actually auto-sent by the production cron
