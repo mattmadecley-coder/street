@@ -166,6 +166,26 @@ something's actually going to move -- it goes quiet ("Paused") if you've
 clocked everyone out, and QA always shows "On demand only" since it's
 reactive, not scheduled.
 
+### Simple, one-glance updates (and the detail behind them)
+
+Each department card in the sidebar shows one short, plain sentence with
+an emoji -- what it just did and what it's doing next -- instead of
+anything technical. Click (or tab to it and press Enter) on any
+department to open a bigger, still plain-English recap of today
+specifically: a few sentences per check-in, written for you, not for
+another engineer. All the dense, technical detail (exact file names,
+database queries, commit hashes, that kind of thing) still exists --
+it's just in each department's own log.md and reports/ files on disk if
+you ever want to dig in, and it's still what other departments and the
+GM itself read to stay in sync. You just don't have to read it.
+
+The GM also sends you one wrap-up message on its own near the end of the
+work day (once it's past 5pm and at least one department has done
+something that day), listing every department's latest one-line update
+in the chat -- so you get the "what happened today" picture without
+having to ask for it. It only sends once per day even if you close and
+reopen the app.
+
 ### Voice to text
 
 There's a mic button next to Send. Click it, talk, click it again (or

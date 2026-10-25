@@ -6,6 +6,10 @@ const sendEl = document.getElementById("send");
 const clockInToggleEl = document.getElementById("clockInToggle");
 const clockInLabelEl = document.getElementById("clockInLabel");
 const clockInDetailEl = document.getElementById("clockInDetail");
+const modalOverlayEl = document.getElementById("deptModal");
+const modalTitleEl = document.getElementById("modalTitle");
+const modalBodyEl = document.getElementById("modalBody");
+const modalCloseEl = document.getElementById("modalClose");
 
 let departments = [];
 let lastStatus = {}; // dept key -> last status string we already showed a line for
@@ -66,6 +70,17 @@ function describeNextCheckIn(dept, s) {
   return sameDay ? `Next check-in ${formatClock(due)}` : `Next check-in tomorrow ${formatClock(due)}`;
 }
 
+function escapeHtml(s) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// The headline is the whole point of the simplified view: one short,
+// plain-English, emoji-led sentence each department writes about itself
+// every run (see lib/claude-runner.js). We just display it as-is -- no
+// truncation, no re-wording -- it's already supposed to be short.
 function renderDepartments(statuses) {
   lastRenderedStatuses = statuses;
   departmentsEl.innerHTML = "";
@@ -73,16 +88,34 @@ function renderDepartments(statuses) {
     const s = statuses[dept.key] || { status: "idle" };
     const card = document.createElement("div");
     card.className = "dept-card";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `${dept.displayName} -- click for more detail`);
     const nextLine = describeNextCheckIn(dept, s);
+    const headline = s.summary ? escapeHtml(s.summary) : null;
     card.innerHTML = `
       <div class="dept-dot ${s.status || "idle"}"></div>
       <div class="dept-info">
         <div class="dept-name">${dept.displayName}</div>
-        <div class="dept-state">${stateLabel(s.status)}</div>
-        ${nextLine ? `<div class="dept-next">${nextLine}</div>` : ""}
+        ${
+          headline
+            ? `<div class="dept-headline">${headline}</div>`
+            : `<div class="dept-state">${stateLabel(s.status)}</div>`
+        }
+        <div class="dept-meta">
+          ${headline ? `<span class="dept-state-mini">${stateLabel(s.status)}</span>` : ""}
+          ${nextLine ? `<span class="dept-next">${nextLine}</span>` : ""}
+        </div>
       </div>
     `;
     if (s.task) card.title = s.task;
+    card.addEventListener("click", () => openDeptDetails(dept));
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openDeptDetails(dept);
+      }
+    });
     departmentsEl.appendChild(card);
   }
 }
@@ -129,6 +162,76 @@ function formatHour(h) {
   return `${hour12}${period}`;
 }
 
+// A very small, deliberately dumb markdown-to-HTML step for the
+// department detail panel -- just headings and paragraphs, nothing
+// fancier. The daily brief files are written to be plain English by
+// design, so there's nothing complex to render here; this just keeps
+// line breaks and "### " headings readable instead of one wall of text.
+function renderMarkdownLite(markdown) {
+  if (!markdown) return "";
+  const lines = escapeHtml(markdown).split(/\r?\n/);
+  let html = "";
+  let paragraph = [];
+  const flushParagraph = () => {
+    if (paragraph.length) {
+      html += `<p>${paragraph.join(" ")}</p>`;
+      paragraph = [];
+    }
+  };
+  for (const line of lines) {
+    const heading = line.match(/^(#{1,4})\s+(.*)/);
+    if (heading) {
+      flushParagraph();
+      const level = Math.min(heading[1].length + 2, 6);
+      html += `<h${level}>${heading[2]}</h${level}>`;
+    } else if (line.trim() === "") {
+      flushParagraph();
+    } else {
+      paragraph.push(line);
+    }
+  }
+  flushParagraph();
+  return html;
+}
+
+function closeDeptDetails() {
+  modalOverlayEl.classList.add("hidden");
+}
+
+// Click (or Enter/Space) on a department card -> the simple, plain-English
+// recap for today, falling back to the technical log if nothing's been
+// written in the new friendly format yet. This is the "click in for more
+// detail" Matthew asked for.
+async function openDeptDetails(dept) {
+  modalTitleEl.textContent = dept.displayName;
+  modalBodyEl.innerHTML = `<p class="modal-hint">Loading...</p>`;
+  modalOverlayEl.classList.remove("hidden");
+
+  const details = await window.streetHQ.getDeptDetails(dept.key);
+  if (!details || !details.ok) {
+    modalBodyEl.innerHTML = `<p class="modal-hint">Couldn't load more detail for this department right now.</p>`;
+    return;
+  }
+  if (details.daily) {
+    modalBodyEl.innerHTML = renderMarkdownLite(details.daily);
+  } else if (details.logTail) {
+    modalBodyEl.innerHTML = `
+      <p class="modal-hint">No simple recap yet today -- here's the technical log instead:</p>
+      <pre class="modal-log">${escapeHtml(details.logTail)}</pre>
+    `;
+  } else {
+    modalBodyEl.innerHTML = `<p class="modal-hint">Nothing to show yet -- check back after the next check-in.</p>`;
+  }
+}
+
+modalCloseEl.addEventListener("click", closeDeptDetails);
+modalOverlayEl.addEventListener("click", (e) => {
+  if (e.target === modalOverlayEl) closeDeptDetails();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !modalOverlayEl.classList.contains("hidden")) closeDeptDetails();
+});
+
 async function init() {
   const data = await window.streetHQ.init();
   departments = data.departments;
@@ -145,6 +248,9 @@ async function init() {
   }
 
   window.streetHQ.onStatusUpdate((statuses) => applyStatusUpdate(statuses, { announce: true }));
+  // The GM talking to Matthew on its own, not just replying -- right now
+  // that's only the once-a-day wrap-up digest.
+  window.streetHQ.onGmMessage((text) => addBubble("gm", text));
 }
 
 clockInToggleEl.addEventListener("click", async () => {

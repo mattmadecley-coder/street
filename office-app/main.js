@@ -1,12 +1,13 @@
 const path = require("path");
 const fs = require("fs");
 const { app, BrowserWindow, ipcMain, Menu, session } = require("electron");
-const { listDepartments } = require("./lib/departments");
+const { listDepartments, getDepartment } = require("./lib/departments");
 const { STATUS_DIR, ensureDir, readAll } = require("./lib/status-store");
 const { REPO_ROOT } = require("./lib/departments");
 const { pullMainCheckout } = require("./lib/worktrees");
 const { buildGmPrompt, runClaudeOnce } = require("./lib/claude-runner");
 const { fireDepartment } = require("./lib/fire.js");
+const { buildDigestText } = require("./lib/digest");
 const {
   startScheduler,
   nextCheckInAt,
@@ -87,6 +88,30 @@ function watchStatusDir() {
   });
 }
 
+// Matthew asked for the GM to proactively tell him what each department
+// did and what's next -- not just make him ask. Sends one plain-English
+// wrap-up a day, once work hours are basically over, built straight from
+// the same short headlines the departments already write for the sidebar
+// (see lib/digest.js). Guarded by settings so it only ever goes out once
+// per calendar day no matter how many times this fires or the app
+// restarts that day.
+function maybeSendDailyDigest() {
+  const now = new Date();
+  if (now.getHours() < WORK_END_HOUR) return;
+  const today = now.toISOString().slice(0, 10);
+  const settings = readSettings();
+  if (settings.lastDigestDate === today) return;
+  const text = buildDigestText();
+  if (!text) return; // nobody's done anything today yet -- nothing to send
+  writeSettings({ lastDigestDate: today });
+  history.push({ role: "assistant", text });
+  if (history.length > MAX_HISTORY_TURNS * 2) {
+    history = history.slice(-MAX_HISTORY_TURNS * 2);
+  }
+  saveHistory();
+  if (mainWindow) mainWindow.webContents.send("gm:message", text);
+}
+
 ipcMain.handle("app:init", async () => {
   const departments = listDepartments().map((d) => ({
     key: d.key,
@@ -111,6 +136,45 @@ ipcMain.handle("app:init", async () => {
 ipcMain.handle("scheduler:toggle", async (_event, paused) => {
   const settings = writeSettings({ schedulerPaused: !!paused });
   return { paused: !!settings.schedulerPaused };
+});
+
+// Backs the "click a department for more detail" view: the sidebar only
+// ever shows the one-line headline, this is where the fuller, still
+// plain-English picture lives -- today's entries from hq/<dept>/daily/,
+// falling back to the technical log.md tail if a department hasn't
+// written a daily brief yet (e.g. right after this feature shipped).
+ipcMain.handle("dept:details", async (_event, deptKey) => {
+  const dept = getDepartment(deptKey);
+  if (!dept) return { ok: false, error: "Unknown department." };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyPath = path.join(dept.hqDir, "daily", `${today}.md`);
+  let daily = null;
+  try {
+    daily = fs.readFileSync(dailyPath, "utf8");
+  } catch {
+    // no daily brief yet today -- fall through to the technical fallback below
+  }
+
+  let logTail = null;
+  if (!daily) {
+    try {
+      const raw = fs.readFileSync(path.join(dept.hqDir, "log.md"), "utf8");
+      const lines = raw.split(/\r?\n/).filter((l) => l.trim().startsWith("-"));
+      logTail = lines.slice(-6).join("\n");
+    } catch {
+      // nothing logged yet either
+    }
+  }
+
+  const status = readAll([dept.key])[dept.key] || {};
+  return {
+    ok: true,
+    displayName: dept.displayName,
+    headline: status.summary || null,
+    daily,
+    logTail,
+  };
 });
 
 ipcMain.handle("gm:send", async (_event, message) => {
@@ -157,6 +221,11 @@ app.whenReady().then(() => {
   // Keep the main checkout's hq/ files from going stale between chat
   // turns too -- same best-effort fast-forward pull, just on a timer.
   setInterval(pullMainCheckout, SCHEDULE_REFRESH_MS);
+  // Catch Matthew up with today's digest right away if he opens the app
+  // after everyone's basically done for the day, then keep checking once
+  // a minute so it goes out the moment work hours end if he's already here.
+  maybeSendDailyDigest();
+  setInterval(maybeSendDailyDigest, SCHEDULE_REFRESH_MS);
 });
 
 app.on("window-all-closed", () => app.quit());

@@ -20,7 +20,7 @@ const {
   buildAutoCheckinPrompt,
 } = require("./lib/claude-runner");
 
-const TIMEOUT_MS = 10 * 60 * 1000; // a department gets 10 minutes before we give up
+const TIMEOUT_MS = 15 * 60 * 1000; // a department gets 15 minutes before we give up -- bumped from 10 once real multi-step work started regularly running close to the old limit
 
 async function main() {
   const [deptKey, mode, taskFilePath] = process.argv.slice(2);
@@ -71,13 +71,13 @@ async function main() {
     windowsHide: true,
   });
 
+  // We killed this ourselves via timeout -- not "the department errored",
+  // just "ran out of time". Only the close handler below decides the final
+  // status (see freshSummary) -- this just remembers why, if it comes to that.
+  let killedForTimeout = false;
   const timer = setTimeout(() => {
+    killedForTimeout = true;
     child.kill();
-    writeStatus(dept.key, {
-      status: "error",
-      summary: "Timed out after 10 minutes -- check live-runs for details.",
-      finishedAt: new Date().toISOString(),
-    });
   }, TIMEOUT_MS);
 
   child.stdout.pipe(outStream);
@@ -94,13 +94,23 @@ async function main() {
 
   child.on("close", (exitCode) => {
     clearTimeout(timer);
+    // A clean exit (0) is a real success. A kill from our own timeout is
+    // ALSO a real success if the department had already written fresh
+    // output before we killed it -- that's a department that finished its
+    // actual work and was just slow to exit cleanly afterward, not one
+    // that failed. Anything else (a genuine crash, or a timeout with
+    // nothing fresh written) is an error.
+    const fresh = freshSummary(dept, startedAt);
+    const succeeded = exitCode === 0 || (killedForTimeout && fresh);
     const summary =
-      lastLogLine(dept.hqDir) ||
+      fresh ||
       (exitCode === 0
         ? "Finished -- no summary line found in log.md."
+        : killedForTimeout
+        ? `Ran out of time after ${Math.round(TIMEOUT_MS / 60000)} minutes -- check live-runs for details.`
         : "Exited with an error -- see live-runs log.");
     writeStatus(dept.key, {
-      status: exitCode === 0 ? "done" : "error",
+      status: succeeded ? "done" : "error",
       exitCode,
       summary,
       finishedAt: new Date().toISOString(),
@@ -115,9 +125,36 @@ async function main() {
   });
 }
 
-function lastLogLine(hqDir) {
+// What Matthew actually sees for this run: the one-line, plain-English
+// headline the department is instructed to overwrite in status-line.md
+// each run, falling back to the technical log.md line if that file is
+// missing (e.g. an older department worktree that hasn't picked up the
+// new instructions yet) or wasn't written yet in the time it had. Either
+// way, only counts if it was actually written DURING this run (its mtime
+// is after startedAt) -- otherwise it's just a stale leftover from a
+// previous run, not real output from this one.
+function freshSummary(dept, startedAt) {
+  const startMs = new Date(startedAt).getTime();
+  const headline = freshFileFirstLine(path.join(dept.hqDir, "status-line.md"), startMs);
+  if (headline) return headline;
+  return freshFileFirstLine(path.join(dept.hqDir, "log.md"), startMs, lastLogLine);
+}
+
+function freshFileFirstLine(filePath, startMs, extract) {
   try {
-    const raw = fs.readFileSync(path.join(hqDir, "log.md"), "utf8");
+    const stat = fs.statSync(filePath);
+    if (stat.mtimeMs < startMs) return null; // not touched this run -- stale
+    if (extract) return extract(filePath);
+    const raw = fs.readFileSync(filePath, "utf8").trim();
+    return raw.split(/\r?\n/)[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+function lastLogLine(logPath) {
+  try {
+    const raw = fs.readFileSync(logPath, "utf8");
     const lines = raw.split(/\r?\n/).filter((l) => l.trim().startsWith("-"));
     return lines.length ? lines[lines.length - 1].replace(/^-\s*/, "") : null;
   } catch {

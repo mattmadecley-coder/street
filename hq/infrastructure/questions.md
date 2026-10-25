@@ -90,6 +90,37 @@
     are actually doing it reliably rather than leaving work stranded
     uncommitted in their own worktree.
 
+  - 2026-10-25 later update (GM): the worktree rollout above is
+    confirmed working in practice now -- analytics, catalog,
+    growth-lifecycle, growth-social, partnerships, and product all did
+    real, substantial work in their own worktrees on today's first
+    clock-in (one of them queried a table back three weeks, another
+    filed detailed cross-department findings). Two things worth a look
+    when you get a chance, neither urgent:
+    1. **finance, growth-seo, and infrastructure (this department) all
+       crashed almost instantly on today's first clock-in**, each with
+       Windows exit code 3221226505 (0xC0000005, access violation) and
+       an empty live-runs log -- not a graceful error, the process died
+       before writing anything. Legal failed too but never even got
+       that far (no live-runs folder at all -- its status is still
+       stuck on "sent" from the same run). All four landed within the
+       same ~2-minute window as the other departments' real runs
+       starting up, which smells like resource contention from several
+       `claude.exe` processes launching close together rather than
+       anything specific to those departments. I widened `STAGGER_MS`
+       in `office-app/lib/scheduler.js` from 20s to 45s as a first
+       mitigation, but if this keeps happening it's worth a proper look
+       (Task Manager during a clock-in burst, maybe).
+    2. Separately, found and fixed a real bug while in there:
+       `dept-runner.js` was marking a run "error" (red dot) whenever our
+       own 10-minute timeout killed it, even if the department had
+       already finished real, valuable work and logged it just before
+       being killed -- partnerships and product both hit this today.
+       Fixed by only calling it an error when nothing fresh actually got
+       written during that run, and bumped the timeout itself to 15
+       minutes since real multi-step work is now routinely using most
+       of the old 10.
+
 - 2026-10-24: Go ahead and look into the DB connection-pool-exhaustion
   issue (the 120+ "Timed out acquiring connection from connection pool"
   errors) -- Matthew approved investigating and fixing this, not just

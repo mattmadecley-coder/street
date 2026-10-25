@@ -189,6 +189,13 @@ html, body {
   padding: 10px 10px;
   border-radius: 10px;
   margin-bottom: 2px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.dept-card:hover, .dept-card:focus-visible {
+  background: var(--border);
+  outline: none;
 }
 
 .dept-dot {
@@ -224,6 +231,42 @@ html, body {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 1px;
+}
+
+/* The headline is the whole point of the simplified sidebar -- one short,
+   emoji-led sentence a department wrote about its own last run. Bigger
+   and bolder than the old plain state label so it's the first thing your
+   eye lands on. */
+.dept-headline {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  margin-top: 2px;
+  color: var(--text);
+}
+
+.dept-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.dept-state-mini {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+.dept-state-mini::after {
+  content: "\2022";
+  margin-left: 6px;
+  opacity: 0.6;
+}
+
+.dept-meta .dept-state-mini:last-child::after {
+  content: "";
+  margin-left: 0;
 }
 
 .clock-in {
@@ -287,7 +330,6 @@ html, body {
 .dept-next {
   font-size: 11px;
   color: var(--text-muted);
-  margin-top: 1px;
   opacity: 0.8;
 }
 
@@ -319,4 +361,97 @@ html, body {
 .mic-btn.unsupported {
   opacity: 0.35;
   cursor: default;
+}
+
+/* Department detail modal -- the "click in for more" view. Plain,
+   readable prose: the content behind it is deliberately written in
+   simple English, so the panel just needs to stay out of its way. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 10;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-panel {
+  background: var(--panel);
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  max-width: 560px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 24px 26px;
+  position: relative;
+}
+
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.modal-close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  padding-right: 28px;
+}
+
+.modal-body {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.modal-body h3, .modal-body h4, .modal-body h5, .modal-body h6 {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 16px 0 6px;
+}
+
+.modal-body h3:first-child, .modal-body h4:first-child {
+  margin-top: 0;
+}
+
+.modal-body p {
+  margin: 0 0 10px;
+}
+
+.modal-hint {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.modal-log {
+  white-space: pre-wrap;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text-muted);
 }

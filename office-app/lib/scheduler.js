@@ -11,7 +11,7 @@ const { readStatus } = require("./status-store");
 
 const CHECK_IN_INTERVAL_MS = 2 * 60 * 60 * 1000; // how often each department checks in on itself
 const POLL_MS = 5 * 60 * 1000; // how often we look for departments that are due
-const STAGGER_MS = 20 * 1000; // space out firings so we don't launch a dozen claude processes at once
+const STAGGER_MS = 45 * 1000; // space out firings so we don't launch a dozen claude processes at once -- widened from 20s after several departments crashed (likely resource contention) when a lot of them clocked in within the same couple of minutes
 const WORK_START_HOUR = 9;
 const WORK_END_HOUR = 17;
 
