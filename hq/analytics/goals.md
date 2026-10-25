@@ -49,7 +49,21 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   in the first-ever check-in (2026-10-24) but had quietly dropped out of
   every run since. Restored 2026-10-25 and ran it again this check-in
   (see reports/2026-10-25.md, "Fourth run") -- still clean. Standing
-  routine, not a one-off: keep doing it every check-in.
+  routine, not a one-off: keep doing it every check-in. (Ran again
+  2026-10-25, fifth run -- still clean.)
+- [x] Self-directed: explain the long-standing `results_count: null`
+  search-tracking gap (noted as unreconciled across multiple prior
+  check-ins) instead of continuing to log it as a known-but-unexplained
+  oddity (done 2026-10-25: traced it to `components/catalog-analytics.tsx`
+  scraping `.catalog-top .results` text before the real `/catalog` page
+  streams past its `loading.tsx` skeleton -- that skeleton has no
+  `.results` element, so the scrape returns `undefined` and the effect's
+  dedup key means it never retries. Verified 7/14 (50%) of the last 7
+  days' tracked searches have `results_count: null`, and showed this
+  undercounts the `zeroResultSearches` admin-analytics feature. Documented
+  in charter.md's Known Gotchas and filed a Tier 2 fix recommendation for
+  Product via GM in questions.md, since fixing it needs an app-code
+  change outside this department's Tier 1.)
 - [x] Self-directed: explain the "dashboard visitors vs raw distinct
   browsers" gap noted as unreconciled in charter.md's Known Gotchas
   (open since the first briefing) instead of leaving it an open mystery

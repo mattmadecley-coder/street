@@ -58,3 +58,22 @@ Daily at 8:10 ET.
   just a second, independent filter.
 - `outbound_clicks` data before the table existed is genuinely missing,
   not a current pipeline bug
+- `site_events` search rows with `results_count: null` (seen across every
+  run so far) — explained 2026-10-25. `CatalogAnalytics`
+  (`components/catalog-analytics.tsx`, mounted in the root `app/layout.tsx`,
+  outside `/catalog`'s own Suspense boundary) scrapes the result count from
+  `.catalog-top .results` text as soon as `searchParams` changes. But
+  `app/catalog/loading.tsx`'s skeleton — shown while the real
+  `app/catalog/page.tsx` streams in — has a `.catalog-top` with no
+  `.results` element at all. If the effect fires while the loading
+  fallback is still showing, the DOM read returns `undefined` → logged as
+  `results_count: null`, and the effect's own dedup key
+  (`trackedContext.current`) means it never retries once the real count
+  streams in. Verified against live data: 7 of the last 14 tracked
+  searches (50%, 7-day window, 2026-10-25) have `results_count: null`.
+  This isn't just a cosmetic gap — it undercounts the `zeroResultSearches`
+  feature (`lib/analytics-metrics.ts`, `analytics-snapshot.ts` filter on
+  `results_count === 0`), since a null never matches that filter even if
+  the real result count was zero. Flagged to GM/Product as a Tier 2 fix
+  recommendation in `questions.md` (2026-10-25) — not something this
+  department can fix itself (requires an app-code change).

@@ -2,6 +2,34 @@
 
 ## Open
 
+**Q (for Product, via GM):** Found and verified a real cause of the
+long-standing `results_count: null` gap on search tracking (noted as an
+unexplained oddity in several prior check-ins). Root cause:
+`CatalogAnalytics` (`components/catalog-analytics.tsx`) lives in the root
+`app/layout.tsx`, outside `/catalog`'s own Suspense boundary, and reads
+the result count by scraping `.catalog-top .results` text the moment
+`searchParams` changes. `app/catalog/loading.tsx`'s skeleton — shown
+while the real `app/catalog/page.tsx` streams in — has a `.catalog-top`
+div with no `.results` element at all, so if the effect fires during
+that loading flash, the scrape returns `undefined` → logged as
+`results_count: null`. Because the effect dedups on the serialized
+search params, it never retries once the real count streams in, so the
+null is permanent for that search. Verified against live data: 7 of the
+last 14 tracked searches (50%, 7-day window) have `results_count: null`.
+Impact beyond cosmetics: this undercounts the `zeroResultSearches`
+feature in `/admin/analytics` (filters on `results_count === 0`) — a
+null search never counts as a zero-result search even when it genuinely
+was one, so that catalog-gap signal is quietly missing roughly half its
+real data. Recommendation (not analytics' call — needs an app-code
+change, outside Tier 1 for this department): `app/catalog/page.tsx`
+already computes the real count server-side and logs an accurate
+`search` event itself via `logSiteEvent(... resultsCount: total ...)`
+inside `after()` — worth Product checking whether that server-side log
+is actually the one landing in `site_events` for real page loads, and
+whether the client-side DOM-scrape in `CatalogAnalytics` is redundant
+with it and safe to drop, rather than trying to make the scrape race-safe.
+(2026-10-25)
+
 **Q (for Growth-SEO, via GM):** Second consecutive weekly Search Console
 comparison shows the same pattern, worse than last time — flagging per
 the standing goal to escalate if it persisted. Week 1 (10-09→10-15) vs.
