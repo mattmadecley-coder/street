@@ -13,3 +13,11 @@ up, but shouldn't remove one Matthew hasn't seen moved.
 - [x] Confirm `trigger_url`/`trigger_token` are set for every product that
   should be classified (done 2026-10-24 -- both set on the watchdog row,
   0 pending/error backlog)
+- [x] Self-directed: audit every `catalog_enabled = false` brand (not just
+  the 2 already flagged) and the homepage feature schedule for staleness
+  (done 2026-10-25 -- found 7 more disabled brands beyond Q1's original 2,
+  including Pholoh at 240 imported products sitting invisible; ruled out
+  my own `metadata_synced_at` theory before reporting it; confirmed all 9
+  disabled brands' images are on cdn.shopify.com with no imgproxy gap;
+  found the homepage schedule has had nothing queued since 2026-09-28 --
+  both written up in questions.md Q1/Q3 for Matthew)
