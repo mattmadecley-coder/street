@@ -5,13 +5,14 @@ import { redirect } from "next/navigation";
 import { actorOf, requirePermission } from "@/lib/admin-guard";
 import { recordAudit } from "@/lib/audit";
 import { hasHqAnswerWriteSource, submitPendingHqAnswer } from "@/lib/hq-pending-answers";
+import { safeAdminPath } from "@/lib/safe-redirect";
 
 export async function answerHqQuestion(formData: FormData) {
   const actor = await requirePermission("hq.answer");
   const department = String(formData.get("department") ?? "").trim();
   const question = String(formData.get("question") ?? "").trim();
   const answer = String(formData.get("answer") ?? "").trim();
-  const returnTo = String(formData.get("return_to") ?? "/admin/hq/inbox");
+  const returnTo = safeAdminPath(formData.get("return_to"), "/admin/hq/inbox");
 
   if (!department || !question) throw new Error("Missing question.");
   if (!answer) redirect(`${returnTo}?hqAnswerError=${encodeURIComponent("Write an answer first.")}`);

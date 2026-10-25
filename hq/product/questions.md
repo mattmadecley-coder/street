@@ -16,44 +16,37 @@ DELETE+INSERT sync -- until that lands, `/admin/hq` keeps reading the
 placeholder seed. **Recommendation:** no action needed from Matthew
 directly; routing this to Infrastructure and GM is the ask. (2026-10-24)
 
-**Q:** Multiple department agents (Product, GM, and apparently others)
-share the one `street-work` working directory with no isolation between
-runs. Today this caused two real collisions in the same few minutes: (1)
-GM's weekly-review commit landed on top of whatever branch Product
-happened to have checked out, instead of `work`, because `git commit`
-just commits onto the checked-out HEAD of the one shared tree -- it was
-rescued onto a side branch and fast-forwarded into `work` by hand, no
-data lost, but only because this run happened to notice before doing
-anything destructive. (2) A stale `.git/HEAD.lock` and a stale
-`.git/objects/maintenance.lock` were left behind by a run that ended
-abruptly mid-git-operation, which blocks every `git` command for the
-*next* run that touches this folder until someone clears them. Neither
-of these needs a schema change or touches app code, so it's logged here
-rather than acted on.
-
-**Recommendation:** give each department's run its own git worktree (or
-its own full clone) instead of all of them sharing one checked-out
-directory -- `git worktree add` against the same `.git` would let every
-department branch/commit independently without fighting over which
-branch is checked out. Short of that, at minimum each run should check
-for and clear stale `*.lock` files under `.git` before doing anything
-else, and should never assume the branch it left checked out is still
-checked out when it comes back. I did not attempt the worktree
-reorganization myself -- same reasoning as the clone-vs-worktree
-question below: it's repo/process plumbing, not application code, and
-Infrastructure or Matthew should decide the shape of it.
-
-**Update, same run:** while this question was being written, a *second*
-copy of this same office-page task finished independently (see Answered,
-below) -- most likely another firing of this department's own run
-landing in the same window. It used this run's own uncommitted files
-(verified identical), committed and pushed them cleanly to
-`agent/hq-office-page-v2`, and opened PR #49 -- so no work was lost or
-duplicated, but it's the same root cause as above: two runs in the same
-shared directory at the same time, this time without collision only by
-luck (neither one was mid-write when the other acted).
+**Q:** Follow-ups from the hq_questions two-way-sync write path (see
+Answered, below) -- flagging here rather than editing another
+department's files directly. (1) Infrastructure needs to provision a
+real value for `HQ_DASHBOARD_GITHUB_WRITE_TOKEN` -- a GitHub token with
+write access to this repo's contents, deliberately separate from both
+the existing read-only `HQ_DASHBOARD_GITHUB_TOKEN` and the ops-only
+`GH_TOKEN`. Until it's set, answering a question from `/admin/hq` fails
+with a clear error instead of doing nothing silently. (2) Something
+(each department's own run, or the GM centrally, since it already reads
+every department's `questions.md` every run) needs to read
+`hq/_shared/pending-answers.json` early in its check-in and fold any
+staged answer back into that department's own `questions.md` (Open →
+Answered, same as when Matthew answers in chat today), then clear the
+consumed entry. Full contract in `hq/_shared/pending-answers-schema.md`.
+**Recommendation:** no action needed from Matthew directly; route (1) to
+Infrastructure and (2) to the GM (centralizing it there avoids editing
+every department's own charter/agent file to add the same step).
+(2026-10-25)
 
 ## Answered
+
+**Q:** Multiple department agents (Product, GM, and apparently others)
+share the one `street-work` working directory with no isolation between
+runs, causing real collisions (a GM commit landing on whatever branch
+Product had checked out; stale `.git/*.lock` files blocking the next
+run). **A:** Fixed directly by Matthew (2026-10-25, commit `536c7b6`):
+every department now gets its own `git worktree` under `.worktrees/<dept>/`
+against the same `.git`, so branching/building/committing in one
+department's run can no longer flip the checked-out branch out from under
+another. This run is itself running from `.worktrees/product/` as a
+result. No further action needed from Product.
 
 **Q:** Replace the hq_* Supabase mirror/sync that feeds `/admin/hq` with
 something that doesn't need a separate database write step (GM's
