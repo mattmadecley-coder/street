@@ -21,3 +21,14 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   disabled brands' images are on cdn.shopify.com with no imgproxy gap;
   found the homepage schedule has had nothing queued since 2026-09-28 --
   both written up in questions.md Q1/Q3 for Matthew)
+- [x] Self-directed: audit every live (`catalog_enabled = true`) brand's
+  name/logo/Instagram handle against its own homepage og:site_name, not
+  just the 14 recently onboarded ones already checked (done 2026-10-25 --
+  scanned all 82 enabled brands, found one real mismatch: "Pay Billions"
+  (paybillions.com) whose own og:site_name/og:title both read "BILLIONAIRE
+  STUDIOS" and whose existing instagram_url/logo_url already matched that
+  name, not "Pay Billions" -- fixed the `name` field only, QA-approved;
+  also checked the 7 highest-product-count live brands with no
+  instagram_url on file for a link in their raw homepage HTML -- found
+  none, likely JS-rendered footers that a static fetch can't see, so
+  nothing fixable there this way)
