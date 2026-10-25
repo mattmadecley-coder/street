@@ -34,6 +34,28 @@ QA's note: `getActiveCollectionsForHomepage()` also fetches full product rows (i
 Pairs with the collection-metadata fix already filed above — that one fixes what crawlers see once they land on a collection page; this one is what gets them there in the first place.
 (2026-10-24)
 
+**Q (for Product & Engineering, via GM):** Product pages (`/products/[slug]`) already render a visible breadcrumb nav (`app/products/[slug]/page.tsx` line 73: `Shop / [Category] / [Product Title]`) but have no matching `BreadcrumbList` structured data, so Google can't show breadcrumb rich results for them in search (every other piece of schema on this template — Product/Offer JSON-LD — is already in place). QA-reviewed (approved with notes 2026-10-25) — recommendation:
+1. Add near the top of `app/products/[slug]/page.tsx` (module scope, same pattern already used in `app/layout.tsx`, `app/sitemap.ts`, `app/robots.ts`): `const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";`
+2. Inside `ProductPage`, after the existing `jsonLd` const (~line 65), add:
+```ts
+const categoryLabel = product.streetCategory ?? product.category;
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Shop", item: `${siteUrl}/catalog` },
+    ...(categoryLabel
+      ? [{ "@type": "ListItem", position: 2, name: categoryLabel, item: `${siteUrl}/catalog?category=${encodeURIComponent(categoryLabel)}` }]
+      : []),
+    { "@type": "ListItem", position: categoryLabel ? 3 : 2, name: product.title },
+  ],
+};
+```
+3. Render a second `<script type="application/ld+json">` tag right after the existing one (line 69): `<script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, "\\u003c") }} />`
+
+This exactly mirrors the labels/hrefs in the visible breadcrumb at line 73 (`categoryLabel` matches the data source already used for `jsonLd.category` at line 55) and correctly omits `item`/URL on the last entry per Google's BreadcrumbList guidance since it's the current page. QA's notes: a second JSON-LD script tag (vs. merging into one `@graph`) is valid and fine; no security or scope issues.
+(2026-10-25)
+
 ## Answered
 
 Format once answered: move the question under here with

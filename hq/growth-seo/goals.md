@@ -28,3 +28,9 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   app/sitemap.ts entirely despite being real curated landing pages with
   live products — QA-approved fix filed in questions.md for Product &
   Engineering)
+- [x] Self-directed: GSC Wizard still payment_required, so audit the
+  codebase (not GSC data) for a concrete structured-data gap on an
+  already-reviewed template (done 2026-10-25 — product pages render a
+  visible breadcrumb nav with no matching BreadcrumbList JSON-LD, so
+  Google can't show breadcrumb rich results for them; QA-approved fix
+  filed in questions.md for Product & Engineering)
