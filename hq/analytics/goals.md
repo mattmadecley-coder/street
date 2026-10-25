@@ -31,7 +31,21 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   logged the first week-over-week comparison in
   hq/analytics/reports/2026-10-24.md -- clicks flat 85->83, impressions
   +29% 2679->3453, average position softened ~8.5->~9.9)
-- [ ] Next check-in: re-pull the GSC window and see whether the average
+- [x] Next check-in: re-pull the GSC window and see whether the average
   position keeps sliding while impressions keep climbing (10-15->10-21
   trend) -- if that pattern continues for a second week, flag it to GM
   as a CTR/content-quality question rather than just noting it here
+  (done 2026-10-25: it did, and worsened -- week1 10-09->10-15 vs week2
+  10-16->10-22: impressions 2762->3886 (+41%), clicks 81->92 (+13%,
+  not keeping pace), position 8.61->10.53 (slid further), CTR 2.9%->2.4%.
+  Pulled query-level detail: top-impression queries are long-tail
+  branded/product-name searches at decent positions (pos 3-11) getting
+  zero clicks -- looks like a CTR/snippet issue, not a ranking problem.
+  Filed as a Tier 2 question for Growth-SEO via GM in questions.md)
+- [ ] Keep the full charter checklist (search, search->click, category
+  popularity, traffic sources, outbound-clicks-by-brand over
+  `site_events`/`outbound_clicks`) in the regular run rotation, not just
+  the DB-aggregate + GSC/GA4 checks -- those site_events breakdowns ran
+  in the first-ever check-in (2026-10-24) but had quietly dropped out of
+  every run since. Restored them this run (see reports/2026-10-25.md);
+  keep doing it each check-in so it doesn't lapse again.
