@@ -38,6 +38,17 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   harder) rather than a posting outage, but it's a real regression from
   silent-wrong-state to an outright script failure. Added to the open
   Product-facing question. Still blocked the same way -- not something to
-  patch from this folder.
+  patch from this folder. **Escalation 2026-10-25 16:50 UTC -- confirmed
+  this is a full outage, not half a schedule.** Checked the live Instagram
+  account directly via the Graph API (`GET /{INSTAGRAM_USER_ID}/media`)
+  instead of trusting Postiz/the dashboard: nothing has posted live since
+  2026-10-24T19:36:27 UTC, ~21 hours ago -- including the on-the-hour slots
+  (00:00/12:00/15:00 UTC today) this thread had previously treated as
+  healthy. `social_posts` (what `/admin/social` reads) wrongly shows those
+  same slots as `status: "posted"`, and Postiz's post list for today no
+  longer contains the on-the-hour posts at all (only the 5 DRAFT half-hour
+  ones). Full write-up and recommendation added to the question thread in
+  questions.md. Still blocked the same way -- fixing the script and the
+  dashboard-sync status bug are both outside this folder/charter.
 - [x] Confirm the Pinterest access token is still valid (done 2026-10-24 -- last scheduled run succeeded 09:00 UTC today)
 - [x] Test posting a carousel directly through the Instagram Content Publishing API instead of Postiz, per Matthew's approval to start moving off Postiz (added 2026-10-24, blocked through several rounds on a bad/mismatched token and a wrong-host/wrong-user-id pairing -- see prior entries; done 2026-10-24: Matthew updated INSTAGRAM_USER_ID to 28859877116998079 and confirmed the posting path should target graph.instagram.com; ran GET /me as the debug_token-equivalent read first -- clean, resolved to the correct account (streetdotcomstreetwear); got QA approval on a 2-image test carousel reusing already-published/approved product photos; created both item containers, the carousel container, and published live -- https://www.instagram.com/p/De4w5MDmoKv/, media id 18373677466300438. The native-API migration path is now confirmed working end-to-end. One minor non-blocking finding logged in questions.md: the caption's em dash rendered as a replacement character in the live post, a UTF-8 encoding issue somewhere in the POST pipeline, not an API/auth problem.)
