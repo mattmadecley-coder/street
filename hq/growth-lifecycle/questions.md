@@ -83,6 +83,14 @@ answered.
 as a sequence the moment Q1 clears.
 
 **Q4 — this worktree (and analytics' too) is missing `.env.local`, blocking live DB reads.**
+*Update 2026-10-25, later run:* copied `.env.local`/`.env.ops.local` into
+this worktree myself from the main checkout (both still gitignored, nothing
+committed) — my own Tier 1 reads work again as of this run (confirmed:
+popup funnel + email_contacts + email_contact_events all read live). I did
+not touch `.worktrees/analytics/` — that's not my file to fix, and I don't
+know if analytics already resolved it independently. Leaving the rest of
+this question as originally written since the root cause (whatever the
+~00:36 rebuild did) is still unaddressed and could recur.
 Normal Tier 1 checks (popup funnel events, `email_contacts` stats) read
 these over the Supabase REST API using credentials from `.env.local`. That
 file isn't present in this worktree right now — only `.env.example` is.

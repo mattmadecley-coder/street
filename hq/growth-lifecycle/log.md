@@ -35,3 +35,15 @@ don't delete history, condense it.
   blocked and goals.md was otherwise done/blocked — drafted a 2nd welcome
   email extending Q2 into a short sequence, QA-approved, logged as Q3;
   still blocked from sending on Legal's Q1.
+- 2026-10-25 13:19: Check-in — fixed my own worktree's missing `.env.local`/
+  `.env.ops.local` (copied from main checkout, gitignored, not committed),
+  unblocking live Tier 1 reads (noted in Q4); confirmed clean: popup funnel
+  now 194 events (109 shown, still only 2 email_submitted/2 phone_submitted,
+  no new full signups since last check), still 2 email_contacts (0 sent/
+  opened/clicked), popup config unchanged (enabled=true, placeholder SMS
+  fine print); Legal's Q1 still Open so nothing new to send. Self-directed a
+  new goal since checks were otherwise clean and goals.md was done/blocked:
+  broke down the funnel by step for the first time and wrote
+  reports/2026-10-25-popup-funnel.md — found 68% dismiss before even typing
+  an email (copy/friction issue, not a targeting one) with 3 reversible test
+  ideas for Matthew, nothing changed live.

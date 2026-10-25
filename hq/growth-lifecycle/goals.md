@@ -21,3 +21,14 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   2026-10-25 — self-directed after this run's normal DB-stat checks came
   back blocked, see Q4; drafted email #2, QA-approved, logged as Q3 in
   questions.md; same send block as Q2)
+- [x] Fix own worktree's missing `.env.local`/`.env.ops.local` so live
+  Tier 1 checks aren't blocked again (done 2026-10-25 — copied both from
+  the main checkout into this worktree only, both gitignored; confirmed
+  Tier 1 reads now work; analytics' worktree is a separate department's
+  file, left untouched, still flagged for Matthew/Infra in Q4)
+- [x] Break down the popup funnel by step for the first time and write up
+  what's worth testing (done 2026-10-25 — self-directed after this run's
+  live checks came back clean/no change; 68% dismiss before even typing an
+  email, conversion is actually fine once someone starts typing; wrote
+  hq/growth-lifecycle/reports/2026-10-25-popup-funnel.md with 3 cheap,
+  reversible test ideas for Matthew, nothing acted on)
