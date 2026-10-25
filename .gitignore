@@ -39,3 +39,7 @@ office-app/status/*.json
 office-app/tmp/
 office-app/chat-history.json
 office-app/settings.json
+
+# Per-department git worktrees (local isolation, never commit)
+.worktrees/
+.worktrees-*/
