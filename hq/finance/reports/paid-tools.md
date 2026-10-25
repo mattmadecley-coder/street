@@ -1,6 +1,6 @@
 # Paid tools & free tiers — confirmed from Gmail
 
-Last updated: 2026-10-25 (second pass).
+Last updated: 2026-10-25 (third pass).
 Amounts/dates below are from billing emails actually found in Gmail — no
 account numbers or card details recorded, per standing rule.
 
@@ -8,12 +8,13 @@ account numbers or card details recorded, per standing rule.
 
 - **Claude (Anthropic)** — pay-as-you-go API usage, not a flat subscription.
   66 "Auto recharge extra usage, Individual plan" receipts since 2026-06-10,
-  each ~$10.06–$10.80. Two more landed 2026-10-24 ($10.28 at 16:22, $10.06 at
-  20:46) — a two-charge day right after yesterday's run already flagged an
-  accelerating cadence (6 on 2026-09-29, 6 on 2026-10-07/08). In the trailing
-  30 days (2026-09-25 to 2026-10-24) that's roughly **$310-330/month** at
-  current usage — this is what's running Street HQ itself. No fixed renewal
-  date since it's recharge-on-depletion.
+  each ~$10.06–$10.80. Two landed 2026-10-24 ($10.28 at 16:22, $10.06 at
+  20:46) — a two-charge day that flagged an accelerating cadence (6 on
+  2026-09-29, 6 on 2026-10-07/08). Re-checked 2026-10-25: no new receipt
+  since the 20:46 one, so the accelerating-cadence watch continues but
+  hasn't produced a new charge yet. In the trailing 30 days that's roughly
+  **$310-330/month** at current usage — this is what's running Street HQ
+  itself. No fixed renewal date since it's recharge-on-depletion.
 - **OpenRouter** (product classification) — also pay-as-you-go, not
   monthly. Only 3 receipts ever found, each $10.80: 2026-05-18, 2026-06-02,
   2026-10-13. Irregular — recharges only when credit runs low, so no
@@ -29,7 +30,12 @@ account numbers or card details recorded, per standing rule.
 - **Postiz** — no receipt or payment email found, only "Welcome" and
   affiliate-program marketing from 2026-09-28/29. Can't confirm from Gmail
   whether it's still on trial or converted to paid. Matches company.md
-  note that Postiz is being phased out.
+  note that Postiz is being phased out. Side note, not a billing finding:
+  a Postiz "Streak Ended" notification landed 2026-10-25 18:03 ("you
+  didn't post anything in the last 24 hours") — this independently
+  corroborates Growth-Social's own urgent finding (see open-items-rollup.md)
+  that the Instagram carousel pipeline has posted nothing in ~21+ hours.
+  Not a Finance action item, just noting where it surfaced.
 
 ## Free tiers being watched
 

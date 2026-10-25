@@ -1,1 +1,1 @@
-💰 Checked all tool costs are up to date and rewrote the cross-team to-do list -- next check coming soon.
+🚨 Confirmed no new charges, but found independent proof the Instagram poster is down — next: watch for Matthew/Product fixing it.

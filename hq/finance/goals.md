@@ -37,3 +37,12 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   not visible via Gmail" rather than re-checking it every run — would
   need Matthew to say where Netcup bills, or to check Postiz's billing
   page directly)
+- [x] Self-directed: third billing re-check + fourth rollup refresh (done
+  2026-10-25 afternoon — confirmed no new charges since 2026-10-24 20:46
+  via Gmail; rewrote open-items-rollup.md again after the big merge of
+  other departments' work pulled in — biggest change was Growth-Social's
+  carousel bug escalating to a full posting outage, which Finance found
+  independent corroboration for via a Postiz "Streak Ended" notification
+  email; also surfaced 2 dead brand storefronts from Partnerships, a new
+  Infrastructure cross-department ask, and Catalog's needs_review cleanup
+  question)
