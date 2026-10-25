@@ -56,6 +56,45 @@ const breadcrumbJsonLd = {
 This exactly mirrors the labels/hrefs in the visible breadcrumb at line 73 (`categoryLabel` matches the data source already used for `jsonLd.category` at line 55) and correctly omits `item`/URL on the last entry per Google's BreadcrumbList guidance since it's the current page. QA's notes: a second JSON-LD script tag (vs. merging into one `@graph`) is valid and fine; no security or scope issues.
 (2026-10-25)
 
+**Q (for Product & Engineering, via GM):** Brand pages (`/brands/[slug]`) have the same filter/pagination UI as the catalog page (an `availability`/`sort` form plus `?page=` pagination, `app/brands/[slug]/page.tsx` lines 82-98) and call the same `getCatalogPage()` Supabase read underneath (line 59) — but unlike the catalog page, their `generateMetadata` (lines 15-28) always returns one static canonical (`/brands/${brand.slug}`) regardless of those params, and never sets a `robots` directive. This is the exact bug class the catalog page was already fixed for once (GSC had flagged the homepage as "Duplicate without user-selected canonical" from filtered catalog URLs) — same risk here, just on brand pages instead. QA-reviewed (approved with notes 2026-10-25) — recommendation, two parts:
+
+1. **Metadata fix** — in `app/brands/[slug]/page.tsx`, change `generateMetadata`'s signature to also accept `searchParams` (same `Params` type already declared at line 30 for the page component) and add a filtered-URL branch:
+```tsx
+export async function generateMetadata({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Params> }): Promise<Metadata> {
+  const { slug } = await params;
+  const filters = await searchParams;
+  const brand = (await getBrandDirectory()).find((entry) => entry.slug === slug);
+  if (!brand) return {};
+  const title = brand.name;
+  const description = `Shop ${brand.name} on Street — ${brand.productCount ? `${brand.productCount} pieces ` : ""}independent streetwear, bought straight from the brand.`;
+  const canonical = `/brands/${brand.slug}`;
+  if (Boolean(filters.availability || filters.sort || filters.page)) {
+    return { robots: { index: false, follow: true }, alternates: { canonical } };
+  }
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: { title, description, type: "website", images: brand.logoUrl ? [{ url: brand.logoUrl }] : undefined },
+    twitter: { card: "summary_large_image", title, description, images: brand.logoUrl ? [brand.logoUrl] : undefined },
+  };
+}
+```
+(`Params` being referenced before its line-30 declaration is fine — it's a `type` alias, which TS resolves at compile time regardless of source order.)
+
+2. **Crawl-budget fix** — QA's note: a `noindex` meta tag alone doesn't stop Googlebot from crawling (and triggering the Supabase read) in the first place. `app/robots.ts` already disallows this exact param combination for `/catalog` with a comment explaining why ("each combination triggers a fresh Supabase read") — brand pages hit the same `getCatalogPage()` call, so they should get the same treatment. In `app/robots.ts`:
+```tsx
+const NON_INDEXABLE_BRAND_PARAMS = ["sort", "availability", "page"];
+```
+and extend the `disallow` array:
+```tsx
+disallow: [
+  ...NON_INDEXABLE_CATALOG_PARAMS.map((param) => `/catalog?*${param}=*`),
+  ...NON_INDEXABLE_BRAND_PARAMS.map((param) => `/brands/*?*${param}=*`),
+],
+```
+(2026-10-25)
+
 ## Answered
 
 Format once answered: move the question under here with

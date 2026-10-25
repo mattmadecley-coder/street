@@ -1,1 +1,1 @@
-✅ Found a missing search-result feature for product pages and sent the fix to Product & Engineering.
+✅ Found that brand pages can confuse Google the same way the shop page once did; fix recommendation sent to engineering, next check Thursday.

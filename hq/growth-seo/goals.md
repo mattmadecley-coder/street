@@ -34,3 +34,13 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   visible breadcrumb nav with no matching BreadcrumbList JSON-LD, so
   Google can't show breadcrumb rich results for them; QA-approved fix
   filed in questions.md for Product & Engineering)
+- [x] Self-directed: GSC Wizard still payment_required, so audit the
+  remaining page templates (brands, collections) for the same
+  duplicate-content/canonical risk the catalog page was already fixed
+  for (done 2026-10-25 — app/brands/[slug]/page.tsx has the identical
+  availability/sort/page filter UI as catalog but never got the
+  matching noindex+canonical treatment, and its generateMetadata calls
+  the same getCatalogPage() Supabase read catalog's robots.ts disallow
+  rule was written to protect; QA-approved with notes (add a matching
+  robots.ts disallow for /brands/* params) and filed in questions.md
+  for Product & Engineering)
