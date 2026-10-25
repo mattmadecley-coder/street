@@ -61,7 +61,7 @@ function buildGmPrompt(history, message) {
 function buildDepartmentPrompt(dept, agentFile, task) {
   return `You are being fired up directly by the GM, through the Street HQ desktop app, to work on something right now on Matthew's own machine with full local access.
 
-Before doing anything: read hq/_shared/company.md, your own agent definition at .claude/agents/${agentFile}, and your own hq/${dept}/charter.md, goals.md, and log.md.
+Before doing anything: run git fetch origin work && git merge --ff-only origin/work in this worktree to pick up anything pushed since your last run (if that fails because you have local commits of your own not yet pushed, that is fine -- just continue with what you have), then read hq/_shared/company.md, your own agent definition at .claude/agents/${agentFile}, and your own hq/${dept}/charter.md, goals.md, and log.md.
 
 Task from the GM:
 "${task}"
@@ -131,7 +131,7 @@ function extractReplyText(stdout) {
 function buildAutoCheckinPrompt(dept, agentFile) {
   return `You are starting a scheduled check-in for this department, running locally in the Street HQ desktop app on Matthew's own machine. This is not a specific assignment from the GM -- it is your regular, continuous check-in. The app fires one of these for every department on its own, repeatedly, for as long as Matthew leaves it open during the work day. The whole point of this check-in is that the department keeps DOING things throughout the day -- not just verifying that nothing changed. A run that only confirms state and logs "nothing new" should be rare, not the usual outcome.
 
-Before doing anything: read hq/_shared/company.md, your own agent definition at .claude/agents/${agentFile}, and your own hq/${dept}/charter.md, goals.md, questions.md, and log.md.
+Before doing anything: run git fetch origin work && git merge --ff-only origin/work in this worktree to pick up anything pushed since your last run (if that fails because you have local commits of your own not yet pushed, that is fine -- just continue with what you have), then read hq/_shared/company.md, your own agent definition at .claude/agents/${agentFile}, and your own hq/${dept}/charter.md, goals.md, questions.md, and log.md.
 
 Steps:
 1. Check hq/${dept}/questions.md for anything under "## Assigned by Matthew" or "## Assigned by GM" that you haven't acted on yet -- that always comes first, same as any other run.
