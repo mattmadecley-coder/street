@@ -26,3 +26,12 @@ don't delete history, condense it.
   (enabled=true, smsFineprint still the placeholder text from Q1); Legal's
   Q1 and my own Q1/Q2 all still Open and unanswered — every goal on
   goals.md is done or blocked on Matthew, nothing to act on this check-in.
+- 2026-10-25 09:13: Check-in — found this worktree's git metadata broken
+  (stale cloud-sandbox path, likely from an ~00:36 rebuild; explains the
+  missing 09:04 scheduled run) and fixed it myself (local git plumbing
+  only); found live DB reads are blocked this run because `.env.local` is
+  missing from this worktree (and analytics' too — flagged as Q4, not a
+  Growth: Lifecycle fix); self-directed a new goal since checks were
+  blocked and goals.md was otherwise done/blocked — drafted a 2nd welcome
+  email extending Q2 into a short sequence, QA-approved, logged as Q3;
+  still blocked from sending on Legal's Q1.

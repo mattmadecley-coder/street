@@ -47,6 +47,67 @@ hard-blocked in code regardless.
 **My recommendation:** approve as-is; it'll sit ready to send the moment
 Q1 clears.
 
+**Q3 — welcome sequence extended to a 2nd email, QA-approved (not sendable yet).**
+With live popup/email-stats reads blocked this run (see Q4), I used the time
+to build out Q2's one-off welcome email into a short 2-email sequence
+instead of just re-checking the same numbers. Email #2 sends ~3 days after
+signup, to anyone who hasn't made an outbound click yet — it explains
+Street's actual model (discovery, not a store) to build trust and nudge a
+first click. QA reviewed it against email #1's tone and Street's real
+business model — approved as-is, no changes needed. Same hard block as Q2:
+can't send until `BRAND_REPORTS_MAILING_ADDRESS` is set and Legal's Q1 is
+answered.
+
+> Subject: Street in 30 seconds: how it actually works
+> Preview: We don't sell anything. Here's why that's the point.
+>
+> Hey —
+>
+> Quick one: Street isn't a store. It's where independent streetwear brands
+> get discovered — browse, filter, compare, and when something's right, we
+> send you straight to the brand's own site to buy it.
+>
+> No middleman, no markup, no dropshipping. Just the actual brand, your
+> money straight to them.
+>
+> If a piece already caught your eye, go cop it. If not — [see what's new →]
+> (streetdotcom.com)
+>
+> — Street
+>
+> ---
+> Unsubscribe: {{unsubscribe_link}}
+> {{mailing_address}}
+
+**My recommendation:** approve as-is alongside Q2; both sit ready to send
+as a sequence the moment Q1 clears.
+
+**Q4 — this worktree (and analytics' too) is missing `.env.local`, blocking live DB reads.**
+Normal Tier 1 checks (popup funnel events, `email_contacts` stats) read
+these over the Supabase REST API using credentials from `.env.local`. That
+file isn't present in this worktree right now — only `.env.example` is.
+I also checked `.worktrees/analytics/`, same thing: no `.env.local` there
+either, despite its own reports describing having used it. Both worktrees'
+base files date to ~00:35-00:36 today, so this looks like a side effect of
+however they got rebuilt then, not something specific to Growth: Lifecycle.
+I also found and fixed a related but separate problem myself (Tier 1, local
+git plumbing only): this worktree's `.git` pointer file and the main repo's
+`.git/worktrees/growth-lifecycle/gitdir` file were both pointing at a stale
+cloud-sandbox path instead of this machine's real path, which had silently
+broken `git status`/`fetch`/`merge` here — likely since the same rebuild
+event (explains the missing scheduled check-in around 09:04 today: it
+produced an empty log, no entry in log.md). That part's fixed now and
+confirmed working.
+The missing env file I can't fix myself — I don't have the credential
+values, and re-provisioning them across worktrees reads as an
+Infrastructure/setup question, not a Growth: Lifecycle Tier 1 action.
+**My recommendation:** copy `.env.local` (and `.env.ops.local` if any
+department needs it) back into `.worktrees/growth-lifecycle/` and
+`.worktrees/analytics/`, and maybe have Infrastructure look at why the
+rebuild drops gitignored files that previously made it in — if this
+happens again it'll quietly block every department's live-data checks
+until someone notices.
+
 ## Answered
 
 Format once answered: move the question under here with

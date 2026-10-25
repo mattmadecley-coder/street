@@ -17,3 +17,7 @@ up, but shouldn't remove one Matthew hasn't seen moved.
 - [~] Track Legal's SMS-consent/mailing-address wording as the blocker
   before anything can actually send (blocked: hq/legal/questions.md Q1
   still Open, waiting on Matthew)
+- [x] Extend the welcome email into a short 2-email sequence (done
+  2026-10-25 — self-directed after this run's normal DB-stat checks came
+  back blocked, see Q4; drafted email #2, QA-approved, logged as Q3 in
+  questions.md; same send block as Q2)
