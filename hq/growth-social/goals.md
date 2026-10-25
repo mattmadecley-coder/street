@@ -26,6 +26,18 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   tomorrow's half-hour slots are already DRAFT too -- this is being baked
   into every future day's schedule, not a one-off. (blocked: fixing the
   script is outside this folder/charter -- flagged for Product in
-  questions.md, did not manually convert or repost the drafts)
+  questions.md, did not manually convert or repost the drafts) **Escalation
+  2026-10-25 12:45 UTC:** re-checked today's slots -- same parity bug, still
+  5/5 on the half-hour marks (01:30, 13:30, 16:30, 19:30, 22:30 all DRAFT in
+  Postiz, error:null). New signal on top of that: `automation_jobs.ig_carousel`
+  now reports `last_status: "failed"`, `last_message: "Exit code 1"`,
+  `last_success_at: null` (last_run_at 12:05:05 UTC today) -- previously this
+  job always reported "ok". The underlying carousel post itself still went
+  out for the 12:00 UTC on-the-hour slot, so this looks like the script
+  throwing on a secondary step (plausibly hitting the same draft-type bug
+  harder) rather than a posting outage, but it's a real regression from
+  silent-wrong-state to an outright script failure. Added to the open
+  Product-facing question. Still blocked the same way -- not something to
+  patch from this folder.
 - [x] Confirm the Pinterest access token is still valid (done 2026-10-24 -- last scheduled run succeeded 09:00 UTC today)
 - [x] Test posting a carousel directly through the Instagram Content Publishing API instead of Postiz, per Matthew's approval to start moving off Postiz (added 2026-10-24, blocked through several rounds on a bad/mismatched token and a wrong-host/wrong-user-id pairing -- see prior entries; done 2026-10-24: Matthew updated INSTAGRAM_USER_ID to 28859877116998079 and confirmed the posting path should target graph.instagram.com; ran GET /me as the debug_token-equivalent read first -- clean, resolved to the correct account (streetdotcomstreetwear); got QA approval on a 2-image test carousel reusing already-published/approved product photos; created both item containers, the carousel container, and published live -- https://www.instagram.com/p/De4w5MDmoKv/, media id 18373677466300438. The native-API migration path is now confirmed working end-to-end. One minor non-blocking finding logged in questions.md: the caption's em dash rendered as a replacement character in the live post, a UTF-8 encoding issue somewhere in the POST pipeline, not an API/auth problem.)
