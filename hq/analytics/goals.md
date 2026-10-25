@@ -47,5 +47,21 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   `site_events`/`outbound_clicks`) in the regular run rotation, not just
   the DB-aggregate + GSC/GA4 checks -- those site_events breakdowns ran
   in the first-ever check-in (2026-10-24) but had quietly dropped out of
-  every run since. Restored them this run (see reports/2026-10-25.md);
-  keep doing it each check-in so it doesn't lapse again.
+  every run since. Restored 2026-10-25 and ran it again this check-in
+  (see reports/2026-10-25.md, "Fourth run") -- still clean. Standing
+  routine, not a one-off: keep doing it every check-in.
+- [x] Self-directed: explain the "dashboard visitors vs raw distinct
+  browsers" gap noted as unreconciled in charter.md's Known Gotchas
+  (open since the first briefing) instead of leaving it an open mystery
+  (done 2026-10-25: read `lib/analytics-audience.ts`'s `analyzeAudience`
+  -- `recorded_visitors` is every distinct `anonymous_user_id` seen;
+  `visitors` is the subset passing a `likelyHuman` heuristic (excludes a
+  profile if it's a single-page, zero-action, single-session visit under
+  15s with no social attribution, or flagged "suspected" via an
+  impossible device fingerprint or Linux+Chrome short passive visit).
+  This is a separate, in-memory, per-query heuristic -- NOT the same
+  mechanism as the DB-level `excluded` column used by
+  `analytics_flagged_visitors`/`analytics_bot_rules`. Matches the
+  observed gap (e.g. 2026-10-24: 51 visitors vs 53 recorded). Updated
+  charter.md's Known Gotchas bullet with this explanation so it's no
+  longer logged as "not reconciled.")

@@ -46,7 +46,15 @@ Daily at 8:10 ET.
 
 ## Known gotchas
 
-- Dashboard "23 visitors" vs raw distinct browsers not reconciled as of
-  the last briefing — don't treat that gap as a new bug, it's open
+- Dashboard "visitors" vs `recorded_visitors` gap — explained 2026-10-25
+  (`lib/analytics-audience.ts`, `analyzeAudience`): `recorded_visitors`
+  is every distinct `anonymous_user_id` seen; `visitors` is the subset
+  passing an in-memory `likelyHuman` heuristic (excludes single-page,
+  zero-action, single-session visits under 15s with no social
+  attribution, or profiles flagged "suspected" via an impossible device
+  fingerprint or a Linux+Chrome short passive visit). This is separate
+  from, and not double-counted with, the DB-level `excluded` column that
+  `analytics_flagged_visitors`/`analytics_bot_rules` use — not a bug,
+  just a second, independent filter.
 - `outbound_clicks` data before the table existed is genuinely missing,
   not a current pipeline bug
