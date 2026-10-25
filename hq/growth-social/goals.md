@@ -15,8 +15,17 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   on its own at 13:58 UTC after the 6-day stall; 13 follows logged today, within
   caps, no checkpoint signal; root cause of the stall still unconfirmed, left
   as a non-urgent follow-up in questions.md)
-- [~] Today's Instagram carousel pipeline (added 2026-10-24 15:32): 01:30 and
-  13:30 UTC slots stuck in draft with no error while 00:00/12:00/15:00 posted
-  fine (blocked: cause unknown, carousel-poster script not visible from this
-  folder; flagged in questions.md, did not manually repost)
+- [~] Today's Instagram carousel pipeline (added 2026-10-24 15:32, diagnosed
+  further 2026-10-24 16:21, confirmed forward-looking 2026-10-24 18:46):
+  confirmed via Postiz's own post list that this is a repeating pattern, not
+  2 random failures -- every single half-hour-mark slot today (01:30, 13:30,
+  16:30, 19:30, 22:30, 5/5) sits in DRAFT, while every on-the-hour slot
+  posted or is correctly queued. Looks like the carousel-scheduling script
+  assigns the wrong Postiz post type to every other slot (parity bug), not
+  an account/token/posting problem. Re-checked through 2026-10-26: all 5 of
+  tomorrow's half-hour slots are already DRAFT too -- this is being baked
+  into every future day's schedule, not a one-off. (blocked: fixing the
+  script is outside this folder/charter -- flagged for Product in
+  questions.md, did not manually convert or repost the drafts)
 - [x] Confirm the Pinterest access token is still valid (done 2026-10-24 -- last scheduled run succeeded 09:00 UTC today)
+- [x] Test posting a carousel directly through the Instagram Content Publishing API instead of Postiz, per Matthew's approval to start moving off Postiz (added 2026-10-24, blocked through several rounds on a bad/mismatched token and a wrong-host/wrong-user-id pairing -- see prior entries; done 2026-10-24: Matthew updated INSTAGRAM_USER_ID to 28859877116998079 and confirmed the posting path should target graph.instagram.com; ran GET /me as the debug_token-equivalent read first -- clean, resolved to the correct account (streetdotcomstreetwear); got QA approval on a 2-image test carousel reusing already-published/approved product photos; created both item containers, the carousel container, and published live -- https://www.instagram.com/p/De4w5MDmoKv/, media id 18373677466300438. The native-API migration path is now confirmed working end-to-end. One minor non-blocking finding logged in questions.md: the caption's em dash rendered as a replacement character in the live post, a UTF-8 encoding issue somewhere in the POST pipeline, not an API/auth problem.)

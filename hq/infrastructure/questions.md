@@ -71,6 +71,52 @@
   branch and opening a PR is already Tier 1 for you -- actually
   deploying it to production still needs Matthew's sign-off, same as
   always. (assigned by Matthew, chat)
+  - 2026-10-24 investigated (no fix applied -- see why below): no SSH
+    key is available to this agent on this machine (`~/.ssh` has no
+    private key, only `known_hosts`), so I couldn't check the VPS
+    directly. Got real data a different way -- logged into Adminer
+    (scripted the login form with the `ADMINER_*` / `SUPABASE_POSTGRES_PASSWORD`
+    creds already in `.env.ops.local`, as PostgreSQL against the
+    `supabase-db` host) and ran read-only queries:
+    - Postgres `max_connections = 100`. Right now (a quiet moment, not
+      during a cron burst) there are ~50 total connections open across
+      everything, and only 11 of those are PostgREST's (`authenticator`
+      role, "PostgREST 14.6" in `pg_stat_activity`). Postgres itself has
+      plenty of headroom at `max_connections=100` -- raising *that*
+      isn't the fix.
+    - The `authenticator` role (the one PostgREST connects as) has a
+      role-level `statement_timeout=8s` and `lock_timeout=8s` set via
+      `pg_roles.rolconfig`. That explains the handful of "canceling
+      statement due to statement timeout" lines in the same log pull --
+      not a bug, a deliberate short leash on PostgREST's own queries.
+    - The error text itself -- "Timed out acquiring connection from
+      connection pool" -- is PostgREST's *own* internal pool-exhaustion
+      message, not Postgres's. PostgREST keeps a small internal
+      connection pool (`PGRST_DB_POOL`, commonly defaults to 10) separate
+      from Postgres's `max_connections`; when concurrent requests exceed
+      that small pool (site traffic plus `catalog`/`classify` cron
+      hitting the DB at the same time), requests queue and time out
+      waiting for a free connection from PostgREST's own pool, even
+      though Postgres has 89 connections' worth of unused headroom.
+    - **Likely real fix: raise PostgREST's `PGRST_DB_POOL` (and maybe
+      `PGRST_DB_POOL_TIMEOUT`) env var on the PostgREST service, not any
+      Postgres setting.** I could not confirm its current value or
+      change it this run -- it's a Coolify-managed service env var, not
+      a file in this repo, and the Coolify API token in `.env.ops.local`
+      is returning 401 "Unauthenticated" right now even on the
+      previously-working `/applications/<uuid>` endpoint (see new Open
+      item below), so I have no read or write path to it at the moment.
+    - Didn't touch cron stagger timing -- GitHub Actions' own schedule
+      offsets (`catalog`/`storefront-health`/`classify` are already 1.5h
+      apart per `cron.yml`) look reasonable already and raising
+      `PGRST_DB_POOL` is the more direct fix for what the logs actually
+      show.
+    **Asking Matthew:** once the Coolify token is sorted (see below), can
+    I get it re-enabled so I can read the PostgREST service's current
+    `PGRST_DB_POOL`/`PGRST_DB_POOL_TIMEOUT` values and raise them (config
+    change, no migration, but it's a production service setting so
+    treating the actual change as needing your sign-off same as a
+    deploy)?
 
 - 2026-10-24: Matthew doesn't know what the cron watchdog is or does --
   look into `authorize_cron_watchdog` (the missing Postgres function
@@ -79,8 +125,87 @@
   alongside drafting the migration to add/expose it. Applying a DB
   migration is still Tier 3 -- draft it and ask Matthew to approve
   applying it, don't apply it yourself. (assigned by Matthew, chat)
+  - 2026-10-24 done (drafted, not applied): **What it is, in plain
+    terms:** the `catalog` and `storefront-health` cron routes each
+    normally run when GitHub Actions calls them with a shared cron
+    secret -- that part works fine and isn't affected by any of this.
+    But both routes *also* accept a second way in: a request carrying
+    an `x-street-worker-token` header instead, meant for a "watchdog" --
+    a periodic job living inside Postgres itself (via the `pg_cron` +
+    `pg_net` extensions) that can reach out and poke the cron endpoint
+    directly if it thinks a run got stuck, as a safety net independent
+    of GitHub Actions. Street already has exactly one of these working
+    today, for the AI classification queue (`wake_classification_worker`,
+    every 5 minutes) -- `authorize_cron_watchdog` was supposed to be the
+    same idea generalized for catalog/storefront-health, but the
+    migration that creates it was never written. Right now, calling
+    either route with that header fails with "function not found," which
+    is exactly the line in storefront-health's logs. **What actually
+    breaks without it:** nothing today -- GitHub Actions cron has run
+    successfully every time (confirmed again this run), so there is no
+    active watchdog trying to use this path yet. It's a latent gap, not
+    a live outage.
+    Drafted `supabase/migrations/20261024_authorize_cron_watchdog.sql`
+    on branch `infra/authorize-cron-watchdog`, opened as PR #50:
+    https://github.com/mattmadecley-coder/street/pull/50 -- generalizes
+    the classification worker's existing pattern into one table
+    (`cron_watchdog_jobs`) keyed by job name instead of adding another
+    one-off table. Rows for `catalog` and `storefront-health` are
+    inserted with `trigger_token = null`, so the function exists (fixing
+    the log error once applied) but safely returns `false` for both
+    until a real token is deliberately set -- this migration does not
+    stand up an active watchdog by itself; that would need a follow-up
+    (a real token + a `net.http_post` wake function + a `cron.schedule`
+    job, same shape as classification's). **Asking Matthew:** (1)
+    approve applying this migration to the self-hosted Postgres instance
+    (Tier 3, per charter); (2) separately, does he actually want an
+    active watchdog for these two jobs, given GitHub Actions cron hasn't
+    failed once in the history checked so far? If not, this migration
+    alone is enough to make the log line go away and nothing further is
+    needed.
 
 ## Open
+
+- **Wiring a failed cron/deploy to wake Infrastructure off-schedule needs
+  Product's office-app, not just an Infra-side config change.** Looked
+  into this goal this check-in. Traced how a department actually gets
+  woken: `office-app/lib/fire.js`'s `fireDepartment()` just spawns a
+  local Node child process on Matthew's own machine (via `dept-runner.js`)
+  -- it's not an HTTP endpoint and nothing calls it from outside the app.
+  `.github/workflows/cron.yml` runs on GitHub's own cloud runners, which
+  have no path to reach into Matthew's local machine or call
+  `fireDepartment()` directly; same for a failed Coolify deploy, which
+  Coolify's own infra would have to webhook somewhere reachable. The only
+  realistic shape I can see: office-app's own local scheduler (which
+  already fires each department on its normal interval) would need a
+  second, independent poll -- e.g. every few minutes, check `gh run list`
+  for the latest cron run's conclusion and Coolify's deploy status, and
+  call `fireDepartment("infrastructure", {trigger: "auto"})` immediately
+  if either shows a failure, instead of waiting for Infrastructure's next
+  scheduled slot. That's a change to `office-app`'s scheduler/runner code,
+  which is Product's area, not mine -- per charter this is Tier 2 (a code
+  change outside my own area) rather than something I should just build.
+  **Recommend:** GM coordinates with Product to add this poll-and-fire
+  path to office-app; I'm glad to hand over the exact `gh run list --json
+  conclusion` / Coolify `/api/v1/applications/<uuid>` calls to check
+  against if that's useful. (2026-10-24)
+
+- **Coolify API token (`COOLIFY_API_TOKEN` in `.env.ops.local`) is now
+  rejected.** Every Coolify API call this run returned
+  `401 {"message":"Unauthenticated."}` -- including
+  `GET /api/v1/applications/<uuid>`, the exact call that returned `200`
+  as recently as this morning's run (see goals.md and yesterday's
+  report). The Coolify host itself is reachable (`/api/health` ->
+  `200`, unauthenticated), so this isn't a network/DNS problem -- the
+  token value itself is being rejected now. I did not try to fix this
+  myself since regenerating it means logging into Coolify's own UI,
+  which I have no access to. Can't check Coolify deploy health or read
+  any Coolify-managed service's env vars (including the PostgREST pool
+  settings above) until this is resolved. **Asking Matthew:** please
+  regenerate the Coolify API token in Coolify's UI and update
+  `COOLIFY_API_TOKEN` in `.env.ops.local` (value only, not the file
+  structure, so this stays Tier 1 for me to pick up once it's there).
+  (2026-10-24)
 
 - **Repeated DB connection-pool-exhaustion errors in the live app logs
   (not the known Traefik 503 pattern).** Pulled the last 2000 lines of

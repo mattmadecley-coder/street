@@ -14,5 +14,6 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   see questions.md)
 - [x] Draft the first batch of brand performance reports for Matthew's
   approval in `/admin/reports` (done 2026-10-24 — 4 drafts for 2026-10-23,
-  QA-cleared, waiting on Matthew; sending is still hard-blocked on Legal's
-  mailing-address item)
+  QA-cleared; update: all 4 were actually auto-sent by the production cron
+  around 2026-10-24 16:15 UTC, not sent by Matthew's approval as assumed —
+  see urgent item in questions.md)
