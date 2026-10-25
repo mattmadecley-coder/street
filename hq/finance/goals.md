@@ -20,3 +20,20 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   evening — 6 of 12 departments' questions.md had changed since the
   morning pass, including a new urgent Partnerships finding; rewrote
   open-items-rollup.md rather than waiting for next Monday)
+- [x] Second-pass billing re-check + another rollup refresh (done
+  2026-10-25 morning — confirmed no new charges since 2026-10-24 20:46 via
+  Gmail; rewrote open-items-rollup.md again since 5 departments'
+  questions.md had moved: Partnerships' auto-send scope grew to 3 weeks,
+  Catalog's disabled-brand count grew from 2 to 9 plus a new homepage-
+  schedule question, Growth-Social's carousel bug gained a job-failure
+  signal, Analytics filed a new SEO CTR finding, Growth-Lifecycle flagged
+  a missing-.env.local process issue)
+- [~] Self-directed: tried a broader Gmail search for Netcup/Postiz
+  billing (subscription/invoice/payment/trial keywords, not just the
+  tool names) to close the gap noted in paid-tools.md (blocked:
+  confirmed there is genuinely nothing to find — both inboxes only ever
+  received marketing/newsletter mail, no invoice or billing email exists
+  for either tool in this Gmail account; closing this out as "confirmed
+  not visible via Gmail" rather than re-checking it every run — would
+  need Matthew to say where Netcup bills, or to check Postiz's billing
+  page directly)

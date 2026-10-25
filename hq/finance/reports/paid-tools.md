@@ -1,18 +1,19 @@
 # Paid tools & free tiers — confirmed from Gmail
 
-Last updated: 2026-10-24 (first pass with Gmail read access).
+Last updated: 2026-10-25 (second pass).
 Amounts/dates below are from billing emails actually found in Gmail — no
 account numbers or card details recorded, per standing rule.
 
 ## Paid tools
 
 - **Claude (Anthropic)** — pay-as-you-go API usage, not a flat subscription.
-  64 "Auto recharge extra usage, Individual plan" receipts since 2026-06-10,
-  each ~$10.13–$10.80. In the last 30 days (2026-09-24 to 2026-10-23): 31
-  auto-recharge charges, roughly **$310–$320/month** at current usage —
-  this is what's running Street HQ itself. No fixed renewal date since it's
-  recharge-on-depletion; cadence has been accelerating (6 charges in a
-  single day on 2026-09-29, another 6 on 2026-10-07/08).
+  66 "Auto recharge extra usage, Individual plan" receipts since 2026-06-10,
+  each ~$10.06–$10.80. Two more landed 2026-10-24 ($10.28 at 16:22, $10.06 at
+  20:46) — a two-charge day right after yesterday's run already flagged an
+  accelerating cadence (6 on 2026-09-29, 6 on 2026-10-07/08). In the trailing
+  30 days (2026-09-25 to 2026-10-24) that's roughly **$310-330/month** at
+  current usage — this is what's running Street HQ itself. No fixed renewal
+  date since it's recharge-on-depletion.
 - **OpenRouter** (product classification) — also pay-as-you-go, not
   monthly. Only 3 receipts ever found, each $10.80: 2026-05-18, 2026-06-02,
   2026-10-13. Irregular — recharges only when credit runs low, so no
@@ -40,8 +41,13 @@ account numbers or card details recorded, per standing rule.
 
 ## Gaps for next run
 
-- Netcup and Postiz billing not visible via Gmail — worth Matthew
-  confirming the billing email address for Netcup, and Postiz's actual
-  plan status, next time it comes up.
+- Netcup and Postiz billing not visible via Gmail — confirmed this pass
+  with a broader search (subscription/invoice/payment/trial keywords,
+  not just the tool names): both inboxes only ever received
+  marketing/newsletter mail, no invoice or billing email exists for
+  either in this Gmail account. This isn't a search-term problem, so not
+  re-checking it every run — worth Matthew confirming the billing email
+  address for Netcup, and Postiz's actual plan status, directly next
+  time it comes up.
 - Claude API spend is the biggest line item and trending up — worth
   watching month to month rather than a one-time note.
