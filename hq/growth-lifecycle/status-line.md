@@ -1,1 +1,1 @@
-📊 Checked signups (still quiet) and found most people close the popup before even typing their email — wrote up 3 cheap fixes to test.
+📱 Found mobile visitors dismiss the signup popup way more than desktop — writing up a test idea, no changes made.

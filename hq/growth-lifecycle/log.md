@@ -47,3 +47,14 @@ don't delete history, condense it.
   reports/2026-10-25-popup-funnel.md — found 68% dismiss before even typing
   an email (copy/friction issue, not a targeting one) with 3 reversible test
   ideas for Matthew, nothing changed live.
+- 2026-10-25 16:02: Check-in — clean again: popup funnel now 196 events (110
+  shown, still only 2 email_submitted/2 phone_submitted, no new full signups),
+  still 2 email_contacts (0 sent/opened/clicked), popup config unchanged
+  (enabled=true, placeholder SMS fine print, updated_at still 10-13); Legal's
+  Q1 still Open so nothing new to send. Self-directed a new goal since checks
+  were clean and goals.md was done/blocked: broke the funnel down by device
+  and by page (new cuts, not re-running yesterday's by-step breakdown) —
+  found mobile dismisses at ~84% vs desktop's ~44%, and `/catalog` has double
+  the homepage's impressions but zero signups vs the homepage's 2-for-2; wrote
+  reports/2026-10-25-popup-funnel-device-path.md with 2 test ideas, nothing
+  changed live.

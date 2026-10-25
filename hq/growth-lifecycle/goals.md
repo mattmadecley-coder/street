@@ -32,3 +32,10 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   email, conversion is actually fine once someone starts typing; wrote
   hq/growth-lifecycle/reports/2026-10-25-popup-funnel.md with 3 cheap,
   reversible test ideas for Matthew, nothing acted on)
+- [x] Break down the popup funnel by device and by page for the first
+  time (done 2026-10-25 — self-directed after this run's live checks came
+  back clean/no change again; found mobile dismisses the popup at ~84%
+  vs desktop's ~44%, and `/catalog` gets double the homepage's impressions
+  but zero signups vs the homepage's 2-for-2; wrote
+  hq/growth-lifecycle/reports/2026-10-25-popup-funnel-device-path.md with
+  2 test ideas for Matthew, nothing acted on)
