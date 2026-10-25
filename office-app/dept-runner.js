@@ -12,7 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
-const { getDepartment, REPO_ROOT } = require("./lib/departments");
+const { getDepartment } = require("./lib/departments");
 const { writeStatus } = require("./lib/status-store");
 const {
   resolveClaudeExe,
@@ -61,8 +61,12 @@ async function main() {
   const outStream = fs.createWriteStream(logFile, { flags: "a" });
   const errStream = fs.createWriteStream(errFile, { flags: "a" });
 
+  // Run inside the department's OWN git worktree when it has one, so a
+  // department doing a real `git checkout` to build something never flips
+  // the branch out from under the GM chat, the app itself, or any other
+  // department's concurrent session.
   const child = spawn(exe, args, {
-    cwd: REPO_ROOT,
+    cwd: dept.cwd,
     shell: useShell,
     windowsHide: true,
   });

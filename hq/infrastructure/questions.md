@@ -61,6 +61,35 @@
     once, which is now the normal case given the clock-in feature just
     shipped.
 
+  - 2026-10-25 update (GM): done for the office-app side, which is where
+    this actually bites day to day. Gave all 9 remaining
+    scheduled/clock-in departments (analytics, catalog, finance,
+    growth-lifecycle, growth-seo, growth-social, legal, partnerships,
+    qa) their own `.worktrees/<dept>/` worktree on a fresh
+    `dept/<dept>-base` branch off `work`, matching what Infrastructure
+    and Product had already worked out for themselves ad hoc
+    (`.worktrees/infrastructure` on `infra/exclude-hq-from-typecheck`,
+    `.worktrees/product` on `agent/hq-office-page-v2`). Updated
+    `office-app/lib/departments.js` to resolve each department's `cwd`
+    to its worktree (new `lib/worktrees.js`), and `dept-runner.js` to
+    spawn `claude` there instead of the shared `REPO_ROOT`, so every
+    fired and auto-check-in session now gets this for free -- no change
+    needed to any scheduled-task config, since the worktrees live inside
+    the already-connected `street-work` folder. Also closed the gap
+    this opens: a department's hq/ edits now live in its own worktree
+    until it pushes them, so the auto check-in and assigned-task prompts
+    both now tell the department to commit and push just its own
+    `hq/<dept>/` files back onto `work` at the end of each run
+    (`fetch` + `rebase origin/work` + `push origin HEAD:work`), and the
+    app's own main checkout (where the GM chat reads from) now does a
+    best-effort fast-forward pull of `work` before every GM reply and
+    once a minute in the background, so Matthew's chat doesn't go stale
+    waiting on a manual pull. This is still prompt-driven for the
+    commit/push step (not hard-coded into dept-runner.js), so it's worth
+    watching the first few days of real check-ins to confirm departments
+    are actually doing it reliably rather than leaving work stranded
+    uncommitted in their own worktree.
+
 - 2026-10-24: Go ahead and look into the DB connection-pool-exhaustion
   issue (the 120+ "Timed out acquiring connection from connection pool"
   errors) -- Matthew approved investigating and fixing this, not just

@@ -134,9 +134,26 @@ its own -- no task from you required. Each check-in is the same as a
 normal run: it looks for anything assigned in its questions.md first,
 does its usual Tier 1 checks, and if nothing's urgent it picks the next
 item off its own goals.md and makes real progress on it, logging what it
-did (or logging "nothing new this check-in" if there's genuinely nothing
-to do). You'll see these in the chat as "X HQ clocking in" / "X HQ
+did. If a department has worked through everything on its goals list
+(done or blocked), it doesn't just stop and say "nothing new" -- it picks
+itself a new, concrete goal that fits inside its own Tier 1 boundaries,
+adds it to goals.md, and gets started on it that same run. "Nothing new
+this check-in" only shows up when a department has genuinely run out of
+anything it's allowed to do on its own and is waiting on you (or another
+team) to unblock it -- and even then it says specifically what it's
+waiting on. You'll see these in the chat as "X HQ clocking in" / "X HQ
 checking in on its own work", same status dots as anything else.
+
+Each department also runs in its own private git worktree
+(`.worktrees/<department>/` inside the same street-work folder --
+nothing new to connect) instead of sharing the one checkout you and the
+GM use. That's what lets a department actually build things -- switch
+branches, commit, push -- during the day without ever knocking your own
+checkout onto a different branch or stepping on another department's
+work mid-run. A department commits and pushes its own hq/ updates back
+onto the shared `work` branch as it goes, and the app quietly keeps your
+own checkout in sync with that in the background, so what you see in the
+GM chat stays current without you having to `git pull` by hand.
 
 This only runs while the app itself is open on this machine -- close it
 and departments stop working until you open it again. There's a

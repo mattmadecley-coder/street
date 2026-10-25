@@ -3,6 +3,7 @@
 // friendly display names and a couple of helpers for the app.
 const fs = require("fs");
 const path = require("path");
+const { deptWorkdir } = require("./worktrees");
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 
@@ -43,22 +44,32 @@ function listDepartments() {
   // The app's sidebar is about the specialist departments, not the GM itself.
   return Object.keys(map)
     .filter((key) => key !== "gm")
-    .map((key) => ({
-      key,
-      displayName: DISPLAY_NAMES[key] || titleize(key),
-      agentFile: map[key],
-      hqDir: path.join(REPO_ROOT, "hq", key),
-    }));
+    .map((key) => {
+      const cwd = deptWorkdir(key);
+      return {
+        key,
+        displayName: DISPLAY_NAMES[key] || titleize(key),
+        agentFile: map[key],
+        cwd,
+        // hqDir is relative to the department's OWN working directory (its
+        // worktree, when it has one) -- not always REPO_ROOT -- so a
+        // department reading/writing its hq/<key> files does so inside the
+        // same checkout its claude session is actually running in.
+        hqDir: path.join(cwd, "hq", key),
+      };
+    });
 }
 
 function getDepartment(key) {
   const map = loadMap();
   if (!map[key]) return null;
+  const cwd = deptWorkdir(key);
   return {
     key,
     displayName: DISPLAY_NAMES[key] || titleize(key),
     agentFile: map[key],
-    hqDir: path.join(REPO_ROOT, "hq", key),
+    cwd,
+    hqDir: path.join(cwd, "hq", key),
   };
 }
 

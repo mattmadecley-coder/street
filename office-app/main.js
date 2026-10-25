@@ -4,6 +4,7 @@ const { app, BrowserWindow, ipcMain, Menu, session } = require("electron");
 const { listDepartments } = require("./lib/departments");
 const { STATUS_DIR, ensureDir, readAll } = require("./lib/status-store");
 const { REPO_ROOT } = require("./lib/departments");
+const { pullMainCheckout } = require("./lib/worktrees");
 const { buildGmPrompt, runClaudeOnce } = require("./lib/claude-runner");
 const { fireDepartment } = require("./lib/fire.js");
 const {
@@ -113,6 +114,10 @@ ipcMain.handle("scheduler:toggle", async (_event, paused) => {
 });
 
 ipcMain.handle("gm:send", async (_event, message) => {
+  // Departments push their own hq/ updates back onto `work` from their own
+  // worktrees -- pick that up now so the GM answers from fresh state
+  // instead of whatever REPO_ROOT happened to have last.
+  pullMainCheckout();
   history.push({ role: "user", text: message });
   const prompt = buildGmPrompt(history.slice(0, -1), message);
   const result = await runClaudeOnce({ cwd: REPO_ROOT, prompt });
@@ -149,6 +154,9 @@ app.whenReady().then(() => {
     isPaused: () => !!readSettings().schedulerPaused,
   });
   setInterval(broadcastStatus, SCHEDULE_REFRESH_MS);
+  // Keep the main checkout's hq/ files from going stale between chat
+  // turns too -- same best-effort fast-forward pull, just on a timer.
+  setInterval(pullMainCheckout, SCHEDULE_REFRESH_MS);
 });
 
 app.on("window-all-closed", () => app.quit());
