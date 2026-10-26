@@ -9,7 +9,7 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   API) actually posted its scheduled slots (done 2026-10-24 -- correction at
   15:32: 2 of today's 10 slots turned out stuck in draft, see the item below)
 - [~] Check TikTok stats-sync cadence and whether the zero-view problem is
-  improving as the account warms up (sync cadence confirmed healthy 2026-10-24; zero-view problem not yet improving -- last 5 posts still 0-3 views each, and TikTok posting is currently paused)
+  improving as the account warms up (sync cadence confirmed healthy 2026-10-24; zero-view problem not yet improving -- last 5 posts still 0-3 views each, and TikTok posting is currently paused) (re-checked 2026-10-26 13:09 UTC: stats sync still on its 2h cadence (ran 12:45:45 UTC today), last 6 posted videos still 0-5 views each, posting still deliberately paused since 2026-10-17 -- unchanged, blocked on the same account warm-up)
 - [x] Confirm the follow bot is within its 20/hour, 300/day, 50-likes caps
   with no checkpoint/Action Blocked signal (done 2026-10-24 15:32 -- bot resumed
   on its own at 13:58 UTC after the 6-day stall; 13 follows logged today, within
@@ -50,5 +50,25 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   ones). Full write-up and recommendation added to the question thread in
   questions.md. Still blocked the same way -- fixing the script and the
   dashboard-sync status bug are both outside this folder/charter.
+  **Escalation 2026-10-26 13:09 UTC -- overnight partial recovery, and the
+  pipeline looks like it has moved off Postiz entirely, but the
+  false-"posted" dashboard bug is still live on whatever replaced it.**
+  `ig_carousel` now reports `last_status: "ok"` (last success 12:05:05 UTC
+  today) -- first "ok" since the 2026-10-25 12:05 run. Postiz's
+  `postsListTool` returns zero posts for all of today/tomorrow (not even
+  drafts) while the Instagram integration is still connected there -- this
+  likely explains away the half-hour-slot parity bug from every earlier
+  update: Postiz simply isn't in the posting path anymore. Confirmed via
+  the live Graph API that real posting did resume: 9 posts went live
+  2026-10-26T02:59:40-08:29:31 UTC (~41 min apart), clearing the backlog
+  from the 31.5h outage. But nothing has posted live since 08:29:31 --
+  4h40m of silence as of this check -- and `social_posts` still marks
+  today's 00:00/01:30/12:00 UTC slots `"posted"` with `posted_at` equal to
+  the scheduled time, none of which match a real live post. Same
+  false-success pattern as 2026-10-25, just on a different (likely
+  native-API) posting path now. Full write-up in questions.md. Still
+  blocked the same way -- confirming the Postiz-to-native migration and
+  fixing the status-write bug are both outside this folder/charter. Did not
+  post manually; pipeline still not clean.
 - [x] Confirm the Pinterest access token is still valid (done 2026-10-24 -- last scheduled run succeeded 09:00 UTC today)
 - [x] Test posting a carousel directly through the Instagram Content Publishing API instead of Postiz, per Matthew's approval to start moving off Postiz (added 2026-10-24, blocked through several rounds on a bad/mismatched token and a wrong-host/wrong-user-id pairing -- see prior entries; done 2026-10-24: Matthew updated INSTAGRAM_USER_ID to 28859877116998079 and confirmed the posting path should target graph.instagram.com; ran GET /me as the debug_token-equivalent read first -- clean, resolved to the correct account (streetdotcomstreetwear); got QA approval on a 2-image test carousel reusing already-published/approved product photos; created both item containers, the carousel container, and published live -- https://www.instagram.com/p/De4w5MDmoKv/, media id 18373677466300438. The native-API migration path is now confirmed working end-to-end. One minor non-blocking finding logged in questions.md: the caption's em dash rendered as a replacement character in the live post, a UTF-8 encoding issue somewhere in the POST pipeline, not an API/auth problem.)

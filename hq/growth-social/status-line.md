@@ -1,1 +1,1 @@
-🚨 Instagram has posted nothing in 21 hours though our dashboard says it did — flagged for Product.
+🔍 Instagram posting partly came back overnight, but the dashboard still can't be trusted -- digging in, nothing to do yet.
