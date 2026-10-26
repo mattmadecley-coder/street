@@ -69,6 +69,36 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   native-API) posting path now. Full write-up in questions.md. Still
   blocked the same way -- confirming the Postiz-to-native migration and
   fixing the status-write bug are both outside this folder/charter. Did not
-  post manually; pipeline still not clean.
+  post manually; pipeline still not clean. **Escalation 2026-10-26 18:21
+  UTC -- the overnight recovery was a one-time catch-up burst, not a fix:
+  real posting has now been completely silent for ~9h52m and growing,
+  nearly double the 4h40m gap seen at 13:09 UTC.** Re-checked the live
+  account via the Graph API: the newest real post is still the same one
+  seen at 13:09, 2026-10-26T08:29:31 UTC -- nothing has gone live since,
+  now almost 10 hours. Confirmed directly via Postiz (`postsListTool` for
+  the full today/tomorrow window, `integrationList`) that Postiz returns
+  zero posts of any kind while the Instagram integration
+  (`instagram-standalone`) is still connected there -- independently backs
+  up the theory that the carousel script has fully moved off Postiz onto a
+  separate native-API path that is now stalling silently.
+  `automation_jobs.ig_carousel` still claims `last_status: "ok"` (12:05:05
+  and 16:05:05 UTC runs today) and `social_posts` now has 6 false "posted"
+  slots today (00:00, 01:30, 12:00, 13:30, 15:00, 16:30 UTC, each
+  `posted_at` = the exact scheduled time, none matching a real post) -- up
+  from 3 at the 13:09 check. Checked the 18:00 UTC slot specifically (21
+  min past due at check time): still correctly `scheduled`, not yet
+  falsely marked, suggesting the false-write happens with some lag after
+  the scheduled time rather than instantly. Also used this run to
+  independently verify the follow bot against its own raw log rather than
+  trusting `automation_jobs`'s self-report alone (since that exact
+  mechanism has now been shown to lie for the carousel job): pulled
+  `ig_follow_log` directly for the last 24h -- 96 follows across two clean
+  batches (23:4x-00:00 UTC and 15:34-15:36 UTC), well within the 300/day
+  cap, no checkpoint signal -- follow bot genuinely healthy, not just
+  self-reported healthy. Still did not post manually -- the pipeline is
+  further from clean than the last check, not closer, and the real
+  production posting path is now unverified, making a manual Postiz-based
+  post even less likely to match how live posting is actually happening
+  right now.
 - [x] Confirm the Pinterest access token is still valid (done 2026-10-24 -- last scheduled run succeeded 09:00 UTC today)
 - [x] Test posting a carousel directly through the Instagram Content Publishing API instead of Postiz, per Matthew's approval to start moving off Postiz (added 2026-10-24, blocked through several rounds on a bad/mismatched token and a wrong-host/wrong-user-id pairing -- see prior entries; done 2026-10-24: Matthew updated INSTAGRAM_USER_ID to 28859877116998079 and confirmed the posting path should target graph.instagram.com; ran GET /me as the debug_token-equivalent read first -- clean, resolved to the correct account (streetdotcomstreetwear); got QA approval on a 2-image test carousel reusing already-published/approved product photos; created both item containers, the carousel container, and published live -- https://www.instagram.com/p/De4w5MDmoKv/, media id 18373677466300438. The native-API migration path is now confirmed working end-to-end. One minor non-blocking finding logged in questions.md: the caption's em dash rendered as a replacement character in the live post, a UTF-8 encoding issue somewhere in the POST pipeline, not an API/auth problem.)
