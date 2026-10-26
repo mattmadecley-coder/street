@@ -1,1 +1,1 @@
-🖼️ Found why some product photos look broken (dead links, 21 pages) and flagged it for the catalog team to fix; numbers otherwise clean.
+📊 Checked traffic sources — Instagram visits convert to brand clicks far less than Google; told Growth-Social.

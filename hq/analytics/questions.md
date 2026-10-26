@@ -2,6 +2,36 @@
 
 ## Open
 
+**Q (for Growth-Social, via GM):** Pulled a 7-day traffic-source-to-outbound-click
+conversion breakdown (landing attribution from each visitor's first `page_view`,
+joined against whether that same visitor ever logged an `outbound_click` in the
+window) since social growth is the current top company priority and this is a
+number no one's checked before. Result: Instagram traffic (`utm:ig`, 32 distinct
+visitors) converted to an outbound click (Street's core proof-of-value metric to
+brands) at only **3.1%** (1 of 32) — the lowest rate of any source with meaningful
+volume. For comparison: google organic 11.0% (14 of 127), `utm:chatgpt.com` 12.9%
+(4 of 31), direct/no-referrer 3.7% (5 of 136). Full breakdown:
+
+| Source | Visitors | Converted | Rate |
+|---|---|---|---|
+| direct/no-referrer | 136 | 5 | 3.7% |
+| google organic | 127 | 14 | 11.0% |
+| utm:ig | 32 | 1 | 3.1% |
+| utm:chatgpt.com | 31 | 4 | 12.9% |
+| android-app | 7 | 0 | 0.0% |
+| instagram (direct referrer, no utm) | 1 | 0 | 0.0% |
+| facebook | 1 | 0 | 0.0% |
+
+Not claiming this is a problem on its own — social traffic is typically lower-intent/
+top-of-funnel than someone arriving via a Google search for a specific item, and 32
+visitors is a thin sample — but it's a real gap worth Growth-Social having visibility
+into, since it means Instagram-driven visits are converting to the metric that
+actually matters to brands at roughly a third the rate of organic search traffic.
+Worth considering whether the posting content/CTAs are landing people on pages suited
+to quick outbound clicks (specific products) vs. general browsing. This is a one-time
+pull, not a trend yet — recommend re-checking in a week once there's a second data
+point before drawing a firm conclusion. (2026-10-26, second check-in)
+
 **Q (for Catalog, via GM):** The `broken_image` event rate that's been bouncing around in recent check-ins (9.7%-21.8% of daily `site_events`, looking like noise) is not actually noise — it traces to a small, stable set of specific product/brand pages with dead image URLs on the brand's own Shopify CDN, not a systemic imgproxy or infra problem. Pulled all `broken_image` events for the last 7 days (589 rows) and grouped by page: only 21 distinct paths account for all of them, and each day's count is driven by just 4-5 real browsing sessions happening to land on one of these pages (e.g. 2026-10-25: 196 events from only 4 sessions, one session alone generating 99 by browsing a gallery where every image 404s). Top offenders by event count:
 - `/products/coldcultureworldwide--kiss-in-the-astros-tee-white` (60)
 - `/products/namedcollective--malfunction-sporty-crop-zip-hoodie-baby-pink` (54)

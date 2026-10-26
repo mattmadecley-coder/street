@@ -50,9 +50,11 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   every run since. Restored 2026-10-25 and ran it again this check-in
   (see reports/2026-10-25.md, "Fourth run") -- still clean. Standing
   routine, not a one-off: keep doing it every check-in. (Ran again
-  2026-10-25, fifth run -- still clean. Ran again 2026-10-26 -- clean,
-  but caught a single-visitor "jeans" search session worth a second look;
-  see below.)
+  2026-10-25, fifth run -- still clean. Ran again 2026-10-26 (two
+  check-ins) -- clean both times; first caught a single-visitor "jeans"
+  search session worth a second look (see below), second caught a
+  `results_count: 1000` search log that looked like a page-cap bug but
+  verified as a real match count.)
 - [x] Self-directed: explain the long-standing `results_count: null`
   search-tracking gap (noted as unreconciled across multiple prior
   check-ins) instead of continuing to log it as a known-but-unexplained
@@ -109,3 +111,28 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   Gotchas and filed a Tier 2 fix recommendation for Catalog via GM in
   questions.md with the full page list, since fixing it needs a brand
   feed re-pull/product-data fix, outside this department's Tier 1.)
+- [x] Self-directed: a search-event log line showed `results_count: 1000`
+  for "jeans" twice in the same 24h pull -- round number, same value as
+  PostgREST's default page cap that's already bitten this department
+  twice this week, so worth verifying it was a real total and not a
+  silently-capped one before letting it pass (done 2026-10-26, second
+  check-in: called the `search_products_ranked` RPC directly with
+  explicit high limits (2000, 50000) for the actual expanded tsquery
+  ("jean | denim" -- "jean"/"denim" are a documented synonym pair in
+  `lib/catalog-ranking.ts`) and got the same 1000 every time, while an
+  unrelated single-term query ("jean" alone) returned 162 -- confirming
+  1000 is `denim`'s genuine match count against the current ~13.6k-product
+  active catalog, not a capped artifact. No bug, no action needed;
+  logging so a future run doesn't re-chase this exact number.)
+- [x] Self-directed: since social growth is the current company priority
+  and no prior check-in has ever looked at *conversion*, not just
+  volume, by traffic source, pulled a 7-day landing-attribution-to-
+  outbound-click conversion rate per source (done 2026-10-26, second
+  check-in: joined each visitor's first `page_view` referrer/utm
+  against whether they ever logged an `outbound_click` in the same
+  window. Found Instagram (`utm:ig`) converting at 3.1% (1/32) vs.
+  google organic 11.0% (14/127) and `utm:chatgpt.com` 12.9% (4/31) --
+  the lowest rate of any source with real volume. Filed as a Tier 2
+  question for Growth-Social via GM with the full table, framed as a
+  one-time data point worth a second week's pull before treating as a
+  trend, not an alarm.)
