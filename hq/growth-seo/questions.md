@@ -95,6 +95,41 @@ disallow: [
 ```
 (2026-10-25)
 
+**Q (for Product & Engineering, via GM):** `app/catalog/page.tsx`'s `generateMetadata` (lines 86-125) already sets `title`/`description`/`alternates.canonical` (and `robots: { index: false }` for filtered, non-indexable URLs) but never sets `openGraph`/`twitter` for any of its three indexable branches — the plain "Shop all" `/catalog` page, a brand-filtered catalog URL, or a taxonomy-heading URL (`/catalog?category=Jackets`, etc.). Because Next.js only merges in a parent layout's metadata for fields the child omits, every one of those indexable, shareable URLs falls back to the root layout's generic homepage preview (title "Street — Discover independent streetwear", the homepage description, and the static `/opengraph-image` graphic) instead of its own content. `app/brands/page.tsx` (the brand directory) has the identical gap — its static `metadata` export (lines 10-14) sets `title`/`description`/`alternates.canonical` but no `openGraph`/`twitter` either. (`app/collections/[slug]/page.tsx` has a related but already-filed gap — see the collections-metadata question below — no need to duplicate that one here.)
+
+QA-reviewed (sent back once on an overstated "every other template already does this" framing — brand directory and collections actually share the gap; corrected here) — recommendation:
+
+1. `app/catalog/page.tsx`, add `openGraph`/`twitter` to each of the three indexable returns, reusing the title/description each branch already computes:
+```tsx
+// "Shop all" branch (no heading, no brand):
+const title = "Shop all";
+const description = "Shop every independent streetwear brand on Street in one catalog — filter by category, size, and price.";
+return { title, description, alternates: { canonical }, openGraph: { title, description, type: "website" }, twitter: { card: "summary_large_image", title, description } };
+
+// brand-filter branch (params.brand set):
+const description = `Shop ${label} on Street — independent streetwear, bought straight from the brand.`;
+return { title: label, description, alternates: { canonical }, openGraph: { title: label, description, type: "website", images: brand?.logoUrl ? [{ url: brand.logoUrl }] : undefined }, twitter: { card: "summary_large_image", title: label, description, images: brand?.logoUrl ? [brand.logoUrl] : undefined } };
+
+// taxonomy-heading branch (group/category/type/detail, no brand) — no logo available, falls back to the default /opengraph-image, which is correct:
+const description = `Shop ${heading} from independent streetwear brands on Street.`;
+return { title: heading, description, alternates: { canonical }, openGraph: { title: heading, description, type: "website" }, twitter: { card: "summary_large_image", title: heading, description } };
+```
+(`getAllBrands()` from `@/lib/catalog-store` is already imported and called in this file; its `StreetBrand.logoUrl` field is `string | undefined` per `lib/brands.ts` line 5, so `brand?.logoUrl ? [...] : undefined` is the correct guard.) Leave the earlier `hasNonIndexableFilter` (noindex) branch untouched — those URLs are intentionally kept out of search, so a share-preview fix there is lower value.
+
+2. `app/brands/page.tsx`, add to the existing static `metadata` export:
+```tsx
+export const metadata: Metadata = {
+  title: "Independent streetwear brands",
+  description: "Browse every independent streetwear brand on Street and shop directly from the brand's own store.",
+  alternates: { canonical: "/brands" },
+  openGraph: { title: "Independent streetwear brands", description: "Browse every independent streetwear brand on Street and shop directly from the brand's own store.", type: "website" },
+  twitter: { card: "summary_large_image", title: "Independent streetwear brands", description: "Browse every independent streetwear brand on Street and shop directly from the brand's own store." },
+};
+```
+
+QA confirmed both diffs are correct TypeScript against the Next.js `Metadata` type and match the pattern already used on `app/products/[slug]/page.tsx` and `app/brands/[slug]/page.tsx`, with no regressions — the only issue was the original framing understating scope, fixed above.
+(2026-10-26)
+
 ## Answered
 
 Format once answered: move the question under here with

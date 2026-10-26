@@ -44,3 +44,13 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   rule was written to protect; QA-approved with notes (add a matching
   robots.ts disallow for /brands/* params) and filed in questions.md
   for Product & Engineering)
+- [x] Self-directed: GSC Wizard still payment_required, so audit the
+  catalog and brand-directory templates for missing openGraph/twitter
+  metadata (done 2026-10-26 — app/catalog/page.tsx's generateMetadata
+  sets title/description/canonical but never openGraph/twitter on any
+  of its three indexable branches, and app/brands/page.tsx has the
+  identical gap; QA sent it back once for understating scope (claimed
+  other templates already covered this when brand directory and
+  collections share the gap), then confirmed the diffs are sound once
+  the framing was corrected; filed in questions.md for Product &
+  Engineering)

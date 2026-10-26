@@ -1,1 +1,1 @@
-✅ Found that brand pages can confuse Google the same way the shop page once did; fix recommendation sent to engineering, next check Thursday.
+📝 Found two more pages with weak social-share previews, wrote up the fix for the dev team next.
