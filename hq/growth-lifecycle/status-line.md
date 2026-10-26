@@ -1,1 +1,1 @@
-📱 Found mobile visitors dismiss the signup popup way more than desktop — writing up a test idea, no changes made.
+📉 Found signups stopped a week ago and desktop visitors are closing the popup more too — checking again next run.

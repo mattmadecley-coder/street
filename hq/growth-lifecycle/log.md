@@ -58,3 +58,14 @@ don't delete history, condense it.
   the homepage's impressions but zero signups vs the homepage's 2-for-2; wrote
   reports/2026-10-25-popup-funnel-device-path.md with 2 test ideas, nothing
   changed live.
+- 2026-10-26 (check-in): Check-in — clean: popup funnel now 209 events (117
+  shown, still only 2 email_submitted/2 phone_submitted, no new full signups
+  since 10-19), still 2 email_contacts (0 sent/opened/clicked), popup config
+  unchanged (enabled=true, placeholder SMS fine print, updated_at still
+  10-13); Legal's Q1 and my own Q1-Q4 all still Open so nothing new to send.
+  Self-directed a new goal since checks were clean and goals.md was done/
+  blocked: broke the funnel down by time since launch (new cut) — found
+  zero signups in 7 days, dismiss rate up 61%→75% week over week, and
+  desktop's own dismiss rate nearly doubled (32%→58%) while mobile's held
+  flat; wrote reports/2026-10-26-popup-funnel-trend.md, nothing changed
+  live.

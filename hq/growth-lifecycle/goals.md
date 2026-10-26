@@ -39,3 +39,12 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   but zero signups vs the homepage's 2-for-2; wrote
   hq/growth-lifecycle/reports/2026-10-25-popup-funnel-device-path.md with
   2 test ideas for Matthew, nothing acted on)
+- [x] Break down the popup funnel by time/trend since launch for the
+  first time (done 2026-10-26 — self-directed after this run's live
+  checks came back clean/no change again, same as the last 3 runs; found
+  zero signups in the 7 days since 10-19 despite steady traffic, overall
+  dismiss rate up 61%→75% week over week, and — new, not just the known
+  mobile-dismisses-more effect — desktop's own dismiss rate nearly
+  doubled (32%→58%) while mobile's held flat; wrote
+  hq/growth-lifecycle/reports/2026-10-26-popup-funnel-trend.md, nothing
+  acted on, still small-sample/directional)
