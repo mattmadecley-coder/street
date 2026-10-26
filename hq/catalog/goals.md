@@ -32,3 +32,13 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   instagram_url on file for a link in their raw homepage HTML -- found
   none, likely JS-rendered footers that a static fetch can't see, so
   nothing fixable there this way)
+- [x] Self-directed: audit all 82 `catalog_enabled = true` brands for a
+  missing `logo_url` (done 2026-10-26 -- found 8 with none at all
+  (peso-clothing, denim-tears, lostboysarchives, fffpostalservice,
+  unknown-london, no-maintenance, syna, homage-year); fetched each brand's
+  own live homepage looking for a real header-logo asset rather than
+  guessing from an og:image lookbook photo -- only Lost Boys Archives had a
+  clear one (`header__heading-logo` img tag), set `logo_url` from it,
+  verified the URL resolves to a real 200 PNG, QA-approved; the other 7 are
+  JS-rendered sites where a static fetch can't find the logo, left alone
+  rather than guess wrong)

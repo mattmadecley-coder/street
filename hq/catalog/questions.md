@@ -38,18 +38,31 @@ last month, not yet enabled" pattern; if it's not, it's worth a closer
 look at whatever step is supposed to flip `catalog_enabled` to true (I
 don't have visibility into that pipeline from Catalog's data tools).
 
-**Q2 (2026-10-24):** Of the 35 `needs_review` products, I confidently fixed 3
-(a cargo-pants detail, two polo details) and left 32 alone. Most of those 32
-aren't really apparel at all — gift cards, "Mystery Box" entries, test rows
-("test product 1", "ytyjyj", "Untitled Nov3_22:30"), and a handful of odd
-non-catalog items pulled in from brand feeds (a notebook, a chain necklace, a
-lighter, condoms, a flag tapestry, a carpet, a spray bottle, a backgammon set,
-a "Bladder Buddy Cystoscope"). These aren't a classification problem I can
-fix with a taxonomy override — they're candidates for hiding from the
-catalog entirely. My recommendation: let me hide the clear non-product/test
-rows (via the existing hide action, reversible) next run if you'd rather not
-review the list yourself first — just say go ahead, or I'll leave them as
-they are.
+**Q2 (2026-10-24, updated 2026-10-26):** Of the 35 `needs_review` products, I
+confidently fixed 3 (a cargo-pants detail, two polo details) and left 32
+alone. Most of those 32 aren't really apparel at all — gift cards, "Mystery
+Box" entries, test rows ("test product 1", "ytyjyj", "Untitled Nov3_22:30"),
+and a handful of odd non-catalog items pulled in from brand feeds (a
+notebook, a chain necklace, a lighter, condoms, a flag tapestry, a carpet, a
+spray bottle, a backgammon set, a "Bladder Buddy Cystoscope"). These aren't a
+classification problem I can fix with a taxonomy override — they're
+candidates for hiding from the catalog entirely. My recommendation: let me
+hide the clear non-product/test rows (via the existing hide action,
+reversible) next run if you'd rather not review the list yourself first —
+just say go ahead, or I'll leave them as they are.
+
+Update 2026-10-26: one of the 32 actually was a real, correctly-classified
+apparel item ("Blue Marine pants/Detachable skirt" — denim pants with a
+detachable skirt panel) that a prior manual review had tagged right
+(Bottoms/Pants) but never flipped out of `needs_review`/low-confidence — I
+fixed that one directly, QA-approved, no need for your input on it. Two new
+items also landed in the pile since: "SKYRAT LIGHTER" (same pattern as the
+other brand-feed junk above — a lighter, not apparel) and a product titled
+just "Home" whose "description" is generic homepage marketing copy — that
+one looks like a scraped CMS/navigation page that got pulled in as if it
+were a product, a slightly different flavor of junk than the rest. Both fit
+the same "candidate to hide" bucket as the rest of Q2 and don't need a
+separate answer from you.
 
 **Q3 (2026-10-25):** The homepage feature schedule (`homepage_feature_schedule`)
 only has 2 rows total: Named Collective (started 2026-07-27) and Broken
