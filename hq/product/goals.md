@@ -34,3 +34,13 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   `HQ_DASHBOARD_GITHUB_TOKEN` and the GM to update its write step to
   actually commit the file — both flagged in questions.md for GM to
   relay, not Product's to do)
+- [x] Fix sitemap.xml missing 63% of products (MAX_PRODUCT_URLS=5000 hard
+  cap vs 13,591 active/non-hidden products) — direct fire from Matthew
+  (done 2026-10-26 — `app/products/sitemap.ts` now chunks all eligible
+  products across `/products/sitemap/0.xml`, `/products/sitemap/1.xml`,
+  etc. via Next's `generateSitemaps()` (10k/chunk, under Google's 50k cap,
+  scales automatically with catalog growth); `app/sitemap.ts` keeps just
+  static + brand routes; `app/robots.ts` lists every chunk explicitly
+  since Next doesn't auto-generate a combined index file. `tsc --noEmit`
+  clean, QA-approved, PR #53 opened against `work`, awaiting Matthew's
+  review/merge.)

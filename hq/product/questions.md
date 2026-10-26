@@ -74,6 +74,31 @@ luck (neither one was mid-write when the other acted).
 
 ## Answered
 
+**Task:** Sitemap only lists a fraction of products -- fix it. GM verified
+live: `app/sitemap.ts` hard-caps product URLs at `MAX_PRODUCT_URLS = 5000`,
+but there are 13,591 active, non-hidden products in the DB
+(`is_active=eq.true&is_hidden=eq.false`), and the live sitemap at
+`https://streetdotcom.com/sitemap.xml` currently had 5086 `<url>` entries
+total (the 5000 cap plus ~86 static/brand routes) -- roughly 8,500 products
+(63%) were missing. **A:** Fixed on branch `product/sitemap-generate-sitemaps`,
+PR #53 against `work`. `app/products/sitemap.ts` (new) uses Next's
+`generateSitemaps()` to chunk every eligible product across
+`/products/sitemap/0.xml`, `/products/sitemap/1.xml`, etc. (10k/chunk, under
+Google's 50k-per-file limit, scales automatically as the catalog grows).
+`app/sitemap.ts` now returns only the static + brand routes. `app/robots.ts`
+lists every product-sitemap chunk URL explicitly, since this Next.js
+version's `generateSitemaps()` does not auto-generate a combined index
+file linking the chunks back to `/sitemap.xml` (confirmed against the
+actual installed Next 16.2.10 docs/types in `node_modules/next`, including
+the v16 breaking change that the sitemap function's `id` param is now a
+promise). QA-approved; one non-blocking follow-up QA flagged for later --
+`getAllProductSitemapEntries()`'s `order=last_synced_at.desc` has no
+secondary tiebreaker, so if two products share an identical timestamp and
+the fetch cache expires between chunk requests, a product could in theory
+shift between chunk files on the next crawl (every product stays counted
+and included somewhere, so this doesn't resurrect the original bug).
+Awaiting Matthew's review/merge of PR #53. (2026-10-26)
+
 **Q:** Replace the hq_* Supabase mirror/sync that feeds `/admin/hq` with
 something that doesn't need a separate database write step (GM's
 DELETE+INSERT sync kept hanging on an unanswered destructive-operation
