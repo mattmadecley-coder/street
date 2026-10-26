@@ -50,7 +50,9 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   every run since. Restored 2026-10-25 and ran it again this check-in
   (see reports/2026-10-25.md, "Fourth run") -- still clean. Standing
   routine, not a one-off: keep doing it every check-in. (Ran again
-  2026-10-25, fifth run -- still clean.)
+  2026-10-25, fifth run -- still clean. Ran again 2026-10-26 -- clean,
+  but caught a single-visitor "jeans" search session worth a second look;
+  see below.)
 - [x] Self-directed: explain the long-standing `results_count: null`
   search-tracking gap (noted as unreconciled across multiple prior
   check-ins) instead of continuing to log it as a known-but-unexplained
@@ -79,3 +81,31 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   observed gap (e.g. 2026-10-24: 51 visitors vs 53 recorded). Updated
   charter.md's Known Gotchas bullet with this explanation so it's no
   longer logged as "not reconciled.")
+- [x] Self-directed: during this check-in's charter checklist, a single
+  visitor's search history showed ~70 `site_events` rows for query
+  "jeans" in a 7-day pull, which looked like a possible duplicate-event
+  or bot-loop bug worth investigating rather than waving off (done
+  2026-10-26: traced it -- the visitor genuinely searched "jeans" 5
+  times over ~2.5 hours and browsed 62 product cards on the results
+  page, each `product_impression` event legitimately carrying the active
+  `query` value for attribution. Confirmed via a full event-type
+  breakdown for that `anonymous_user_id` (76 events total: 6 page_view,
+  3 page_performance, 5 search, 62 product_impression) -- a normal
+  single-session browse, not a tracking bug or bot. No action needed;
+  noting the investigation so a future run doesn't re-chase the same
+  false alarm.)
+- [x] Self-directed: re-examine the `broken_image` event-share volatility
+  noted as unescalated noise across the last several check-ins (9.7%-
+  21.8% swings) -- pull enough data to say whether it's a growing
+  site-wide trend or something else (done 2026-10-26: used exact-count
+  range queries per day, since the naive 7-day pull silently hit
+  PostgREST's 1000-row default page cap and undercounted -- found 589
+  `broken_image` events over 7 days trace to only 21 distinct pages,
+  each day's count driven by a handful of sessions hitting one of those
+  specific broken pages. Root cause: dead `cdn.shopify.com` image URLs on
+  specific products, concentrated in a few brands (`racer-worldwide` x3,
+  `namedcollective`, `coldcultureworldwide`, `colebuxton`,
+  `moremoneymorelove`, `str4wrld`). Documented in charter.md's Known
+  Gotchas and filed a Tier 2 fix recommendation for Catalog via GM in
+  questions.md with the full page list, since fixing it needs a brand
+  feed re-pull/product-data fix, outside this department's Tier 1.)

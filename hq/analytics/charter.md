@@ -77,3 +77,19 @@ Daily at 8:10 ET.
   the real result count was zero. Flagged to GM/Product as a Tier 2 fix
   recommendation in `questions.md` (2026-10-25) — not something this
   department can fix itself (requires an app-code change).
+- `broken_image` event share looked like noisy day-to-day volatility
+  across several prior check-ins (swinging ~10%-22% of daily
+  `site_events`) — explained 2026-10-26. It isn't noise: 589
+  `broken_image` events over the last 7 days trace to only 21 distinct
+  pages, and each day's count is really just 4-5 real sessions happening
+  to browse one of those specific broken pages (one session alone can
+  generate 50-99 events scrolling a product gallery where every image
+  404s). The apparent volatility is just whether a visitor hit one of
+  those pages that day, not a growing site-wide problem. Root cause per
+  sample `metadata.src` values: dead `cdn.shopify.com` URLs on specific
+  products (several `racer-worldwide` listings, plus `namedcollective`,
+  `coldcultureworldwide`, `colebuxton`, `moremoneymorelove`, `str4wrld`),
+  i.e. brand-side image/feed staleness, not an imgproxy or tracking bug.
+  Flagged to Catalog via GM in `questions.md` (2026-10-26) with the full
+  page list — fixing it needs a feed re-pull/product-data fix, outside
+  this department's Tier 1.
