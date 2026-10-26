@@ -26,3 +26,12 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   QA-cleared; update: all 4 were actually auto-sent by the production cron
   around 2026-10-24 16:15 UTC, not sent by Matthew's approval as assumed —
   see urgent item in questions.md)
+- [x] Self-directed (2026-10-26): cross-check the new `storefront_status`
+  column that appeared on `brands` today against `brand_contacts` and
+  spot-verify the worst cases myself, to extend yesterday's dead-storefront
+  flag (done 2026-10-26 -- found 8 more brands beyond the original 2 with a
+  non-"open" storefront status; personally re-fetched homage-year (confirmed
+  genuinely dead, now a 404 on a different site builder, not their old
+  Shopify store) and vicinity (confirmed a false alarm, loads fine, just
+  slow); wrote the full breakdown with a per-brand recommendation to
+  questions.md for GM)

@@ -1,1 +1,1 @@
-🔎 Found working Instagram/WhatsApp contacts for 2 hard-to-reach brands and 2 dead storefronts -- next, waiting on Matthew to decide how to reach out.
+🔍 Found 8 more brand storefronts that look broken or offline; flagged them for review -- next, waiting on your call on the dead ones.
