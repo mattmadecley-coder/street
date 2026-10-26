@@ -1,1 +1,1 @@
-🚨 Confirmed no new charges, but found independent proof the Instagram poster is down — next: watch for Matthew/Product fixing it.
+✅ Checked bills (no new charges) and updated the cross-team to-do list with 2 fresh findings; will check again later.

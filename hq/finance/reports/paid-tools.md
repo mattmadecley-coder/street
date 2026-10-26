@@ -1,6 +1,6 @@
 # Paid tools & free tiers — confirmed from Gmail
 
-Last updated: 2026-10-25 (third pass).
+Last updated: 2026-10-26 (fourth pass).
 Amounts/dates below are from billing emails actually found in Gmail — no
 account numbers or card details recorded, per standing rule.
 
@@ -10,9 +10,10 @@ account numbers or card details recorded, per standing rule.
   66 "Auto recharge extra usage, Individual plan" receipts since 2026-06-10,
   each ~$10.06–$10.80. Two landed 2026-10-24 ($10.28 at 16:22, $10.06 at
   20:46) — a two-charge day that flagged an accelerating cadence (6 on
-  2026-09-29, 6 on 2026-10-07/08). Re-checked 2026-10-25: no new receipt
-  since the 20:46 one, so the accelerating-cadence watch continues but
-  hasn't produced a new charge yet. In the trailing 30 days that's roughly
+  2026-09-29, 6 on 2026-10-07/08). Re-checked 2026-10-25 (twice) and again
+  2026-10-26 morning: no new receipt since the 20:46 one, so the
+  accelerating-cadence watch continues but hasn't produced a new charge in
+  over a day now. In the trailing 30 days that's roughly
   **$310-330/month** at current usage — this is what's running Street HQ
   itself. No fixed renewal date since it's recharge-on-depletion.
 - **OpenRouter** (product classification) — also pay-as-you-go, not

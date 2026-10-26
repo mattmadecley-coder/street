@@ -46,3 +46,11 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   email; also surfaced 2 dead brand storefronts from Partnerships, a new
   Infrastructure cross-department ask, and Catalog's needs_review cleanup
   question)
+- [x] Self-directed: fourth billing re-check + fifth rollup refresh (done
+  2026-10-26 morning — confirmed no new charges since 2026-10-24 20:46 via
+  Gmail, now clean for two full days; pulled in a large merge from `work`
+  that brought in Analytics/Growth-Lifecycle/Growth-SEO updates, found and
+  added 2 new Product-routed findings that weren't in the prior rollup yet
+  (Analytics' `results_count: null` tracking-gap root cause, Growth-SEO's
+  brand-pages duplicate-canonical bug) — everything else unchanged since
+  yesterday afternoon, so kept this pass short rather than restating it)

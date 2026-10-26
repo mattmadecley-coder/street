@@ -1,13 +1,43 @@
 # Weekly open-items rollup — across every department
 
 First pass: 2026-10-24 (morning). Refreshed: 2026-10-24 (evening), 2026-10-25
-(morning), 2026-10-25 (afternoon, this pass) — diffs against the prior pass
-instead of re-summarizing from scratch. Built by reading each department's
-own `questions.md` (Open + Assigned sections) — a summary for Matthew to
-scan in one place, not a replacement for the department files themselves,
-which have the full detail and recommendations.
+(morning), 2026-10-25 (afternoon), 2026-10-26 (morning, this pass) — diffs
+against the prior pass instead of re-summarizing from scratch. Built by
+reading each department's own `questions.md` (Open + Assigned sections) — a
+summary for Matthew to scan in one place, not a replacement for the
+department files themselves, which have the full detail and recommendations.
 
-## New and escalated since this morning
+## New since the last pass (2026-10-25 afternoon)
+
+- **Analytics → Product (new) — found the actual root cause of the
+  long-standing `results_count: null` search-tracking gap, and it's
+  quietly breaking a real admin feature.** `CatalogAnalytics` scrapes the
+  result count from the DOM the moment search params change, but if that
+  fires while the catalog page's loading skeleton is still showing (no
+  `.results` element yet), the scrape returns `undefined` and never
+  retries — permanent `null` for that search. Verified live: 7 of the last
+  14 tracked searches (50%) hit this. Real impact: `/admin/analytics`'s
+  `zeroResultSearches` filter only counts `results_count === 0`, so a null
+  search never counts as a zero-result search even when it genuinely was
+  one — that catalog-gap signal is missing roughly half its real data.
+  Analytics notes the server-side log in `app/catalog/page.tsx` already
+  computes the real count accurately — worth Product checking if that's
+  the one actually landing in `site_events`, and whether the client-side
+  scrape is redundant and safe to drop.
+- **Growth-SEO → Product (new) — brand pages have the same duplicate-
+  canonical risk the catalog page was already fixed for once.** Brand
+  pages (`/brands/[slug]`) share the catalog's filter/pagination UI and
+  the same `getCatalogPage()` Supabase read, but their `generateMetadata`
+  always returns one static canonical regardless of filter params, and
+  sets no `robots` directive — the exact bug class GSC previously flagged
+  on the homepage ("Duplicate without user-selected canonical"). QA-
+  approved fix spec'd in two parts: a metadata fix (noindex + canonical on
+  filtered URLs) and a crawl-budget fix extending `app/robots.ts`'s
+  existing disallow pattern (already used for `/catalog`) to cover
+  `/brands/*?sort=*` etc., since noindex alone doesn't stop the crawl
+  itself from triggering a fresh Supabase read.
+
+## New and escalated since 2026-10-25 morning (prior pass's section, still current)
 
 - **Growth-Social — URGENT, this is now a full outage, not a half-schedule
   bug.** Zero Instagram carousel posts have gone live in ~21 hours (newest
@@ -132,11 +162,13 @@ which have the full detail and recommendations.
 
 - **Partnerships** — copy bug in `lib/brand-report.ts` (~line 208,
   hardcoded plural "shoppers") routed to Product.
-- **Growth-SEO** — three Product-routed fixes, all QA-approved with
+- **Growth-SEO** — four Product-routed fixes, all QA-approved with
   implementation detail spec'd: (1) collection-page metadata, (2) collection
-  pages missing from the sitemap, (3, new 2026-10-25) product pages missing
-  `BreadcrumbList` structured data despite already having a visible
-  breadcrumb nav.
+  pages missing from the sitemap, (3) product pages missing `BreadcrumbList`
+  structured data despite already having a visible breadcrumb nav, (4, new
+  2026-10-25) brand pages' duplicate-canonical/crawl-budget fix, above.
+- **Analytics → Product (new)** — `results_count: null` tracking-gap root
+  cause, above.
 - **Growth-Social → Product** — carousel pipeline outage, above.
 - **Analytics → Growth-SEO** — CTR/snippet question, above.
 - **Partnerships → GM/Catalog** — two dead brand storefronts, above.
@@ -149,8 +181,11 @@ which have the full detail and recommendations.
 ## Notes
 
 - No open items in: GM, QA (both clean as of this run).
-- Fourth pass in roughly 30 hours. This pass's most important change: a
-  known bug (carousel scheduling parity) escalated into a confirmed full
-  posting outage with a dashboard actively misreporting it as healthy —
-  worth Matthew's attention sooner than the next natural check-in if
-  Product hasn't already picked it up.
+- Fifth pass. No status change on the big items since yesterday afternoon —
+  Growth-Social's carousel outage, the Legal sign-offs, Catalog's 9
+  disabled brands, and the Coolify token are all still exactly where they
+  were. This pass's only real movement was two new Product-routed findings
+  (Analytics' search-tracking bug, Growth-SEO's brand-pages canonical bug)
+  — neither urgent, both just additions to Product's queue. Billing
+  re-checked via Gmail: no new charges since the 2026-10-24 20:46 Anthropic
+  receipt, now confirmed clean for two full days.
