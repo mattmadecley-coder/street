@@ -1,15 +1,11 @@
 import type { MetadataRoute } from "next";
-import { getAllProductSitemapEntries, getBrandDirectory } from "@/lib/catalog-store";
+import { getBrandDirectory } from "@/lib/catalog-store";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 // Keep this in step with the ISR window on catalog/product pages so the
 // sitemap doesn't drift far from what's actually indexable.
 export const revalidate = 3600;
-
-// Google's per-sitemap limit is 50k URLs; cap well below that so this stays
-// a single file for now instead of needing generateSitemaps().
-const MAX_PRODUCT_URLS = 5000;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
@@ -33,21 +29,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.5,
     }));
 
-  // Product detail pages are how shoppers land on Street from a Google search
-  // for a specific item, so they matter most for the discovery goal. This
-  // only needs each product's slug + last-synced timestamp, so it goes
-  // through the lightweight sitemap query instead of the full nested
-  // products+images+variants join getStoredCatalog() does — that join was
-  // getting re-run on every hourly sitemap regeneration (and every crawler
-  // hit after a cache miss) just to read two fields per product, which was
-  // a meaningful chunk of Supabase egress for a catalog this size.
-  const products = await getAllProductSitemapEntries();
-  const productRoutes: MetadataRoute.Sitemap = products.slice(0, MAX_PRODUCT_URLS).map((product) => ({
-    url: `${siteUrl}/products/${product.slug}`,
-    lastModified: product.lastSyncedAt,
-    changeFrequency: "daily",
-    priority: 0.7,
-  }));
-
-  return [...staticRoutes, ...brandRoutes, ...productRoutes];
+  // Product detail pages live in their own chunked sitemap
+  // (app/products/sitemap.ts, via generateSitemaps()) since there are far
+  // more of them than fit under Google's 50k-per-file limit; they're listed
+  // individually in robots.ts since Next doesn't auto-generate an index
+  // linking the chunks back to this file.
+  return [...staticRoutes, ...brandRoutes];
 }
