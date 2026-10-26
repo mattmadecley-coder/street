@@ -1,1 +1,1 @@
-✅ Fixed a product listing, found a brand's missing logo, and double-checked a shirt category; more checks soon.
+✅ Found 31 products from one brand hidden from search filters and fixed them; ~130 more to check next.

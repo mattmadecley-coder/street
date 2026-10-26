@@ -42,3 +42,25 @@ up, but shouldn't remove one Matthew hasn't seen moved.
   verified the URL resolves to a real 200 PNG, QA-approved; the other 7 are
   JS-rendered sites where a static fetch can't find the logo, left alone
   rather than guess wrong)
+- [x] Self-directed: investigate `classification_status = classified` active
+  products with a NULL `street_type` (the Shop All filter field) and fix the
+  real gaps (done 2026-10-26 -- found 1,913 such products; confirmed most are
+  legitimately non-apparel (shoes/bags/jewelry/watches -- `street_type` only
+  applies to clothing, so null is correct there); isolated one brand,
+  VICINITY, with 30 real apparel items affected (144 of its 783 products had
+  null `street_type`, e.g. jerseys/tanks/joggers filed under misleading raw
+  `category` labels like "Sweater"/"Jersey"), plus 1 sibling-colorway gap at
+  Named Collective; fixed all 31 by reading each product's own description
+  and matching existing taxonomy precedent (jerseys -> Shirts and Tops,
+  track pants -> Pants, etc.), deliberately did NOT call "ACTIVEWEAR SWEATER
+  BLACK" Knitwear since its fabric description showed no knit/rib evidence
+  (same gotcha as prior knitwear work) -- called it Sweatshirts instead;
+  left 3 AKIMBO LOWS products alone (category says "Denim" but description
+  is shoe sizing, not apparel); QA sent this back once over a scope-safety
+  question (confirmed every PATCH was scoped by product id, never a title
+  match), then approved)
+- [ ] ~133 more active, classified apparel-category products across other
+  brands (not VICINITY) still have a null `street_type` (found 2026-10-26
+  while investigating the above) -- needs the same per-product
+  description-based review, not a blind category->type mapping, since the
+  raw `category` field is inconsistent/unreliable per brand
