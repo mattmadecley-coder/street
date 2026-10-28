@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { readAdminState, writeAdminState } from "@/lib/admin-state";
-import { hasSupabaseCatalog, supabaseRestAll } from "@/lib/supabase-rest";
+import { hasSupabaseCatalog, supabaseRestPage } from "@/lib/supabase-rest";
 
 export type TransparentProduct = {
   id: string;
@@ -13,8 +13,11 @@ export type TransparentProduct = {
 };
 
 type StoredPool = {
-  version: 1;
+  version: 2;
   scannedAt: string;
+  totalProducts: number;
+  nextOffset: number;
+  complete: boolean;
   scannedProducts: number;
   scannedImages: number;
   failedImages: number;
@@ -30,8 +33,9 @@ type CatalogProduct = {
 };
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-const IMAGE_TIMEOUT_MS = 15_000;
+const IMAGE_TIMEOUT_MS = 5_000;
 const SCAN_CONCURRENCY = 8;
+export const TRANSPARENT_SCAN_BATCH_SIZE = 48;
 const MIN_TRANSPARENT_FRACTION = 0.08;
 
 function uniqueUrls(product: CatalogProduct) {
@@ -84,7 +88,7 @@ async function inspectImage(url: string): Promise<Omit<TransparentProduct, "id" 
 export async function getTransparentProductPool(limit = 24): Promise<TransparentProduct[]> {
   try {
     const state = await readAdminState<StoredPool | null>("transparent_product_pool", null);
-    if (!state.available || !state.value || state.value.version !== 1) return [];
+    if (!state.available || !state.value || state.value.version !== 2 || !state.value.complete) return [];
     return state.value.products.filter((product) => product.imageUrl && /^https?:\/\//i.test(product.imageUrl)).slice(0, Math.max(0, Math.min(limit, 48)));
   } catch {
     return [];
@@ -92,18 +96,21 @@ export async function getTransparentProductPool(limit = 24): Promise<Transparent
 }
 
 /**
- * Scan the active catalog once for real alpha transparency and persist the
- * result in server-only admin state. It is safe to run again when the catalog
- * changes; the previous pool is replaced only after the new scan completes.
+ * Scan one bounded catalog page for real alpha transparency and persist the
+ * result in server-only admin state. Keeping the scan resumable avoids a
+ * single long-running request when the catalog contains many remote images.
  */
-export async function scanTransparentProductPool(): Promise<StoredPool> {
+export async function scanTransparentProductPoolBatch(offset = 0, batchSize = TRANSPARENT_SCAN_BATCH_SIZE): Promise<StoredPool> {
   if (!hasSupabaseCatalog()) throw new Error("The catalog database is not configured.");
-  const products = await supabaseRestAll<CatalogProduct[]>(
-    "products?select=id,title,primary_image_url,product_images(source_url,sort_order)&is_active=eq.true&is_hidden=eq.false&order=updated_at.desc",
-    500,
-    25_000,
-  );
-  const selected: TransparentProduct[] = [];
+  const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
+  const safeBatchSize = Math.max(12, Math.min(TRANSPARENT_SCAN_BATCH_SIZE, Math.floor(Number(batchSize) || TRANSPARENT_SCAN_BATCH_SIZE)));
+  const path = "products?select=id,title,primary_image_url,product_images(source_url,sort_order)&is_active=eq.true&is_hidden=eq.false&order=updated_at.desc";
+  const page = await supabaseRestPage<CatalogProduct>(path, { from: safeOffset, to: safeOffset + safeBatchSize - 1 }, { noStore: true });
+  const priorState = safeOffset > 0 ? await readAdminState<StoredPool | null>("transparent_product_pool", null) : null;
+  const selectedById = new Map<string, TransparentProduct>();
+  if (priorState?.available && priorState.value?.version === 2) {
+    for (const product of priorState.value.products) selectedById.set(product.id, product);
+  }
   let scannedImages = 0;
   let failedImages = 0;
   let cursor = 0;
@@ -111,13 +118,13 @@ export async function scanTransparentProductPool(): Promise<StoredPool> {
   async function worker() {
     while (true) {
       const index = cursor++;
-      if (index >= products.length) return;
-      const product = products[index];
+      if (index >= page.data.length) return;
+      const product = page.data[index];
       for (const imageUrl of uniqueUrls(product)) {
         scannedImages += 1;
         const inspected = await inspectImage(imageUrl);
         if (inspected) {
-          selected.push({ id: product.id, title: product.title.slice(0, 140), imageUrl, ...inspected });
+          selectedById.set(product.id, { id: product.id, title: product.title.slice(0, 140), imageUrl, ...inspected });
           break;
         }
         failedImages += 1;
@@ -125,14 +132,20 @@ export async function scanTransparentProductPool(): Promise<StoredPool> {
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(SCAN_CONCURRENCY, Math.max(1, products.length)) }, () => worker()));
-  selected.sort((a, b) => a.id.localeCompare(b.id));
+  await Promise.all(Array.from({ length: Math.min(SCAN_CONCURRENCY, Math.max(1, page.data.length)) }, () => worker()));
+  const totalProducts = page.total || priorState?.value?.totalProducts || safeOffset + page.data.length;
+  const nextOffset = Math.min(totalProducts, safeOffset + page.data.length);
+  const complete = nextOffset >= totalProducts || page.data.length === 0;
+  const selected = [...selectedById.values()].sort((a, b) => a.id.localeCompare(b.id));
   const pool: StoredPool = {
-    version: 1,
-    scannedAt: new Date().toISOString(),
-    scannedProducts: products.length,
-    scannedImages,
-    failedImages,
+    version: 2,
+    scannedAt: priorState?.value?.scannedAt ?? new Date().toISOString(),
+    totalProducts,
+    nextOffset,
+    complete,
+    scannedProducts: nextOffset,
+    scannedImages: (priorState?.value?.scannedImages ?? 0) + scannedImages,
+    failedImages: (priorState?.value?.failedImages ?? 0) + failedImages,
     products: selected,
   };
   await writeAdminState("transparent_product_pool", pool);
