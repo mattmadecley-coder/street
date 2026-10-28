@@ -53,11 +53,11 @@
 .error button { border: 0; background: transparent; color: inherit; font-size: 11px; font-weight: 800; text-decoration: underline; cursor: pointer; }
 .preload { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .preload img { width: 1px; height: 1px; }
-.previewNotice { position: fixed; top: 12px; right: 12px; z-index: 10; padding: 8px 10px; background: #101010; color: #f4f3ee; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.previewNotice { position: fixed; top: 12px; right: 12px; z-index: 10; max-width: min(360px, calc(100vw - 24px)); box-sizing: border-box; padding: 8px 10px; background: #101010; color: #f4f3ee; font-size: 11px; font-weight: 800; letter-spacing: .08em; line-height: 1.15; text-transform: uppercase; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes timer { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (max-width: 640px) {
-  .shell { padding: 40px 14px 12px; }
+  .shell { padding: 58px 14px 12px; }
   .compareShell { padding-bottom: 10px; }
   .topbar { min-height: 52px; gap: 3px; }
   .logo { font-size: 21px; }
@@ -70,6 +70,7 @@
   .votes { width: 100%; }
   .outfit img { aspect-ratio: 3 / 4; }
   .interstitial { padding: 20px; }
+  .previewNotice { top: 8px; right: 8px; max-width: 170px; padding: 6px 8px; font-size: 9px; text-align: right; }
   .commentaryProducts { inset: 12% 0 14%; }
   .commentaryProduct { width: clamp(64px, 22vw, 110px); max-height: 30vh; opacity: .62; }
   .commentaryProduct:nth-child(1) { transform: translate(-50%, -50%) translate(-28vw, -16vh) rotate(-14deg); }
