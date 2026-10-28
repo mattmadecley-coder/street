@@ -26,6 +26,15 @@ function id() {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function seedHash(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
 function pickMessage(messages: Message[], left: string, right: string) {
   if (messages.length) return messages[Math.floor(Math.random() * messages.length)];
   return { id: "fallback", body: Math.random() > 0.5 ? "Not bad. But we have seen harder pieces on Street." : "Think you can dress better? Prove it.", link_label: null, link_url: null, position: 1 };
@@ -41,21 +50,32 @@ export default function FitWarsClient({ experience, preview = false }: { experie
   const [marketing, setMarketing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [selectionImagesReady, setSelectionImagesReady] = useState(false);
   const sessionId = useRef(id());
   const roundTimer = useRef<number | null>(null);
+  const loadedSelectionImages = useRef(new Set<string>());
   const current = matchups[round];
   const isLast = round === matchups.length - 1;
   const progressLabel = phase === "email" || phase === "success" ? `${matchups.length} / ${matchups.length}` : `${Math.min(round + 1, matchups.length)} / ${matchups.length}`;
   const commentaryProducts = useMemo(() => {
     if (!message || !experience.transparentProducts.length) return [];
-    return [...experience.transparentProducts].sort((left, right) => `${message.id}:${left.id}`.localeCompare(`${message.id}:${right.id}`)).slice(0, 10);
-  }, [experience.transparentProducts, message]);
+    const pool = experience.transparentProducts;
+    const start = seedHash(`${current?.id ?? round}:${message.id}`) % pool.length;
+    const count = Math.min(10, pool.length);
+    return Array.from({ length: count }, (_, index) => pool[(start + index * 3) % pool.length]);
+  }, [current?.id, experience.transparentProducts, message, round]);
 
   const utm = useMemo(() => {
     if (typeof window === "undefined") return {};
     const params = new URLSearchParams(window.location.search);
     return { utmSource: params.get("utm_source"), utmMedium: params.get("utm_medium"), utmCampaign: params.get("utm_campaign"), utmContent: params.get("utm_content") };
   }, []);
+
+  function markSelectionImageReady(outfitId: string) {
+    if (loadedSelectionImages.current.has(outfitId)) return;
+    loadedSelectionImages.current.add(outfitId);
+    if (loadedSelectionImages.current.size >= 2) setSelectionImagesReady(true);
+  }
 
   async function event(type: string, metadata: Record<string, unknown> = {}, matchupId?: string) {
     if (preview) return;
@@ -74,6 +94,32 @@ export default function FitWarsClient({ experience, preview = false }: { experie
     // Only the initial landing event should fire here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!selectionImagesReady || !experience.transparentProducts.length || typeof window === "undefined") return;
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+    const preload = () => {
+      if (cancelled) return;
+      for (const product of experience.transparentProducts) {
+        const image = new Image();
+        image.decoding = "async";
+        image.src = product.imageUrl;
+      }
+    };
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (idleWindow.requestIdleCallback) idleId = idleWindow.requestIdleCallback(preload, { timeout: 1500 });
+    else timeoutId = window.setTimeout(preload, 250);
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (idleId !== null) idleWindow.cancelIdleCallback?.(idleId);
+    };
+  }, [experience.transparentProducts, selectionImagesReady]);
 
   useEffect(() => {
     if (phase === "compare" && current && round > 0) void event("matchup_view", {}, current.id);
@@ -167,7 +213,7 @@ export default function FitWarsClient({ experience, preview = false }: { experie
           <div className={styles.votes} aria-label="Choose an outfit">
             {[current.left, current.right].map((outfit, index) => (
               <button key={outfit.id} type="button" className={`${styles.outfit} ${selected === outfit.id ? styles.selected : ""}`} onClick={() => void vote(outfit.id)} disabled={busy} aria-label={`Choose ${index === 0 ? "left" : "right"} outfit`}>
-                <img src={outfit.image_url} alt={`${index === 0 ? "Left" : "Right"} outfit`} loading={round === 0 ? "eager" : "lazy"} />
+                <img src={outfit.image_url} alt={`${index === 0 ? "Left" : "Right"} outfit`} loading={round === 0 ? "eager" : "lazy"} onLoad={() => markSelectionImageReady(outfit.id)} onError={() => markSelectionImageReady(outfit.id)} />
               </button>
             ))}
           </div>
@@ -192,22 +238,21 @@ export default function FitWarsClient({ experience, preview = false }: { experie
               <p className={styles.roundLabel}>IN YOUR INBOX</p>
               <h1 id="results-title">RESULTS ARE ON THE WAY.</h1>
               <p>Check {email}. While you wait, there is more to discover on Street.</p>
-              <div className={styles.successActions}><a href="/catalog" className={styles.primaryLink}>EXPLORE STREET</a><button type="button" onClick={() => void share()} className={styles.secondaryLink}>SHARE FIT WARS</button></div>
+              <div className={styles.successActions}><a href="/catalog" className={styles.primaryLink}>EXPLORE STREET</a><button type="button" onClick={() => void share()} className={styles.secondaryLink}>SHARE THE FIT WARS</button></div>
             </div>
           ) : (
-            <form className={styles.resultsForm} onSubmit={submitResults}>
-              <p className={styles.roundLabel}>ALL ROUNDS COMPLETE</p>
-              <h1 id="results-title">{campaign.results_headline}</h1>
-              <p>{campaign.results_copy}</p>
-              <p>{campaign.results_note}</p>
-              <label className={styles.emailLabel} htmlFor="fit-wars-email">Email address</label>
-              <input id="fit-wars-email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(eventObject) => setEmail(eventObject.target.value)} required placeholder="you@example.com" />
-              <label className={styles.checkbox}><input type="checkbox" checked={marketing} onChange={(eventObject) => setMarketing(eventObject.target.checked)} /> <span>{campaign.marketing_label}</span></label>
-              <p className={styles.privacy}>Your results request is separate from marketing consent. See our <a href="/privacy">privacy policy</a>.</p>
-              {error ? <p className={styles.error} role="alert">{error}</p> : null}
-              <button className={styles.submit} type="submit" disabled={!email || busy}>{busy ? "SENDING…" : "SEND ME THE RESULTS"}</button>
-              <button type="button" className={styles.shareButton} onClick={() => void share()}>SHARE THIS CAMPAIGN</button>
-            </form>
+            <>
+              <form className={styles.resultsForm} onSubmit={submitResults}>
+                <h1 id="results-title">WANT TO SEE WHO HAD THE WORST FIT?</h1>
+                <label className={styles.emailLabel} htmlFor="fit-wars-email">Email address</label>
+                <input id="fit-wars-email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(eventObject) => setEmail(eventObject.target.value)} required placeholder="you@example.com" />
+                <label className={styles.checkbox}><input type="checkbox" checked={marketing} onChange={(eventObject) => setMarketing(eventObject.target.checked)} /> <span>Allow Street to send you emails</span></label>
+                <p className={styles.privacy}>Your results email is separate. Check the box to receive marketing emails from Street. See our <a href="/privacy">privacy policy</a>.</p>
+                {error ? <p className={styles.error} role="alert">{error}</p> : null}
+                <button className={styles.submit} type="submit" disabled={!email || busy}>{busy ? "SENDING…" : "SEND ME THE RESULTS"}</button>
+              </form>
+              <div className={styles.shareRow}><button type="button" className={styles.shareButton} onClick={() => void share()}>SHARE THE FIT WARS</button></div>
+            </>
           )}
         </section>
       ) : null}
