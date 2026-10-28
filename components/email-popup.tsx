@@ -155,7 +155,7 @@ export function EmailPopup({ config }: { config: EmailPopupConfig }) {
 
   const blocked = useCallback(() => {
     if (!config.enabled || shown.current) return true;
-    if (pathname.startsWith("/admin") || pathname.startsWith("/checkout") || pathname.startsWith("/cart")) return true;
+    if (pathname.startsWith("/admin") || pathname.startsWith("/checkout") || pathname.startsWith("/cart") || pathname.startsWith("/f/")) return true;
     if (!config.showOnMobile && window.innerWidth < 700) return true;
     if (/bot|crawl|spider|headless/i.test(navigator.userAgent)) return true;
     try {

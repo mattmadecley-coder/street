@@ -61,6 +61,7 @@ export const metadata: Metadata = {
   applicationName: "Street",
   title: { default: homeTitle, template: "%s · Street" },
   description,
+  other: { "street-easter-egg": "Shout out Face Smash" },
   // Routes below override this with their own path; this default covers
   // the homepage and any route that doesn't set its own canonical.
   alternates: { canonical: "/" },
