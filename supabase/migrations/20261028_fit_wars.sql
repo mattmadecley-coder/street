@@ -191,11 +191,11 @@ begin
 
   if not exists (select 1 from public.fit_wars_matchups m where m.campaign_id = v_campaign_id) then
     insert into public.fit_wars_matchups (campaign_id, position, left_outfit_id, right_outfit_id) values (v_campaign_id, 1, outfit_a, outfit_b) returning id into matchup_id;
-    insert into public.fit_wars_commentaries (matchup_id, body, position) values (matchup_id, 'The hoodie had potential. The shoes? Different story.');
+    insert into public.fit_wars_commentaries (matchup_id, body, position) values (matchup_id, 'The hoodie had potential. The shoes? Different story.', 1);
     insert into public.fit_wars_matchups (campaign_id, position, left_outfit_id, right_outfit_id) values (v_campaign_id, 2, outfit_c, outfit_d) returning id into matchup_id;
-    insert into public.fit_wars_commentaries (matchup_id, body, position) values (matchup_id, 'Not bad. But we have seen harder pieces on Street.');
+    insert into public.fit_wars_commentaries (matchup_id, body, position) values (matchup_id, 'Not bad. But we have seen harder pieces on Street.', 1);
     insert into public.fit_wars_matchups (campaign_id, position, left_outfit_id, right_outfit_id) values (v_campaign_id, 3, outfit_b, outfit_c) returning id into matchup_id;
-    insert into public.fit_wars_commentaries (matchup_id, body, position) values (matchup_id, 'Think you can dress better? Prove it.');
+    insert into public.fit_wars_commentaries (matchup_id, body, position) values (matchup_id, 'Think you can dress better? Prove it.', 1);
   end if;
 end $$;
 
