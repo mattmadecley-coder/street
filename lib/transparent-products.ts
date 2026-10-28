@@ -33,16 +33,23 @@ type CatalogProduct = {
 };
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-const IMAGE_TIMEOUT_MS = 5_000;
-const SCAN_CONCURRENCY = 8;
-export const TRANSPARENT_SCAN_BATCH_SIZE = 48;
+const IMAGE_TIMEOUT_MS = 2_500;
+const SCAN_CONCURRENCY = 32;
+export const TRANSPARENT_SCAN_BATCH_SIZE = 512;
 const MIN_TRANSPARENT_FRACTION = 0.08;
 
 function uniqueUrls(product: CatalogProduct) {
-  return [...new Set([
+  const urls = [...new Set([
     product.primary_image_url,
     ...(product.product_images ?? []).sort((a, b) => a.sort_order - b.sort_order).map((image) => image.source_url),
   ].filter((url): url is string => typeof url === "string" && /^https?:\/\//i.test(url)))];
+  // JPEG cannot carry an alpha channel, so avoid spending time downloading
+  // the majority of the catalog. Keep extensionless CDN URLs as fallbacks.
+  const alphaCandidates = urls.filter((url) => {
+    const cleanUrl = url.split(/[?#]/, 1)[0];
+    return /\.(?:png|webp|avif|gif|svg)$/i.test(cleanUrl) || !/\.[a-z0-9]{2,5}$/i.test(cleanUrl);
+  });
+  return alphaCandidates;
 }
 
 async function inspectImage(url: string): Promise<Omit<TransparentProduct, "id" | "title" | "imageUrl"> | null> {
@@ -103,7 +110,7 @@ export async function getTransparentProductPool(limit = 24): Promise<Transparent
 export async function scanTransparentProductPoolBatch(offset = 0, batchSize = TRANSPARENT_SCAN_BATCH_SIZE): Promise<StoredPool> {
   if (!hasSupabaseCatalog()) throw new Error("The catalog database is not configured.");
   const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
-  const safeBatchSize = Math.max(12, Math.min(TRANSPARENT_SCAN_BATCH_SIZE, Math.floor(Number(batchSize) || TRANSPARENT_SCAN_BATCH_SIZE)));
+  const safeBatchSize = Math.max(48, Math.min(TRANSPARENT_SCAN_BATCH_SIZE, Math.floor(Number(batchSize) || TRANSPARENT_SCAN_BATCH_SIZE)));
   const path = "products?select=id,title,primary_image_url,product_images(source_url,sort_order)&is_active=eq.true&is_hidden=eq.false&order=updated_at.desc";
   const page = await supabaseRestPage<CatalogProduct>(path, { from: safeOffset, to: safeOffset + safeBatchSize - 1 }, { noStore: true });
   const priorState = safeOffset > 0 ? await readAdminState<StoredPool | null>("transparent_product_pool", null) : null;

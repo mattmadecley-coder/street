@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     const url = new URL(request.url);
     const offset = Number(url.searchParams.get("offset") ?? 0);
-    const batch = Number(url.searchParams.get("batch") ?? 48);
+    const batch = Number(url.searchParams.get("batch") ?? 512);
     const pool = await scanTransparentProductPoolBatch(offset, batch);
     return NextResponse.json({
       ok: true,
