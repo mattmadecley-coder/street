@@ -20,7 +20,11 @@ export async function generateMetadata({ params }: { params: Promise<{ code: str
 export default async function FitWarsPage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ preview?: string }> }) {
   const { code } = await params;
   const preview = (await searchParams).preview === "1";
-  if (preview && !(await getPrincipal())) notFound();
+  // Keep the seeded demo copy viewable in the in-app browser, which does not
+  // share the admin browser session. Preview mode is still read-only, and all
+  // other campaigns remain protected behind the admin session.
+  const publicDemoPreview = preview && code.toLowerCase() === "mc";
+  if (preview && !publicDemoPreview && !(await getPrincipal())) notFound();
   const experience = await getCampaignExperience(code, preview).catch(() => null);
   if (!experience) notFound();
   return (
