@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { scanTransparentProductPool } from "@/lib/transparent-products";
+import { scanTransparentProductPoolBatch } from "@/lib/transparent-products";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,8 +14,20 @@ function authorized(request: NextRequest) {
 export async function POST(request: NextRequest) {
   if (!authorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   try {
-    const pool = await scanTransparentProductPool();
-    return NextResponse.json({ ok: true, scannedProducts: pool.scannedProducts, scannedImages: pool.scannedImages, transparentProducts: pool.products.length, scannedAt: pool.scannedAt });
+    const url = new URL(request.url);
+    const offset = Number(url.searchParams.get("offset") ?? 0);
+    const batch = Number(url.searchParams.get("batch") ?? 48);
+    const pool = await scanTransparentProductPoolBatch(offset, batch);
+    return NextResponse.json({
+      ok: true,
+      scannedProducts: pool.scannedProducts,
+      totalProducts: pool.totalProducts,
+      nextOffset: pool.nextOffset,
+      complete: pool.complete,
+      scannedImages: pool.scannedImages,
+      transparentProducts: pool.products.length,
+      scannedAt: pool.scannedAt,
+    });
   } catch (error) {
     console.error("Transparent product scan failed", error);
     return NextResponse.json({ ok: false, error: "The transparent product scan failed." }, { status: 502 });
