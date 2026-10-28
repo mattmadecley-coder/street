@@ -48,10 +48,10 @@ export async function updateCampaign(formData: FormData) {
     label: cleanFitWarsText(formData.get("label"), 120),
     headline: cleanFitWarsText(formData.get("headline"), 180) || "WHOSE FIT IS BETTER?",
     audience_type: formData.get("audience_type") === "adult_opt_in" ? "adult_opt_in" : "high_school",
-    results_headline: cleanFitWarsText(formData.get("results_headline"), 180) || "YOU'VE GOT TASTE. OR DO YOU?",
-    results_copy: cleanFitWarsText(formData.get("results_copy"), 300) || "Want to see which fits everyone loved?",
+    results_headline: cleanFitWarsText(formData.get("results_headline"), 180) || "WANT TO SEE WHO HAD THE WORST FIT?",
+    results_copy: cleanFitWarsText(formData.get("results_copy"), 300) || "Enter your email to get the final Fit Wars leaderboard.",
     results_note: cleanFitWarsText(formData.get("results_note"), 300) || "Get the current Fit Wars leaderboard sent to your inbox.",
-    marketing_label: cleanFitWarsText(formData.get("marketing_label"), 180) || "Send me fashion finds and updates from Street.",
+    marketing_label: cleanFitWarsText(formData.get("marketing_label"), 180) || "Allow Street to send you emails",
     updated_at: new Date().toISOString(),
   };
   if (!body.school_name || !isCampaignCode(body.code)) return back(id, "Enter a school name and a valid short URL code.");
