@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./fit-wars.module.css";
 
+const COMMENTARY_DURATION_MS = 5000;
+
 type Message = { id: string; body: string; link_label: string | null; link_url: string | null; position: number };
 type Matchup = {
   id: string;
@@ -103,7 +105,7 @@ export default function FitWarsClient({ experience, preview = false }: { experie
       setMessage(picked);
       setPhase("commentary");
       void event("commentary_view", { messageId: picked.id }, current.id);
-      roundTimer.current = window.setTimeout(advance, current.duration_ms);
+      roundTimer.current = window.setTimeout(advance, COMMENTARY_DURATION_MS);
     } catch (voteError) {
       setError(voteError instanceof Error ? voteError.message : "That vote could not be saved. Try again.");
       setPhase("error");
@@ -170,7 +172,7 @@ export default function FitWarsClient({ experience, preview = false }: { experie
       {phase === "commentary" && message ? (
         <section className={styles.interstitial} aria-live="polite">
           <div className={styles.interstitialCopy}>{message.body}{message.link_url ? <> <a href={message.link_url} onClick={() => void event("street_click", { url: message.link_url }, current.id)}>{message.link_label || "Shop it on Street"}</a></> : null}</div>
-          <div className={styles.timer} style={{ "--duration": `${current.duration_ms}ms` } as React.CSSProperties} aria-hidden="true"><span /></div>
+          <div className={styles.timer} aria-hidden="true"><span /></div>
         </section>
       ) : null}
 
