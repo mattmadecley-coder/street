@@ -14,10 +14,12 @@ type Matchup = {
   right: { id: string; display_name: string; image_url: string };
   messages: Message[];
 };
+type TransparentProduct = { id: string; title: string; imageUrl: string; transparentFraction: number; width: number; height: number; format: string | null };
 type Experience = {
   campaign: { code: string; school_name: string; label: string; headline: string; results_headline: string; results_copy: string; results_note: string; marketing_label: string };
   matchups: Matchup[];
   publicUrl: string;
+  transparentProducts: TransparentProduct[];
 };
 
 function id() {
@@ -44,6 +46,10 @@ export default function FitWarsClient({ experience, preview = false }: { experie
   const current = matchups[round];
   const isLast = round === matchups.length - 1;
   const progressLabel = phase === "email" || phase === "success" ? `${matchups.length} / ${matchups.length}` : `${Math.min(round + 1, matchups.length)} / ${matchups.length}`;
+  const commentaryProducts = useMemo(() => {
+    if (!message || !experience.transparentProducts.length) return [];
+    return [...experience.transparentProducts].sort((left, right) => `${message.id}:${left.id}`.localeCompare(`${message.id}:${right.id}`)).slice(0, 10);
+  }, [experience.transparentProducts, message]);
 
   const utm = useMemo(() => {
     if (typeof window === "undefined") return {};
@@ -171,6 +177,9 @@ export default function FitWarsClient({ experience, preview = false }: { experie
 
       {phase === "commentary" && message ? (
         <section className={styles.interstitial} aria-live="polite">
+          <div className={styles.commentaryProducts} aria-hidden="true">
+            {commentaryProducts.map((product) => <img key={product.id} className={styles.commentaryProduct} src={product.imageUrl} alt="" />)}
+          </div>
           <div className={styles.interstitialCopy}>{message.body}{message.link_url ? <> <a href={message.link_url} onClick={() => void event("street_click", { url: message.link_url }, current.id)}>{message.link_label || "Shop it on Street"}</a></> : null}</div>
           <div className={styles.timer} aria-hidden="true"><span /></div>
         </section>

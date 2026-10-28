@@ -7,7 +7,7 @@ import { hasSupabaseCatalog, supabaseRest } from "@/lib/supabase-rest";
  * writes throw AdminStateUnavailableError, so callers can show "not enabled
  * yet" instead of failing.
  */
-export type AdminStateKey = "email_settings" | "saved_product_filters" | "smart_collection_rules" | "alert_thresholds" | "alert_states" | "analytics_annotations" | "alert_digest" | "brand_meta" | "homepage_history";
+export type AdminStateKey = "email_settings" | "saved_product_filters" | "smart_collection_rules" | "alert_thresholds" | "alert_states" | "analytics_annotations" | "alert_digest" | "brand_meta" | "homepage_history" | "transparent_product_pool";
 
 export class AdminStateUnavailableError extends Error {
   constructor() {
