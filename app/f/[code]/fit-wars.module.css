@@ -61,5 +61,4 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .outfit, .interstitial { transition: none; animation: none; }
-  .timer span { animation: none; transform: scaleX(1); }
 }
