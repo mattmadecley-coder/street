@@ -1,24 +1,24 @@
 .page { min-height: 100svh; background: #f4f3ee; color: #101010; }
 .shell { min-height: 100svh; display: flex; flex-direction: column; width: min(1080px, 100%); margin: 0 auto; padding: 18px clamp(16px, 4vw, 42px) 28px; }
-.topbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 34px; gap: 14px; }
-.logo { justify-self: start; font-size: 20px; font-weight: 900; letter-spacing: -.13em; }
-.campaignLabel, .progress, .roundLabel { font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
-.campaignLabel { text-align: center; max-width: 48vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.progress { justify-self: end; color: rgba(16,16,16,.56); font-variant-numeric: tabular-nums; }
-.compareStage, .resultsStage { display: flex; flex-direction: column; flex: 1; justify-content: center; padding: clamp(42px, 9vh, 96px) 0 40px; }
-.compareStage h1, .resultsStage h1 { max-width: 820px; margin: 0 0 clamp(22px, 4vw, 42px); font-size: clamp(42px, 8vw, 92px); line-height: .87; letter-spacing: -.095em; }
+.compareShell { height: 100svh; min-height: 100svh; overflow: hidden; }
+.topbar { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 62px; gap: 5px; }
+.logo { font-size: 22px; font-weight: 900; letter-spacing: -.13em; }
+.campaignMeta { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; max-width: 100%; }
+.campaignLabel, .progress, .roundLabel { font-size: 9px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.campaignLabel { max-width: min(70vw, 520px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress { color: rgba(16,16,16,.56); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.compareStage, .resultsStage { display: flex; flex-direction: column; flex: 1; min-height: 0; justify-content: center; padding: clamp(18px, 4vh, 42px) 0 clamp(12px, 3vh, 28px); }
+.compareStage h1, .resultsStage h1 { max-width: 680px; margin: 0 auto clamp(14px, 3vh, 28px); font-size: clamp(30px, 5.5vw, 64px); line-height: .9; letter-spacing: -.095em; text-align: center; }
 .roundLabel { margin: 0 0 14px; color: rgba(16,16,16,.55); }
-.votes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(8px, 2vw, 18px); }
+.votes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(8px, 2vw, 18px); min-height: 0; }
 .outfit { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 0; border: 0; background: #e7e5de; color: #101010; text-align: left; cursor: pointer; overflow: hidden; transition: transform .18s ease, opacity .18s ease; }
 .outfit:hover, .outfit:focus-visible { transform: translateY(-4px); }
 .outfit:focus-visible { outline: 2px solid #101010; outline-offset: 4px; }
 .outfit:disabled { cursor: wait; }
 .outfit.selected { outline: 4px solid #101010; outline-offset: -4px; }
-.outfit img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; background: #dedbd2; }
-.outfitLabel { position: absolute; top: 10px; left: 10px; z-index: 1; display: grid; place-items: center; width: 26px; height: 26px; background: #101010; color: #f4f3ee; font-size: 11px; font-weight: 800; }
-.outfitName { padding: 12px 12px 14px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.outfit img { display: block; width: 100%; max-height: min(54svh, 560px); aspect-ratio: 4 / 5; object-fit: cover; background: #dedbd2; }
 .interstitial { position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column; justify-content: center; padding: 30px; background: #101010; color: #f4f3ee; animation: fade-in .2s ease both; }
-.interstitialCopy { max-width: 900px; margin: auto; font-size: clamp(42px, 9vw, 106px); line-height: .9; letter-spacing: -.09em; text-align: center; }
+.interstitialCopy { max-width: 720px; margin: auto; font-size: clamp(26px, 5vw, 56px); line-height: .95; letter-spacing: -.07em; text-align: center; }
 .interstitialCopy a { color: inherit; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 7px; }
 .timer { position: absolute; right: 0; bottom: 0; left: 0; height: 4px; background: rgba(244,243,238,.2); }
 .timer span { display: block; width: 100%; height: 100%; background: #f4f3ee; transform-origin: left; animation: timer var(--duration) linear both; }
@@ -45,12 +45,19 @@
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes timer { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (max-width: 640px) {
-  .shell { padding-top: 14px; }
-  .campaignLabel { font-size: 9px; letter-spacing: .1em; }
-  .compareStage { padding-top: 13vh; }
-  .compareStage h1, .resultsStage h1 { font-size: clamp(42px, 13vw, 70px); }
-  .outfitName { padding: 9px 8px 11px; font-size: 9px; }
-  .interstitialCopy { font-size: clamp(42px, 13vw, 72px); }
+  .shell { padding: 40px 14px 12px; }
+  .compareShell { padding-bottom: 10px; }
+  .topbar { min-height: 52px; gap: 3px; }
+  .logo { font-size: 21px; }
+  .campaignMeta { gap: 7px; }
+  .campaignLabel, .progress { font-size: 8px; letter-spacing: .1em; }
+  .campaignLabel { max-width: 72vw; }
+  .compareStage { padding-top: 16px; padding-bottom: 8px; }
+  .compareStage h1, .resultsStage h1 { max-width: 360px; margin-bottom: 16px; font-size: clamp(30px, 10vw, 46px); }
+  .votes { gap: 8px; }
+  .outfit img { aspect-ratio: 4 / 5; max-height: none; }
+  .interstitial { padding: 20px; }
+  .interstitialCopy { font-size: clamp(26px, 8vw, 42px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .outfit, .interstitial { transition: none; animation: none; }

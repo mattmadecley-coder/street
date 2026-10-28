@@ -143,24 +143,23 @@ export default function FitWarsClient({ experience, preview = false }: { experie
   }
 
   return (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} ${phase === "compare" || phase === "error" ? styles.compareShell : ""}`}>
       {preview ? <div className={styles.previewNotice}>Preview mode · this campaign is not public yet.</div> : null}
       <header className={styles.topbar}>
         <a href="/" className={styles.logo} aria-label="Street home">STREET</a>
-        <div className={styles.campaignLabel}>{campaign.label || `${campaign.school_name} FIT WARS`}</div>
-        <div className={styles.progress} aria-label={`Round ${progressLabel}`}>{progressLabel}</div>
+        <div className={styles.campaignMeta}>
+          <div className={styles.campaignLabel}>{campaign.label || `${campaign.school_name} FIT WARS`}</div>
+          <div className={styles.progress} aria-label={`Round ${progressLabel}`}>{progressLabel}</div>
+        </div>
       </header>
 
       {phase === "compare" || phase === "error" ? (
         <section className={styles.compareStage} aria-labelledby="fit-wars-question">
-          <p className={styles.roundLabel}>ROUND {round + 1}</p>
           <h1 id="fit-wars-question">{campaign.headline}</h1>
           <div className={styles.votes} aria-label="Choose an outfit">
             {[current.left, current.right].map((outfit, index) => (
-              <button key={outfit.id} type="button" className={`${styles.outfit} ${selected === outfit.id ? styles.selected : ""}`} onClick={() => void vote(outfit.id)} disabled={busy} aria-label={`Vote for outfit ${index === 0 ? "A" : "B"}`}>
-                <span className={styles.outfitLabel}>{index === 0 ? "A" : "B"}</span>
-                <img src={outfit.image_url} alt={`${index === 0 ? "Outfit A" : "Outfit B"}: ${outfit.display_name}`} loading={round === 0 ? "eager" : "lazy"} />
-                <span className={styles.outfitName}>{outfit.display_name}</span>
+              <button key={outfit.id} type="button" className={`${styles.outfit} ${selected === outfit.id ? styles.selected : ""}`} onClick={() => void vote(outfit.id)} disabled={busy} aria-label={`Choose ${index === 0 ? "left" : "right"} outfit`}>
+                <img src={outfit.image_url} alt={`${index === 0 ? "Left" : "Right"} outfit`} loading={round === 0 ? "eager" : "lazy"} />
               </button>
             ))}
           </div>
