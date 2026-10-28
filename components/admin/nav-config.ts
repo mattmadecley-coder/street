@@ -30,6 +30,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/homepage", label: "Homepage", icon: "layout" },
       { href: "/admin/social", label: "Social", icon: "share" },
+      { href: "/admin/fit-wars", label: "Fit Wars", icon: "trophy" },
     ],
   },
   {
