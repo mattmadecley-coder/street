@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 import { siteUrl } from "@/lib/email-products";
+import { getTransparentProductPool, type TransparentProduct } from "@/lib/transparent-products";
 
 export type FitWarsStatus = "draft" | "active" | "paused" | "archived";
 export type FitWarsSourceType = "upload" | "url" | "instagram";
@@ -67,6 +68,7 @@ export type FitWarsExperience = {
   campaign: FitWarsCampaign;
   matchups: FitWarsPublicMatchup[];
   publicUrl: string;
+  transparentProducts: TransparentProduct[];
 };
 
 export type FitWarsLeaderboardRow = {
@@ -150,9 +152,10 @@ export async function getCampaignExperience(code: string, includeInactive = fals
   const campaign = await getCampaignByCode(code, includeInactive);
   if (!campaign) return null;
 
-  const [outfits, matchups] = await Promise.all([
+  const [outfits, matchups, transparentProducts] = await Promise.all([
     supabaseRest<FitWarsOutfit[]>(`fit_wars_outfits?campaign_id=eq.${campaign.id}&is_active=eq.true&permission_status=eq.approved&select=*&order=created_at.asc`, { noStore: true }),
     supabaseRest<FitWarsMatchup[]>(`fit_wars_matchups?campaign_id=eq.${campaign.id}&is_active=eq.true&select=*&order=position.asc`, { noStore: true }),
+    getTransparentProductPool(),
   ]);
   const comments = matchups.length
     ? await supabaseRest<FitWarsCommentary[]>(`fit_wars_commentaries?matchup_id=in.(${matchups.map((matchup) => matchup.id).join(",")})&is_active=eq.true&select=*&order=position.asc`, { noStore: true })
@@ -173,7 +176,7 @@ export async function getCampaignExperience(code: string, includeInactive = fals
     }];
   });
   if (!publicMatchups.length) return null;
-  return { campaign, matchups: publicMatchups, publicUrl: publicCampaignUrl(campaign.code) };
+  return { campaign, matchups: publicMatchups, publicUrl: publicCampaignUrl(campaign.code), transparentProducts };
 }
 
 export async function getLeaderboard(campaignId: string, maxRows = 200000): Promise<FitWarsLeaderboardRow[]> {
