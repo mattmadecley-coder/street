@@ -22,6 +22,8 @@ export default async function FitWarsCampaignPage({ params, searchParams }: { pa
     return <div><PageHeader title="Fit Wars campaign" crumbs={[{ label: "Fit Wars", href: "/admin/fit-wars" }, { label: "Campaign" }]} /><Banner tone="warn">This campaign is not available yet. Apply the Fit Wars database migration, then refresh.</Banner></div>;
   }
   const { campaign, outfits, matchups, leaderboard, stats } = data;
+  const storedResultsHeadline = campaign.results_headline?.trim() ?? "";
+  const resultsHeadline = storedResultsHeadline && storedResultsHeadline !== "YOU'VE GOT TASTE. OR DO YOU?" ? storedResultsHeadline : "WANT TO SEE WHO HAD THE WORST FIT?";
   const canWrite = can(principal.role, "analytics.write");
   const url = publicCampaignUrl(campaign.code);
   const qr = await QRCode.toDataURL(url, { width: 220, margin: 1, color: { dark: "#101010", light: "#ffffff" } });
@@ -63,7 +65,7 @@ export default async function FitWarsCampaignPage({ params, searchParams }: { pa
           <div className={styles.field}><label htmlFor="label">Campaign label</label><input id="label" name="label" defaultValue={campaign.label} /></div>
           <div className={styles.field}><label htmlFor="headline">Headline</label><input id="headline" name="headline" defaultValue={campaign.headline} /></div>
           <div className={styles.field}><label htmlFor="audience_type">Audience safeguards</label><select id="audience_type" name="audience_type" defaultValue={campaign.audience_type}><option value="high_school">High-school campaign</option><option value="adult_opt_in">Adult opt-in competition</option></select></div>
-          <div className={styles.field}><label htmlFor="results_headline">Results headline</label><input id="results_headline" name="results_headline" defaultValue={campaign.results_headline} /></div>
+          <div className={styles.field}><label htmlFor="results_headline">Results screen question</label><input id="results_headline" name="results_headline" defaultValue={resultsHeadline} /><span className={styles.rowMeta}>This is the large question visitors see after the final vote.</span></div>
           <div className={styles.field}><label htmlFor="results_copy">Results copy</label><textarea id="results_copy" name="results_copy" defaultValue={campaign.results_copy} /></div>
           <div className={styles.field}><label htmlFor="results_note">Results note</label><textarea id="results_note" name="results_note" defaultValue={campaign.results_note} /></div>
           <div className={styles.field}><label htmlFor="marketing_label">Optional marketing checkbox</label><input id="marketing_label" name="marketing_label" defaultValue={campaign.marketing_label} /></div>

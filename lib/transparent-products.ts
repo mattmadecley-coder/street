@@ -92,7 +92,7 @@ async function inspectImage(url: string): Promise<Omit<TransparentProduct, "id" 
 }
 
 /** Read the one-time scan result. The pool intentionally stays stable until rescanned. */
-export async function getTransparentProductPool(limit = 24): Promise<TransparentProduct[]> {
+export async function getTransparentProductPool(limit = 48): Promise<TransparentProduct[]> {
   try {
     const state = await readAdminState<StoredPool | null>("transparent_product_pool", null);
     if (!state.available || !state.value || state.value.version !== 2 || !state.value.complete) return [];
