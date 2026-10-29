@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 import { siteUrl } from "@/lib/email-products";
-import { catalogImageCandidates } from "@/lib/catalog-image";
 import { getTransparentProductPool, type TransparentProduct } from "@/lib/transparent-products";
 
 export type FitWarsStatus = "draft" | "active" | "paused" | "archived";
@@ -101,6 +100,13 @@ export type FitWarsAdminData = {
 
 const text = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 
+function fitWarsImageUrl(source: string, widthHint: number) {
+  const original = source.trim();
+  if (!original) return original;
+  const width = Math.min(1920, Math.max(64, Math.round(widthHint)));
+  return `/_next/image?url=${encodeURIComponent(original)}&w=${width}&q=70`;
+}
+
 export function cleanCampaignCode(value: unknown): string {
   return text(value, 32).toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
@@ -166,7 +172,7 @@ export async function getCampaignExperience(code: string, includeInactive = fals
   for (const comment of comments) commentsByMatchup.set(comment.matchup_id, [...(commentsByMatchup.get(comment.matchup_id) ?? []), comment]);
   const transparentProducts: TransparentProduct[] = rawTransparentProducts.map((product) => ({
     ...product,
-    imageUrl: catalogImageCandidates(product.imageUrl, 220)[0] ?? product.imageUrl,
+    imageUrl: fitWarsImageUrl(product.imageUrl, 480),
     originalImageUrl: product.imageUrl,
   }));
 
@@ -174,8 +180,8 @@ export async function getCampaignExperience(code: string, includeInactive = fals
     const left = outfitById.get(matchup.left_outfit_id);
     const right = outfitById.get(matchup.right_outfit_id);
     if (!left || !right) return [];
-    const leftImage = catalogImageCandidates(left.image_url, 480)[0] ?? left.image_url;
-    const rightImage = catalogImageCandidates(right.image_url, 480)[0] ?? right.image_url;
+    const leftImage = fitWarsImageUrl(left.image_url, 640);
+    const rightImage = fitWarsImageUrl(right.image_url, 640);
     return [{
       ...matchup,
       left: { id: left.id, display_name: left.display_name, image_url: leftImage, original_image_url: left.image_url },
