@@ -26,6 +26,9 @@ function id() {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+const LEGACY_RESULTS_HEADLINE = "YOU'VE GOT TASTE. OR DO YOU?";
+const DEFAULT_RESULTS_HEADLINE = "WANT TO SEE WHO HAD THE WORST FIT?";
+
 function seedHash(value: string) {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -57,13 +60,17 @@ export default function FitWarsClient({ experience, preview = false }: { experie
   const current = matchups[round];
   const isLast = round === matchups.length - 1;
   const progressLabel = phase === "email" || phase === "success" ? `${matchups.length} / ${matchups.length}` : `${Math.min(round + 1, matchups.length)} / ${matchups.length}`;
+  const storedResultsHeadline = campaign.results_headline?.trim() ?? "";
+  const resultsHeadline = storedResultsHeadline && storedResultsHeadline !== LEGACY_RESULTS_HEADLINE ? storedResultsHeadline : DEFAULT_RESULTS_HEADLINE;
   const commentaryProducts = useMemo(() => {
     if (!message || !experience.transparentProducts.length) return [];
     const pool = experience.transparentProducts.filter((product, index, products) => products.findIndex((candidate) => candidate.imageUrl === product.imageUrl) === index);
-    const start = seedHash(`${current?.id ?? round}:${message.id}`) % pool.length;
     const count = Math.min(10, pool.length);
-    return Array.from({ length: count }, (_, index) => pool[(start + index) % pool.length]);
-  }, [current?.id, experience.transparentProducts, message, round]);
+    const orderedPool = [...pool].sort((left, right) => seedHash(`${left.id}:fit-wars-collage`) - seedHash(`${right.id}:fit-wars-collage`));
+    const start = round * count;
+    const batch = orderedPool.slice(start, start + count);
+    return batch.length === count ? batch : [...batch, ...orderedPool.slice(0, count - batch.length)];
+  }, [experience.transparentProducts, message, round]);
 
   const utm = useMemo(() => {
     if (typeof window === "undefined") return {};
@@ -243,10 +250,10 @@ export default function FitWarsClient({ experience, preview = false }: { experie
           ) : (
             <>
               <form className={styles.resultsForm} onSubmit={submitResults}>
-                <h1 id="results-title">WANT TO SEE WHO HAD THE WORST FIT?</h1>
+                <h1 id="results-title">{resultsHeadline}</h1>
                 <label className={styles.emailLabel} htmlFor="fit-wars-email">Email address</label>
                 <input id="fit-wars-email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(eventObject) => setEmail(eventObject.target.value)} required placeholder="you@example.com" />
-                <label className={styles.checkbox}><input type="checkbox" checked={marketing} onChange={(eventObject) => setMarketing(eventObject.target.checked)} /> <span>Allow Street to send you emails</span></label>
+                <label className={styles.checkbox}><input type="checkbox" checked={marketing} onChange={(eventObject) => setMarketing(eventObject.target.checked)} /> <span>{campaign.marketing_label || "Allow Street to send you emails"}</span></label>
                 <p className={styles.privacy}>Your results email is separate. Check the box to receive marketing emails from Street. See our <a href="/privacy">privacy policy</a>.</p>
                 {error ? <p className={styles.error} role="alert">{error}</p> : null}
                 <button className={styles.submit} type="submit" disabled={!email || busy}>{busy ? "SENDING…" : "SEND ME THE RESULTS"}</button>
