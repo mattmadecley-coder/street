@@ -10,11 +10,11 @@ type Matchup = {
   id: string;
   position: number;
   duration_ms: number;
-  left: { id: string; display_name: string; image_url: string };
-  right: { id: string; display_name: string; image_url: string };
+  left: { id: string; display_name: string; image_url: string; original_image_url?: string };
+  right: { id: string; display_name: string; image_url: string; original_image_url?: string };
   messages: Message[];
 };
-type TransparentProduct = { id: string; title: string; imageUrl: string; transparentFraction: number; width: number; height: number; format: string | null };
+type TransparentProduct = { id: string; title: string; imageUrl: string; originalImageUrl?: string; transparentFraction: number; width: number; height: number; format: string | null };
 type Experience = {
   campaign: { code: string; school_name: string; label: string; headline: string; results_headline: string; results_copy: string; results_note: string; marketing_label: string };
   matchups: Matchup[];
@@ -55,10 +55,10 @@ export default function FitWarsClient({ experience, preview = false }: { experie
   const [marketing, setMarketing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [selectionImagesReady, setSelectionImagesReady] = useState(false);
   const sessionId = useRef(id());
   const roundTimer = useRef<number | null>(null);
-  const loadedSelectionImages = useRef(new Set<string>());
+  const loadedProductImages = useRef(new Set<string>());
+  const pendingProductImages = useRef(new Map<string, Promise<void>>());
   const current = matchups[round];
   const isLast = round === matchups.length - 1;
   const progressLabel = phase === "email" || phase === "success" ? `${matchups.length} / ${matchups.length}` : `${Math.min(round + 1, matchups.length)} / ${matchups.length}`;
@@ -66,27 +66,64 @@ export default function FitWarsClient({ experience, preview = false }: { experie
   const resultsHeadline = storedResultsHeadline && storedResultsHeadline !== LEGACY_RESULTS_HEADLINE ? storedResultsHeadline : DEFAULT_RESULTS_HEADLINE;
   const storedMarketingLabel = campaign.marketing_label?.trim() ?? "";
   const marketingLabel = storedMarketingLabel && storedMarketingLabel !== LEGACY_MARKETING_LABEL ? storedMarketingLabel : DEFAULT_MARKETING_LABEL;
-  const commentaryProducts = useMemo(() => {
-    if (!message || !experience.transparentProducts.length) return [];
+  const commentaryProductPool = useMemo(() => {
     const pool = experience.transparentProducts.filter((product, index, products) => products.findIndex((candidate) => candidate.imageUrl === product.imageUrl) === index);
-    const count = Math.min(10, pool.length);
-    const orderedPool = [...pool].sort((left, right) => seedHash(`${left.id}:fit-wars-collage`) - seedHash(`${right.id}:fit-wars-collage`));
+    return [...pool].sort((left, right) => seedHash(`${left.id}:fit-wars-collage`) - seedHash(`${right.id}:fit-wars-collage`));
+  }, [experience.transparentProducts]);
+  const commentaryProducts = useMemo(() => {
+    if (!commentaryProductPool.length) return [];
+    const count = Math.min(10, commentaryProductPool.length);
+    const orderedPool = commentaryProductPool;
     const start = round * count;
     const batch = orderedPool.slice(start, start + count);
     return batch.length === count ? batch : [...batch, ...orderedPool.slice(0, count - batch.length)];
-  }, [experience.transparentProducts, message, round]);
+  }, [commentaryProductPool, round]);
+
+  function preloadProductImage(product: TransparentProduct): Promise<void> {
+    const source = product.imageUrl;
+    if (!source || loadedProductImages.current.has(source)) return Promise.resolve();
+    const pending = pendingProductImages.current.get(source);
+    if (pending) return pending;
+    const fallback = product.originalImageUrl && product.originalImageUrl !== source ? product.originalImageUrl : null;
+    const promise = new Promise<void>((resolve) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.onload = () => { loadedProductImages.current.add(source); resolve(); };
+      image.onerror = () => {
+        if (fallback && image.src !== fallback) {
+          image.src = fallback;
+          return;
+        }
+        resolve();
+      };
+      image.src = source;
+    });
+    pendingProductImages.current.set(source, promise);
+    return promise;
+  }
+
+  function useImageFallback(eventObject: React.SyntheticEvent<HTMLImageElement>) {
+    const fallback = eventObject.currentTarget.dataset.fallbackSrc;
+    if (fallback && eventObject.currentTarget.src !== fallback) eventObject.currentTarget.src = fallback;
+  }
+
+  const preloadBatch = useMemo(() => {
+    const nextBatch = commentaryProductPool.length
+      ? (() => {
+        const count = Math.min(10, commentaryProductPool.length);
+        const start = (round + 1) * count;
+        const batch = commentaryProductPool.slice(start, start + count);
+        return batch.length === count ? batch : [...batch, ...commentaryProductPool.slice(0, count - batch.length)];
+      })()
+      : [];
+    return { current: commentaryProducts, next: nextBatch };
+  }, [commentaryProductPool, commentaryProducts, round]);
 
   const utm = useMemo(() => {
     if (typeof window === "undefined") return {};
     const params = new URLSearchParams(window.location.search);
     return { utmSource: params.get("utm_source"), utmMedium: params.get("utm_medium"), utmCampaign: params.get("utm_campaign"), utmContent: params.get("utm_content") };
   }, []);
-
-  function markSelectionImageReady(outfitId: string) {
-    if (loadedSelectionImages.current.has(outfitId)) return;
-    loadedSelectionImages.current.add(outfitId);
-    if (loadedSelectionImages.current.size >= 2) setSelectionImagesReady(true);
-  }
 
   async function event(type: string, metadata: Record<string, unknown> = {}, matchupId?: string) {
     if (preview) return;
@@ -107,30 +144,15 @@ export default function FitWarsClient({ experience, preview = false }: { experie
   }, []);
 
   useEffect(() => {
-    if (!selectionImagesReady || !experience.transparentProducts.length || typeof window === "undefined") return;
+    if (!preloadBatch.current.length || typeof window === "undefined") return;
     let cancelled = false;
-    let timeoutId: number | null = null;
-    let idleId: number | null = null;
-    const preload = () => {
-      if (cancelled) return;
-      for (const product of experience.transparentProducts) {
-        const image = new Image();
-        image.decoding = "async";
-        image.src = product.imageUrl;
-      }
+    const preload = async () => {
+      await Promise.all(preloadBatch.current.map((product) => preloadProductImage(product)));
+      if (!cancelled) await Promise.all(preloadBatch.next.map((product) => preloadProductImage(product)));
     };
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
-    if (idleWindow.requestIdleCallback) idleId = idleWindow.requestIdleCallback(preload, { timeout: 1500 });
-    else timeoutId = window.setTimeout(preload, 250);
-    return () => {
-      cancelled = true;
-      if (timeoutId !== null) window.clearTimeout(timeoutId);
-      if (idleId !== null) idleWindow.cancelIdleCallback?.(idleId);
-    };
-  }, [experience.transparentProducts, selectionImagesReady]);
+    void preload();
+    return () => { cancelled = true; };
+  }, [preloadBatch]);
 
   useEffect(() => {
     if (phase === "compare" && current && round > 0) void event("matchup_view", {}, current.id);
@@ -224,7 +246,7 @@ export default function FitWarsClient({ experience, preview = false }: { experie
           <div className={styles.votes} aria-label="Choose an outfit">
             {[current.left, current.right].map((outfit, index) => (
               <button key={outfit.id} type="button" className={`${styles.outfit} ${selected === outfit.id ? styles.selected : ""}`} onClick={() => void vote(outfit.id)} disabled={busy} aria-label={`Choose ${index === 0 ? "left" : "right"} outfit`}>
-                <img src={outfit.image_url} alt={`${index === 0 ? "Left" : "Right"} outfit`} loading={round === 0 ? "eager" : "lazy"} onLoad={() => markSelectionImageReady(outfit.id)} onError={() => markSelectionImageReady(outfit.id)} />
+                <img src={outfit.image_url} data-fallback-src={outfit.original_image_url} alt={`${index === 0 ? "Left" : "Right"} outfit`} loading="eager" fetchPriority={round === 0 ? "high" : "auto"} decoding="async" onError={useImageFallback} />
               </button>
             ))}
           </div>
@@ -235,7 +257,7 @@ export default function FitWarsClient({ experience, preview = false }: { experie
       {phase === "commentary" && message ? (
         <section className={styles.interstitial} aria-live="polite">
           <div className={styles.commentaryProducts} aria-hidden="true">
-            {commentaryProducts.map((product) => <img key={product.id} className={styles.commentaryProduct} src={product.imageUrl} alt="" />)}
+            {commentaryProducts.map((product) => <img key={product.id} className={styles.commentaryProduct} src={product.imageUrl} data-fallback-src={product.originalImageUrl} alt="" decoding="async" onError={useImageFallback} />)}
           </div>
           <div className={styles.interstitialCopy}>{message.body}{message.link_url ? <> <a href={message.link_url} onClick={() => void event("street_click", { url: message.link_url }, current.id)}>{message.link_label || "Shop it on Street"}</a></> : null}</div>
           <div className={styles.timer} aria-hidden="true"><span /></div>
@@ -268,7 +290,7 @@ export default function FitWarsClient({ experience, preview = false }: { experie
         </section>
       ) : null}
 
-      <div className={styles.preload} aria-hidden="true">{matchups.slice(round + 1, round + 2).flatMap((next) => [next.left, next.right]).map((outfit) => <img key={outfit.id} src={outfit.image_url} alt="" />)}</div>
+      <div className={styles.preload} aria-hidden="true">{matchups.slice(round + 1, round + 2).flatMap((next) => [next.left, next.right]).map((outfit) => <img key={outfit.id} src={outfit.image_url} data-fallback-src={outfit.original_image_url} alt="" loading="eager" decoding="async" onError={useImageFallback} />)}</div>
     </div>
   );
 }

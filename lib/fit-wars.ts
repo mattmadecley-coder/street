@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { supabaseRest, supabaseRestAll, supabaseRestPage } from "@/lib/supabase-rest";
 import { siteUrl } from "@/lib/email-products";
+import { catalogImageCandidates } from "@/lib/catalog-image";
 import { getTransparentProductPool, type TransparentProduct } from "@/lib/transparent-products";
 
 export type FitWarsStatus = "draft" | "active" | "paused" | "archived";
@@ -59,8 +60,8 @@ export type FitWarsCommentary = {
 };
 
 export type FitWarsPublicMatchup = FitWarsMatchup & {
-  left: Pick<FitWarsOutfit, "id" | "display_name" | "image_url">;
-  right: Pick<FitWarsOutfit, "id" | "display_name" | "image_url">;
+  left: Pick<FitWarsOutfit, "id" | "display_name" | "image_url"> & { original_image_url: string };
+  right: Pick<FitWarsOutfit, "id" | "display_name" | "image_url"> & { original_image_url: string };
   messages: FitWarsCommentary[];
 };
 
@@ -152,7 +153,7 @@ export async function getCampaignExperience(code: string, includeInactive = fals
   const campaign = await getCampaignByCode(code, includeInactive);
   if (!campaign) return null;
 
-  const [outfits, matchups, transparentProducts] = await Promise.all([
+  const [outfits, matchups, rawTransparentProducts] = await Promise.all([
     supabaseRest<FitWarsOutfit[]>(`fit_wars_outfits?campaign_id=eq.${campaign.id}&is_active=eq.true&permission_status=eq.approved&select=*&order=created_at.asc`, { noStore: true }),
     supabaseRest<FitWarsMatchup[]>(`fit_wars_matchups?campaign_id=eq.${campaign.id}&is_active=eq.true&select=*&order=position.asc`, { noStore: true }),
     getTransparentProductPool(),
@@ -163,15 +164,22 @@ export async function getCampaignExperience(code: string, includeInactive = fals
   const outfitById = new Map(outfits.map((outfit) => [outfit.id, outfit]));
   const commentsByMatchup = new Map<string, FitWarsCommentary[]>();
   for (const comment of comments) commentsByMatchup.set(comment.matchup_id, [...(commentsByMatchup.get(comment.matchup_id) ?? []), comment]);
+  const transparentProducts: TransparentProduct[] = rawTransparentProducts.map((product) => ({
+    ...product,
+    imageUrl: catalogImageCandidates(product.imageUrl, 220)[0] ?? product.imageUrl,
+    originalImageUrl: product.imageUrl,
+  }));
 
   const publicMatchups = matchups.flatMap((matchup) => {
     const left = outfitById.get(matchup.left_outfit_id);
     const right = outfitById.get(matchup.right_outfit_id);
     if (!left || !right) return [];
+    const leftImage = catalogImageCandidates(left.image_url, 480)[0] ?? left.image_url;
+    const rightImage = catalogImageCandidates(right.image_url, 480)[0] ?? right.image_url;
     return [{
       ...matchup,
-      left: { id: left.id, display_name: left.display_name, image_url: left.image_url },
-      right: { id: right.id, display_name: right.display_name, image_url: right.image_url },
+      left: { id: left.id, display_name: left.display_name, image_url: leftImage, original_image_url: left.image_url },
+      right: { id: right.id, display_name: right.display_name, image_url: rightImage, original_image_url: right.image_url },
       messages: commentsByMatchup.get(matchup.id) ?? [],
     }];
   });
