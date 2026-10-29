@@ -59,7 +59,7 @@ export default function FitWarsClient({ experience, preview = false }: { experie
   const progressLabel = phase === "email" || phase === "success" ? `${matchups.length} / ${matchups.length}` : `${Math.min(round + 1, matchups.length)} / ${matchups.length}`;
   const commentaryProducts = useMemo(() => {
     if (!message || !experience.transparentProducts.length) return [];
-    const pool = experience.transparentProducts;
+    const pool = experience.transparentProducts.filter((product, index, products) => products.findIndex((candidate) => candidate.imageUrl === product.imageUrl) === index);
     const start = seedHash(`${current?.id ?? round}:${message.id}`) % pool.length;
     const count = Math.min(10, pool.length);
     return Array.from({ length: count }, (_, index) => pool[(start + index) % pool.length]);
