@@ -6,6 +6,7 @@ export type TransparentProduct = {
   id: string;
   title: string;
   imageUrl: string;
+  originalImageUrl?: string;
   transparentFraction: number;
   width: number;
   height: number;
