@@ -28,6 +28,8 @@ function id() {
 
 const LEGACY_RESULTS_HEADLINE = "YOU'VE GOT TASTE. OR DO YOU?";
 const DEFAULT_RESULTS_HEADLINE = "WANT TO SEE WHO HAD THE WORST FIT?";
+const LEGACY_MARKETING_LABEL = "Send me fashion finds and updates from Street.";
+const DEFAULT_MARKETING_LABEL = "Allow Street to send you emails";
 
 function seedHash(value: string) {
   let hash = 2166136261;
@@ -62,6 +64,8 @@ export default function FitWarsClient({ experience, preview = false }: { experie
   const progressLabel = phase === "email" || phase === "success" ? `${matchups.length} / ${matchups.length}` : `${Math.min(round + 1, matchups.length)} / ${matchups.length}`;
   const storedResultsHeadline = campaign.results_headline?.trim() ?? "";
   const resultsHeadline = storedResultsHeadline && storedResultsHeadline !== LEGACY_RESULTS_HEADLINE ? storedResultsHeadline : DEFAULT_RESULTS_HEADLINE;
+  const storedMarketingLabel = campaign.marketing_label?.trim() ?? "";
+  const marketingLabel = storedMarketingLabel && storedMarketingLabel !== LEGACY_MARKETING_LABEL ? storedMarketingLabel : DEFAULT_MARKETING_LABEL;
   const commentaryProducts = useMemo(() => {
     if (!message || !experience.transparentProducts.length) return [];
     const pool = experience.transparentProducts.filter((product, index, products) => products.findIndex((candidate) => candidate.imageUrl === product.imageUrl) === index);
@@ -253,7 +257,7 @@ export default function FitWarsClient({ experience, preview = false }: { experie
                 <h1 id="results-title">{resultsHeadline}</h1>
                 <label className={styles.emailLabel} htmlFor="fit-wars-email">Email address</label>
                 <input id="fit-wars-email" type="email" inputMode="email" autoComplete="email" value={email} onChange={(eventObject) => setEmail(eventObject.target.value)} required placeholder="you@example.com" />
-                <label className={styles.checkbox}><input type="checkbox" checked={marketing} onChange={(eventObject) => setMarketing(eventObject.target.checked)} /> <span>{campaign.marketing_label || "Allow Street to send you emails"}</span></label>
+                <label className={styles.checkbox}><input type="checkbox" checked={marketing} onChange={(eventObject) => setMarketing(eventObject.target.checked)} /> <span>{marketingLabel}</span></label>
                 <p className={styles.privacy}>Your results email is separate. Check the box to receive marketing emails from Street. See our <a href="/privacy">privacy policy</a>.</p>
                 {error ? <p className={styles.error} role="alert">{error}</p> : null}
                 <button className={styles.submit} type="submit" disabled={!email || busy}>{busy ? "SENDING…" : "SEND ME THE RESULTS"}</button>
