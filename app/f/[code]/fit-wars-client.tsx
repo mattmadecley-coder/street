@@ -62,7 +62,7 @@ export default function FitWarsClient({ experience, preview = false }: { experie
     const pool = experience.transparentProducts;
     const start = seedHash(`${current?.id ?? round}:${message.id}`) % pool.length;
     const count = Math.min(10, pool.length);
-    return Array.from({ length: count }, (_, index) => pool[(start + index * 3) % pool.length]);
+    return Array.from({ length: count }, (_, index) => pool[(start + index) % pool.length]);
   }, [current?.id, experience.transparentProducts, message, round]);
 
   const utm = useMemo(() => {
