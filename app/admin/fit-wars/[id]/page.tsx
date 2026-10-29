@@ -24,6 +24,8 @@ export default async function FitWarsCampaignPage({ params, searchParams }: { pa
   const { campaign, outfits, matchups, leaderboard, stats } = data;
   const storedResultsHeadline = campaign.results_headline?.trim() ?? "";
   const resultsHeadline = storedResultsHeadline && storedResultsHeadline !== "YOU'VE GOT TASTE. OR DO YOU?" ? storedResultsHeadline : "WANT TO SEE WHO HAD THE WORST FIT?";
+  const storedMarketingLabel = campaign.marketing_label?.trim() ?? "";
+  const marketingLabel = storedMarketingLabel && storedMarketingLabel !== "Send me fashion finds and updates from Street." ? storedMarketingLabel : "Allow Street to send you emails";
   const canWrite = can(principal.role, "analytics.write");
   const url = publicCampaignUrl(campaign.code);
   const qr = await QRCode.toDataURL(url, { width: 220, margin: 1, color: { dark: "#101010", light: "#ffffff" } });
@@ -68,7 +70,7 @@ export default async function FitWarsCampaignPage({ params, searchParams }: { pa
           <div className={styles.field}><label htmlFor="results_headline">Results screen question</label><input id="results_headline" name="results_headline" defaultValue={resultsHeadline} /><span className={styles.rowMeta}>This is the large question visitors see after the final vote.</span></div>
           <div className={styles.field}><label htmlFor="results_copy">Results copy</label><textarea id="results_copy" name="results_copy" defaultValue={campaign.results_copy} /></div>
           <div className={styles.field}><label htmlFor="results_note">Results note</label><textarea id="results_note" name="results_note" defaultValue={campaign.results_note} /></div>
-          <div className={styles.field}><label htmlFor="marketing_label">Optional marketing checkbox</label><input id="marketing_label" name="marketing_label" defaultValue={campaign.marketing_label} /></div>
+          <div className={styles.field}><label htmlFor="marketing_label">Marketing checkbox wording</label><input id="marketing_label" name="marketing_label" defaultValue={marketingLabel} /></div>
           <button type="submit" className={styles.button}>Save campaign settings</button>
         </form>
       </section> : null}
