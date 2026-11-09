@@ -16,6 +16,18 @@ function back(campaignId?: string, error?: string, saved?: string): never {
   redirect(`${path}${params.toString() ? `?${params.toString()}` : ""}`);
 }
 
+// next/navigation's redirect() works by throwing a special error (digest
+// starts with "NEXT_REDIRECT") that the framework catches at the routing
+// layer. When a successful back(...) call sits inside a try block, that
+// throw gets swallowed by the block's own catch and misreported as a real
+// error (surfaced to the user as a literal "NEXT_REDIRECT" message). Any
+// catch block that wraps a call to back() must rethrow redirects first.
+function rethrowIfRedirect(error: unknown): void {
+  if (error && typeof error === "object" && "digest" in error && typeof (error as { digest?: unknown }).digest === "string" && (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")) {
+    throw error;
+  }
+}
+
 function requiredId(formData: FormData, name: string) {
   const value = String(formData.get(name) ?? "").trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) throw new Error(`Missing ${name}.`);
@@ -35,6 +47,7 @@ export async function createCampaign(formData: FormData) {
     revalidatePath("/admin/fit-wars");
     redirect(`/admin/fit-wars/${id}`);
   } catch (error) {
+    rethrowIfRedirect(error);
     return back(undefined, error instanceof Error && /duplicate|unique/i.test(error.message) ? "That URL code is already in use." : "The campaign could not be created.");
   }
 }
@@ -63,6 +76,7 @@ export async function updateCampaign(formData: FormData) {
     revalidatePath("/admin/fit-wars");
     back(id, undefined, "Campaign saved.");
   } catch (error) {
+    rethrowIfRedirect(error);
     back(id, error instanceof Error && /duplicate|unique/i.test(error.message) ? "That URL code is already in use." : "The campaign could not be saved.");
   }
 }
@@ -109,6 +123,7 @@ export async function saveOutfit(formData: FormData) {
     revalidatePath(`/f/${String(formData.get("code") ?? "")}`);
     back(campaignId, undefined, "Outfit saved.");
   } catch (error) {
+    rethrowIfRedirect(error);
     back(campaignId, error instanceof Error ? error.message.slice(0, 240) : "The outfit could not be saved.");
   }
 }
@@ -140,6 +155,7 @@ export async function saveMatchup(formData: FormData) {
     revalidatePath(`/admin/fit-wars/${campaignId}`);
     back(campaignId, undefined, "Matchup saved.");
   } catch (error) {
+    rethrowIfRedirect(error);
     back(campaignId, error instanceof Error && /duplicate|unique/i.test(error.message) ? "That comparison order is already used. Choose another position." : "The matchup could not be saved.");
   }
 }
