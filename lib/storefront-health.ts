@@ -11,12 +11,25 @@ export type StorefrontHealth = {
   checkedUrl?: string;
 };
 
+// Headless storefronts (Remix/Next + Shopify Storefront API, rather than a
+// classic Liquid theme) commonly embed the full product/collection payload
+// as JSON inside a <script> tag for client-side hydration. A product can
+// legitimately carry a tag or title like "coming soon" as plain data, which
+// has nothing to do with the storefront itself being gated -- but a naive
+// substring search over the whole HTML document can't tell the two apart,
+// and will misfire on that embedded JSON. Stripping <script>/<style> blocks
+// before running the text-marker checks keeps those checks scoped to actual
+// rendered page copy, where a real launch-gate message would appear.
+function stripNonVisibleBlocks(html: string) {
+  return html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ");
+}
+
 function hasPasswordInput(html: string) {
   return /<input[^>]+type=["']password["']/i.test(html);
 }
 
-function hasStrongPasswordPageMarker(html: string) {
-  const lower = html.toLowerCase();
+function hasStrongPasswordPageMarker(visibleHtml: string) {
+  const lower = visibleHtml.toLowerCase();
   return lower.includes("shopify-section-password")
     || lower.includes("template-password")
     || lower.includes("password-page")
@@ -26,8 +39,8 @@ function hasStrongPasswordPageMarker(html: string) {
     || lower.includes("i have a password");
 }
 
-function hasClosedLaunchMarker(html: string) {
-  const lower = html.toLowerCase();
+function hasClosedLaunchMarker(html: string, visibleHtml: string) {
+  const lower = visibleHtml.toLowerCase();
   return hasPasswordInput(html) && (
     lower.includes("opening soon")
     || lower.includes("coming soon")
@@ -51,10 +64,11 @@ export async function inspectStorefront(storeUrl: string): Promise<StorefrontHea
     if (!contentType.includes("text/html")) return { status: "unknown", reason: "Homepage did not return HTML", checkedUrl: response.url };
 
     const html = await response.text();
+    const visibleHtml = stripNonVisibleBlocks(html);
     const finalPath = new URL(response.url).pathname.toLowerCase();
     const redirectedToPassword = finalPath === "/password" || finalPath.startsWith("/password/");
-    const explicitPasswordPage = hasPasswordInput(html) && hasStrongPasswordPageMarker(html);
-    const launchGate = hasClosedLaunchMarker(html);
+    const explicitPasswordPage = hasPasswordInput(html) && hasStrongPasswordPageMarker(visibleHtml);
+    const launchGate = hasClosedLaunchMarker(html, visibleHtml);
 
     if (redirectedToPassword || explicitPasswordPage || launchGate) {
       return {
