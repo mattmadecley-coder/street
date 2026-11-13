@@ -330,8 +330,13 @@ function normalizeJsonLdProduct(raw: Record<string, unknown>, sourceUrl: string)
 function extractJsonLdProduct(html: string): Record<string, unknown> | null {
   for (const match of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     try {
-      const parsed = JSON.parse(match[1]);
-      const candidates = Array.isArray(parsed) ? parsed : parsed?.["@graph"] ? parsed["@graph"] : [parsed];
+      // Some Remix/headless storefronts HTML-escape JSON-LD by serializing
+      // the whole JSON document as a JSON string. Parse that second layer too
+      // so a valid Product block is not discarded as a non-object string.
+      let parsed: unknown = JSON.parse(match[1]);
+      if (typeof parsed === "string") parsed = JSON.parse(parsed);
+      const parsedRecord = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
+      const candidates = Array.isArray(parsed) ? parsed : parsedRecord?.["@graph"] ? parsedRecord["@graph"] : [parsed];
       const product = (candidates as Array<Record<string, unknown>>).find((entry) => entry?.["@type"] === "Product");
       if (product) return product;
     } catch {
@@ -397,3 +402,4 @@ export async function importBrandCatalog(brand: StreetBrand): Promise<ImportedPr
 
   return importViaGenericScrape(brand);
 }
+
