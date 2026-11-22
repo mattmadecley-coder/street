@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { payloadMatchesTrackingIdentity, trackingIdentityForRequest } from "@/lib/analytics-request";
 import { logSiteEvent } from "@/lib/analytics";
+import { flagBurstVisitor, trackEventForBurstGuard } from "@/lib/bot-guard";
 
 const text = (value: unknown, max = 500) => typeof value === "string" ? value.trim().slice(0, max) || undefined : undefined;
 const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -32,6 +33,17 @@ export async function POST(request: NextRequest) {
 
     const eventType = text(body.eventType, 80);
     if (!eventType) return NextResponse.json({ ok: false, error: "Missing event type" }, { status: 400 });
+
+    // Live per-session bot burst guard -- see lib/bot-guard.ts. Catches the
+    // broken-image-flood / high-event-rate crawler shape in real time, even
+    // when it doesn't share one fingerprint across visitors.
+    const burst = trackEventForBurstGuard(identity.sessionId, eventType);
+    if (burst.flagging && burst.reason) {
+      void flagBurstVisitor(identity.visitorId, burst.reason);
+    }
+    if (burst.drop) {
+      return NextResponse.json({ ok: true, ignored: true }, { status: 202 });
+    }
 
     await logSiteEvent({
       eventType,
